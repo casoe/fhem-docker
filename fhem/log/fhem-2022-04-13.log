@@ -1,0 +1,152 @@
+2022.04.13 03:00:00.008 3: DbRep dbrep - ################################################################
+2022.04.13 03:00:00.012 3: DbRep dbrep - ###                    new reduceLog run                     ###
+2022.04.13 03:00:00.013 3: DbRep dbrep - ################################################################
+2022.04.13 03:00:00.203 3: DbRep dbrep - reduce data older than: 2022-04-07 00:59:59 (logical corrected), newer than: 2019-12-26 00:00:00
+2022.04.13 03:00:00.204 3: DbRep dbrep - reduceLog requested with options: 
+AVERAGE=HOUR
+INCLUDE -> Devs: % Readings: %
+2022.04.13 03:00:12.007 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-14
+2022.04.13 03:00:12.693 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-14 is: 1000
+2022.04.13 03:00:13.386 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-14 is: 2000
+2022.04.13 03:00:14.206 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-14 is: 3000
+2022.04.13 03:00:14.865 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-14 is: 4000
+2022.04.13 03:00:15.035 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-14
+2022.04.13 03:00:15.404 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-15
+2022.04.13 03:00:16.072 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-15 is: 1000
+2022.04.13 03:00:16.712 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-15 is: 2000
+2022.04.13 03:00:17.339 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-15 is: 3000
+2022.04.13 03:00:17.995 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-15 is: 4000
+2022.04.13 03:00:18.221 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-15
+2022.04.13 03:00:18.576 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-16
+2022.04.13 03:00:19.431 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-16 is: 1000
+2022.04.13 03:00:20.072 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-16 is: 2000
+2022.04.13 03:00:20.738 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-16 is: 3000
+2022.04.13 03:00:21.398 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-16 is: 4000
+2022.04.13 03:00:21.584 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-16
+2022.04.13 03:00:21.909 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-17
+2022.04.13 03:00:22.583 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-17 is: 1000
+2022.04.13 03:00:23.242 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-17 is: 2000
+2022.04.13 03:00:23.939 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-17 is: 3000
+2022.04.13 03:00:24.987 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-17 is: 4000
+2022.04.13 03:00:25.274 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-17
+2022.04.13 03:00:25.700 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-18
+2022.04.13 03:00:26.610 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-18 is: 1000
+2022.04.13 03:00:27.597 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-18 is: 2000
+2022.04.13 03:00:28.569 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-18 is: 3000
+2022.04.13 03:00:29.584 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-18 is: 4000
+2022.04.13 03:00:30.002 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-18
+2022.04.13 03:00:30.575 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-19
+2022.04.13 03:00:31.835 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-19 is: 1000
+2022.04.13 03:00:33.234 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-19 is: 2000
+2022.04.13 03:00:34.387 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-19 is: 3000
+2022.04.13 03:00:35.442 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-19 is: 4000
+2022.04.13 03:00:35.808 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-19
+2022.04.13 03:00:36.377 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-20
+2022.04.13 03:00:37.348 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-20 is: 1000
+2022.04.13 03:00:38.375 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-20 is: 2000
+2022.04.13 03:00:39.227 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-20 is: 3000
+2022.04.13 03:00:39.890 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-20 is: 4000
+2022.04.13 03:00:40.066 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-20
+2022.04.13 03:00:40.383 3: DbRep dbrep - reduceLog deleting 4245 records of day: 2022-03-21
+2022.04.13 03:00:41.051 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-21 is: 1000
+2022.04.13 03:00:41.906 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-21 is: 2000
+2022.04.13 03:00:42.646 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-21 is: 3000
+2022.04.13 03:00:43.299 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-21 is: 4000
+2022.04.13 03:00:43.474 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-21
+2022.04.13 03:00:43.806 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-22
+2022.04.13 03:00:44.466 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-22 is: 1000
+2022.04.13 03:00:45.139 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-22 is: 2000
+2022.04.13 03:00:45.815 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-22 is: 3000
+2022.04.13 03:00:46.480 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-22 is: 4000
+2022.04.13 03:00:46.664 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-22
+2022.04.13 03:00:47.004 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-23
+2022.04.13 03:00:47.912 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-23 is: 1000
+2022.04.13 03:00:48.583 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-23 is: 2000
+2022.04.13 03:00:49.268 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-23 is: 3000
+2022.04.13 03:00:49.934 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-23 is: 4000
+2022.04.13 03:00:50.119 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-23
+2022.04.13 03:00:50.455 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-24
+2022.04.13 03:00:51.192 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-24 is: 1000
+2022.04.13 03:00:51.928 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-24 is: 2000
+2022.04.13 03:00:52.648 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-24 is: 3000
+2022.04.13 03:00:53.477 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-24 is: 4000
+2022.04.13 03:00:53.697 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-24
+2022.04.13 03:00:54.065 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-25
+2022.04.13 03:00:54.730 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-25 is: 1000
+2022.04.13 03:00:55.668 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-25 is: 2000
+2022.04.13 03:00:56.619 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-25 is: 3000
+2022.04.13 03:00:57.570 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-25 is: 4000
+2022.04.13 03:00:57.834 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-25
+2022.04.13 03:00:58.205 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-26
+2022.04.13 03:00:59.070 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-26 is: 1000
+2022.04.13 03:00:59.755 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-26 is: 2000
+2022.04.13 03:01:00.426 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-26 is: 3000
+2022.04.13 03:01:01.314 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-26 is: 4000
+2022.04.13 03:01:01.504 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-26
+2022.04.13 03:01:01.832 3: DbRep dbrep - reduceLog deleting 4071 records of day: 2022-03-27
+2022.04.13 03:01:02.519 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-27 is: 1000
+2022.04.13 03:01:03.197 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-27 is: 2000
+2022.04.13 03:01:04.018 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-27 is: 3000
+2022.04.13 03:01:04.700 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-27 is: 4000
+2022.04.13 03:01:04.763 3: DbRep dbrep - reduceLog (hourly-average) updating 69 records of day: 2022-03-27
+2022.04.13 03:01:05.360 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-28
+2022.04.13 03:01:06.038 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-28 is: 1000
+2022.04.13 03:01:06.709 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-28 is: 2000
+2022.04.13 03:01:07.340 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-28 is: 3000
+2022.04.13 03:01:08.009 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-28 is: 4000
+2022.04.13 03:01:08.191 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-28
+2022.04.13 03:01:08.545 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-29
+2022.04.13 03:01:09.422 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-29 is: 1000
+2022.04.13 03:01:10.219 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-29 is: 2000
+2022.04.13 03:01:10.953 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-29 is: 3000
+2022.04.13 03:01:11.622 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-29 is: 4000
+2022.04.13 03:01:11.805 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-29
+2022.04.13 03:01:12.136 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-30
+2022.04.13 03:01:12.871 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-30 is: 1000
+2022.04.13 03:01:13.536 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-30 is: 2000
+2022.04.13 03:01:14.220 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-30 is: 3000
+2022.04.13 03:01:15.015 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-30 is: 4000
+2022.04.13 03:01:15.293 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-30
+2022.04.13 03:01:15.630 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-03-31
+2022.04.13 03:01:16.335 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-31 is: 1000
+2022.04.13 03:01:17.008 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-31 is: 2000
+2022.04.13 03:01:17.743 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-31 is: 3000
+2022.04.13 03:01:18.423 3: DbRep dbrep - reduceLog deletion progress of day: 2022-03-31 is: 4000
+2022.04.13 03:01:18.665 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-03-31
+2022.04.13 03:01:19.034 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-04-01
+2022.04.13 03:01:20.061 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-01 is: 1000
+2022.04.13 03:01:21.355 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-01 is: 2000
+2022.04.13 03:01:22.279 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-01 is: 3000
+2022.04.13 03:01:22.953 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-01 is: 4000
+2022.04.13 03:01:23.137 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-04-01
+2022.04.13 03:01:23.479 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-04-02
+2022.04.13 03:01:24.194 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-02 is: 1000
+2022.04.13 03:01:25.109 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-02 is: 2000
+2022.04.13 03:01:26.068 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-02 is: 3000
+2022.04.13 03:01:27.145 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-02 is: 4000
+2022.04.13 03:01:27.416 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-04-02
+2022.04.13 03:01:28.253 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-04-03
+2022.04.13 03:01:29.121 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-03 is: 1000
+2022.04.13 03:01:30.073 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-03 is: 2000
+2022.04.13 03:01:31.041 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-03 is: 3000
+2022.04.13 03:01:32.327 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-03 is: 4000
+2022.04.13 03:01:32.612 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-04-03
+2022.04.13 03:01:33.017 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-04-04
+2022.04.13 03:01:33.939 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-04 is: 1000
+2022.04.13 03:01:34.840 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-04 is: 2000
+2022.04.13 03:01:35.748 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-04 is: 3000
+2022.04.13 03:01:36.562 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-04 is: 4000
+2022.04.13 03:01:36.854 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-04-04
+2022.04.13 03:01:37.312 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-04-05
+2022.04.13 03:01:38.511 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-05 is: 1000
+2022.04.13 03:01:39.472 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-05 is: 2000
+2022.04.13 03:01:40.365 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-05 is: 3000
+2022.04.13 03:01:41.229 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-05 is: 4000
+2022.04.13 03:01:41.460 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-04-05
+2022.04.13 03:01:41.832 3: DbRep dbrep - reduceLog deleting 4248 records of day: 2022-04-06
+2022.04.13 03:01:42.862 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-06 is: 1000
+2022.04.13 03:01:44.276 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-06 is: 2000
+2022.04.13 03:01:45.589 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-06 is: 3000
+2022.04.13 03:01:46.684 3: DbRep dbrep - reduceLog deletion progress of day: 2022-04-06 is: 4000
+2022.04.13 03:01:47.061 3: DbRep dbrep - reduceLog (hourly-average) updating 72 records of day: 2022-04-06
+2022.04.13 03:01:47.245 3: DbRep dbrep - reduceLog finished. Rows processed: 195953, deleted: 101772, updated: 1725

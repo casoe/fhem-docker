@@ -20,7 +20,6 @@ services:
             TZ: Europe/Berlin
         depends_on:
             - "mysql"
-            - "mqtt"
 
     mysql:
         restart: always
@@ -42,37 +41,6 @@ services:
             - MYSQL_ONETIME_PASSWORD=false
         networks:
             - fhem-network
-
-    mqtt:
-        restart: always
-        expose:
-            - "1883"
-            - "9001"
-        ports:
-            - "1883:1883"
-            - "9001:9001"
-        image: eclipse-mosquitto:1.6.8
-        networks:
-            - fhem-network
-        volumes:
-            - ./mqtt/config/:/mosquitto/config/
-            - ./mqtt/log/:/mosquitto/log/
-            - ./mqtt/data/:/mosquitto/data/
-
-    nodered:
-        restart: always
-        expose:
-            - "1880"
-        ports:
-            - "1880:1880"
-        image: nodered/node-red:1.0.3-2
-        user: "1000:1000"
-        volumes:
-            - ./nodered/data/:/data/
-        networks:
-            - fhem-network
-        depends_on:
-            - "mqtt"
 
 networks:
     fhem-network:
