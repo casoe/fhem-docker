@@ -1,5 +1,5 @@
 
-# $Id: 30_HUEBridge.pm 25769 2022-03-03 20:45:24Z justme1968 $
+# $Id: 30_HUEBridge.pm 25953 2022-04-13 07:43:38Z justme1968 $
 
 # "Hue Personal Wireless Lighting" is a trademark owned by Koninklijke Philips Electronics N.V.,
 # see www.meethue.com for more information.
@@ -1553,7 +1553,7 @@ HUEBridge_Get($@)
       $ret .= sprintf( "%2i: %-20s %-15s %-20s", $key, $result->{$key}{name}, $fhem_name, $result->{$key}{type} );
       $ret .= sprintf( "\n%-56s %s", '', encode_json($result->{$key}{state}) ) if( $arg && $arg eq 'detail' );
       $ret .= sprintf( "\n%-56s %s", '', encode_json($result->{$key}{config}) ) if( $arg && $arg eq 'detail' );
-      $ret .= sprintf( "\n%-56s %s", '', encode_json($result->{$key}{capabilities}) ) if( $arg && $arg eq 'detail' );
+      $ret .= sprintf( "\n%-56s %s", '', encode_json($result->{$key}{capabilities}) ) if( $arg && $arg eq 'detail' && defined($result->{$key}{capabilities}) );
       $ret .= "\n";
     }
     if( $arg && $arg eq 'detail' ) {
@@ -2145,7 +2145,7 @@ HUEBridge_Autocreate($;$$)
     }
   }
 
-  sub sum { my $sum = 0; $sum += $_ for @_;  return $sum }
+  local *sum = sub { my $sum = 0; $sum += $_ for @_;  return $sum };
 
   my $created = join( '/', @created );
   my $ignored = join( '/', @ignored );
