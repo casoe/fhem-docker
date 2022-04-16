@@ -1,8 +1,6 @@
 # FHEM Docker Base
 
-This is a template for a docker based fhem installation with postgres.
-
-**Change all the passwords for mySQL, FHEM, NodeRed, ...**
+This is a template for a docker based FHEM installation with Postgres.
 
 ## Contains
 
