@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 00_MQTT2_CLIENT.pm 25943 2022-04-10 11:34:15Z rudolfkoenig $
+# $Id: 00_MQTT2_CLIENT.pm 25958 2022-04-14 13:35:48Z rudolfkoenig $
 package main;
 
 use strict;
@@ -12,6 +12,7 @@ sub MQTT2_CLIENT_Undef($@);
 sub MQTT2_CLIENT_doPublish($@);
 sub MQTT2_CLIENT_Disco($;$$);
 
+use vars qw($FW_chash);   # client fhem hash
 use vars qw(%FW_id2inform);
 
 # See also:

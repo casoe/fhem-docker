@@ -6,7 +6,7 @@
 #
 # Prof. Dr. Peter A. Henning
 #
-# $Id: 95_ShareMaster.pm 25936 2022-04-08 15:35:44Z phenning $
+# $Id: 95_ShareMaster.pm 25956 2022-04-14 08:03:23Z phenning $
 #
 ########################################################################################
 #
@@ -202,7 +202,21 @@ sub ShareMaster_Attr(@)
   return undef;
 }
 
+#########################################################################################
+#
+# ShareMaster_Undefine 
+# 
+# Parameter hash = hash of device addressed 
+#
+#########################################################################################
 
+sub ShareMaster_Undefine($$){
+  my ($hash, $arg) = @_;
+
+  RemoveInternalTimer($hash);
+
+  return undef;
+}
 #########################################################################################
 #
 # ShareMaster_ClearReadings 
