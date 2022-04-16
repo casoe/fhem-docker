@@ -5,3 +5,4 @@
 /fhem/fhem.cfg.bak
 /fhem/log/*
 /fhem/restoreDir/*
+/fhem/.ssh/*
