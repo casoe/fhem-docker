@@ -1,4 +1,4 @@
-version: '2'
+version: '3'
 
 services:
     fhem:
@@ -32,8 +32,13 @@ services:
         ports:
             - "5432:5432"
         image: postgres:13-bullseye
+        # Scripts in /docker-entrypoint-initdb.d are only run if you start the container with a data
+        # directory that is empty; any pre-existing database will be left untouched on container startup.
         volumes:
             - pgdata:/var/lib/postgresql/data
+            - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+        # Access to the database from the other container needs to reference the container name as the host;
+        # localhost won't work; dblog.conf for FHEM was changed accordingly
         environment:
             - POSTGRES_DB=fhem
             - POSTGRES_USER=fhem
