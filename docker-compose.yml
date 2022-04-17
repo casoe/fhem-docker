@@ -46,7 +46,7 @@ services:
             - SHARED_BUFFERS=256MB
             - EFFECTIVE_CACHE_SIZE=512MB
         healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U fhem"
+            test: ["CMD-SHELL", "pg_isready -U fhem"]
             interval: 10s
             timeout: 5s
             retries: 5
