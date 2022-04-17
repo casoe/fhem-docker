@@ -6,3 +6,4 @@
 /fhem/log/*
 /fhem/restoreDir/*
 /fhem/.ssh/*
+/fhem/.npm/*
