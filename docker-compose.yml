@@ -1,16 +1,14 @@
-version: '3'
-
 services:
     fhem:
         restart: always
         ports:
             - "8083:8083"
             - "7072:7072"
-        image: ghcr.io/fhem/fhem/fhem-docker:bullseye
-        volumes:
-            - "./fhem/:/opt/fhem/"
-        devices:
-            - "/dev/lesekopf:/dev/lesekopf"
+        image: ghcr.io/fhem/fhem/fhem-minimal-docker:bullseye
+        #volumes:
+        #    - "./fhem/:/opt/fhem/"
+        #devices:
+        #    - "/dev/lesekopf:/dev/lesekopf"
         networks:
             - fhem-network
         environment:
