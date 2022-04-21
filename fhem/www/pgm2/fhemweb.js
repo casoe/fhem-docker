@@ -1,6 +1,6 @@
 "use strict";
 var FW_version={};
-FW_version["fhemweb.js"] = "$Id: fhemweb.js 25924 2022-04-05 14:38:39Z rudolfkoenig $";
+FW_version["fhemweb.js"] = "$Id: fhemweb.js 25983 2022-04-19 17:26:44Z rudolfkoenig $";
 
 var FW_serverGenerated;
 var FW_jsLog;
@@ -303,8 +303,7 @@ FW_jqueryReadyFn()
 
   $("select[id^=sel_attr],select[id^=sel_set],select[id^=sel_get]")
   .change(function(){ // online help
-    var val = $(this).val().replace(/[.\/(){}\[\]%*]/g,
-                            function(a){ return "\\"+a });
+    var val = $(this).val();
     var m = $(this).attr("name").match(/arg.(set|get|attr)(.*)/);
     if(!m)
       return;
@@ -373,8 +372,12 @@ FW_displayHelp(devName, sel, selType, val, group)
     if(!$(aTag).length) { // regexp attributes, like backend_.*
       wb.find("a[id^='"+mtype+"-"+selType+"-'][data-pattern]").each(
         function() {
-          if(val.match($(this).attr("data-pattern")))
+          var dp = $(this).attr("data-pattern");
+          // if(!$(aTag).length && val.match(dp)) {
+          if(val.match(dp)) {
+            log("Searching for "+val+", found data-pattern "+dp);
             aTag = this;
+          }
         });
     }
 

@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 25957 2022-04-14 09:05:11Z rudolfkoenig $
+# $Id: fhem.pl 25971 2022-04-16 10:17:59Z rudolfkoenig $
 
 
 use strict;
@@ -277,7 +277,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 25957 2022-04-14 09:05:11Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 25971 2022-04-16 10:17:59Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -6170,6 +6170,7 @@ restoreDir_mkDir($$$)
   if($isFile) { # Delete the file Component
     $dir =~ m,^(.*)/([^/]*)$,;
     $dir = $1;
+    $dir = "" if(!defined($dir)); # file in .
   }
   return if($restoreDir_dirs{$dir});
   $restoreDir_dirs{$dir} = 1;
