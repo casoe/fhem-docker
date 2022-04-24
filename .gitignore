@@ -7,3 +7,4 @@
 /fhem/restoreDir/*
 /fhem/.ssh/*
 /fhem/.npm/*
+*.sqlc
