@@ -17,7 +17,7 @@ This is a template for a docker based FHEM installation with Postgres.
 ```
 git clone https://github.com/casoe/fhem-docker.git fhem-docker
 cd fhem-docker
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Restore DB-Dump
