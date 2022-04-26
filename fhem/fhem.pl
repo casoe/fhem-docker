@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 25971 2022-04-16 10:17:59Z rudolfkoenig $
+# $Id: fhem.pl 25997 2022-04-25 18:39:55Z rudolfkoenig $
 
 
 use strict;
@@ -277,7 +277,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 25971 2022-04-16 10:17:59Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 25997 2022-04-25 18:39:55Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -723,6 +723,7 @@ while (1) {
                               (!defined($timeout) || $timeout > $readytimeout));
   $timeout = 5 if $winService->{AsAService} && $timeout > 5;
   $nfound = select($rout=$rin, $wout=$win, $eout=$ein, $timeout) if(!$nfound);
+  my $err = int($!);
 
   $winService->{serviceCheck}->() if($winService->{serviceCheck});
   if($gotSig) {
@@ -733,14 +734,14 @@ while (1) {
   }
 
   if($nfound < 0) {
-    my $err = int($!);
     next if($err==0 || $err==4); # 4==EINTR
 
     Log 1, "ERROR: Select error $nfound ($err), error count= $errcount";
     $errcount++;
 
     # Handling "Bad file descriptor". This is a programming error.
-    if($err == 9 || $err == 10038) {  # BADF, don't want to "use errno.ph"
+    # 9/10038 => BADF, 11=>EAGAIN. don't want to "use errno.ph"
+    if($err == 11 || $err == 9 || $err == 10038) { 
       my $nbad = 0;
       foreach my $p (keys %selectlist) {
         my ($tin, $tout) = ('', '');
