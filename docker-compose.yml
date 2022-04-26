@@ -7,8 +7,8 @@ services:
         image: ghcr.io/fhem/fhem/fhem-minimal-docker:bullseye
         volumes:
             - "./fhem/:/opt/fhem/"
-        #devices:
-        #    - "/dev/lesekopf:/dev/lesekopf"
+        devices:
+            - "/dev/lesekopf:/dev/lesekopf"
         networks:
             - fhem-network
         environment:
@@ -18,7 +18,7 @@ services:
             RESTART: 1
             TELNETPORT: 7072
             TZ: Europe/Berlin
-            APT_PKGS: "libjson-perl libwww-perl libsoap-lite-perl libjson-xs-perl libnet-telnet-perl wakeonlan"
+            APT_PKGS: "wakeonlan"
         depends_on:
             postgres:
                  condition: service_healthy
