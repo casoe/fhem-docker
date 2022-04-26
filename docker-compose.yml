@@ -1,14 +1,14 @@
-version: '2'
-
 services:
     fhem:
         restart: always
         ports:
             - "8083:8083"
             - "7072:7072"
-        image: fhem/fhem:latest
+        image: ghcr.io/fhem/fhem/fhem-minimal-docker:bullseye
         volumes:
-            - ./fhem/core/:/opt/fhem/
+            - "./fhem/:/opt/fhem/"
+        #devices:
+        #    - "/dev/lesekopf:/dev/lesekopf"
         networks:
             - fhem-network
         environment:
@@ -19,60 +19,40 @@ services:
             TELNETPORT: 7072
             TZ: Europe/Berlin
         depends_on:
-            - "mysql"
-            - "mqtt"
+            postgres:
+                 condition: service_healthy
 
-    mysql:
+
+    postgres:
         restart: always
         expose:
-            - "3306"
-            - "33060"
+            - "5432"
         ports:
-            - "3306:3306"
-            - "33060:33060"
-        image: mysql/mysql-server:5.7
+            - "5432:5432"
+        image: postgres:13-bullseye
+        # Scripts in /docker-entrypoint-initdb.d are only run if you start the container with a data
+        # directory that is empty; any pre-existing database will be left untouched on container startup.
         volumes:
-            - ./mysql/init.sql:/docker-entrypoint-initdb.d/fhem-init.sql
-            - ./mysql/data:/var/lib/mysql
+            - pgdata:/var/lib/postgresql/data
+            - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+        # Access to the database from the other container needs to reference the container name as the host;
+        # localhost won't work; dblog.conf for FHEM was changed accordingly
         environment:
-            - MYSQL_DATABASE=fhem
-            - MYSQL_USER=fhemuser
-            - MYSQL_PASSWORD=2jRHnEi3WuNSQAcX7
-            - MYSQL_RANDOM_ROOT_PASSWORD=true
-            - MYSQL_ONETIME_PASSWORD=false
+            - POSTGRES_DB=fhem
+            - POSTGRES_USER=fhem
+            - POSTGRES_PASSWORD=fhem
+            - SHARED_BUFFERS=256MB
+            - EFFECTIVE_CACHE_SIZE=512MB
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U fhem"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
         networks:
             - fhem-network
 
-    mqtt:
-        restart: always
-        expose:
-            - "1883"
-            - "9001"
-        ports:
-            - "1883:1883"
-            - "9001:9001"
-        image: eclipse-mosquitto:1.6.8
-        networks:
-            - fhem-network
-        volumes:
-            - ./mqtt/config/:/mosquitto/config/
-            - ./mqtt/log/:/mosquitto/log/
-            - ./mqtt/data/:/mosquitto/data/
-
-    nodered:
-        restart: always
-        expose:
-            - "1880"
-        ports:
-            - "1880:1880"
-        image: nodered/node-red:1.0.3-2
-        user: "1000:1000"
-        volumes:
-            - ./nodered/data/:/data/
-        networks:
-            - fhem-network
-        depends_on:
-            - "mqtt"
+volumes:
+    pgdata:
 
 networks:
     fhem-network:
