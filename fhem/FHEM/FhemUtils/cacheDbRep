@@ -1,1 +1,6 @@
 dbrep_sqlCmdList:
+dbrep_DelEntriesEnergy_sqlCmdList:
+dbrep_DelEntriesFritz_sqlCmdList:
+dbrep_DelEntriesPower_sqlCmdList:
+dbrep_RedLogSysstat_sqlCmdList:
+dbrep_RedLogZaehler_sqlCmdList:

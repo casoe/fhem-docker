@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 00_MQTT2_SERVER.pm 25984 2022-04-19 17:32:19Z rudolfkoenig $
+# $Id: 00_MQTT2_SERVER.pm 25999 2022-04-26 09:22:19Z rudolfkoenig $
 package main;
 
 use strict;
@@ -233,7 +233,7 @@ MQTT2_SERVER_Set($@)
     MQTT2_SERVER_doPublish($hash->{CL}, $hash, $tp, $val, $retain);
 
   } elsif($a[0] eq "clearRetain") {
-    my $rname = AttrVal($hash->{NAME}, "hideRetain", 0) ? "RETAIN" : ".RETAIN";
+    my $rname = AttrVal($hash->{NAME}, "hideRetain", 0) ? ".RETAIN" : "RETAIN";
     delete($hash->{READINGS}{$rname});
     delete($hash->{retain});
     return undef;
