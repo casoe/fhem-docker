@@ -9,4 +9,5 @@
 /fhem/.npm/*
 /homebridge/backups/*
 /homebridge/logs/*
+/homebridge/homebridge.log
 *.sqlc
