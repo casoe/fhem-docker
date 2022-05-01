@@ -1,0 +1,18 @@
+# Created by FHEM/98_SVG.pm, 2021-06-24 12:57:12
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Computer & Peripherie'
+set ytics 
+set y2tics 
+set grid ytics
+set ylabel "Watt"
+set y2label ""
+set yrange [0:500]
+set y2range [0:500]
+
+#dblog MQTT2_DVES_14C6B8:ENERGY_Power
+
+plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch in Watt' ls l0 lw 1 with steps

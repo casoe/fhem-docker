@@ -1,0 +1,20 @@
+# Created by FHEM/98_SVG.pm, 2021-11-07 17:39:14
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title ''
+set ytics 
+set y2tics 
+set grid
+set ylabel "MBit/s"
+set y2label ""
+set yrange [0:55]
+set y2range [0:12]
+
+#lp DbLog:dblog:Fritzbox:rateDownInMB
+#lp DbLog:dblog:Fritzbox:rateUpInMB
+
+plot "<IN>" using 1:2 axes x1y1 title 'rateDown' ls l0 lw 1 with lines,\
+     "<IN>" using 1:2 axes x1y2 title 'rateUp' ls l1 lw 1 with lines

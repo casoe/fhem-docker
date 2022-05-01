@@ -1,0 +1,17 @@
+# Created by FHEM/98_SVG.pm, 2020-10-06 13:04:12
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Systemlast'
+set ytics 
+set y2tics 
+set grid ytics
+set ylabel "Load"
+set y2label ""
+set yrange [0:4]
+
+#dblog sysstat:load
+
+plot "<IN>" using 1:2 axes x1y1 title '1 minute load average' ls l0 lw 1 with steps

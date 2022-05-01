@@ -1,0 +1,20 @@
+# Created by FHEM/98_SVG.pm, 2022-04-26 07:25:49
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Kühlschrank Verbrauch pro Tag'
+set ytics 
+set y2tics 
+set grid ytics
+set ylabel "kW/h"
+set y2label ""
+set yrange [0:2]
+set y2range [0:2]
+
+#dblog MQTT2_DVES_0371A9:ENERGY_Yesterday
+#dblog MQTT2_DVES_0371A9:ENERGY_Today
+
+plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch gestern in Watt' ls l0fill lw 1 with bars,\
+     "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch heute in Watt' ls l1fill lw 1 with lines

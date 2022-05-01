@@ -1,0 +1,16 @@
+# Created by FHEM/98_SVG.pm, 2020-10-08 16:53:24
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Umwälzpumpe'
+set ytics (“off” 0, “on” 1)
+set y2tics 
+set grid ytics
+set ylabel ""
+set y2label ""
+
+#dblog MQTT2_DVES_4B31BB:POWER1:::$val=($val=~"on"?1:0)
+
+plot "<IN>" using 1:2 axes x1y1 title 'Ein/Aus' ls l0fill lw 1 with steps
