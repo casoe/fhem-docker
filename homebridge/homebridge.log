@@ -9970,3 +9970,598 @@ Enter this code with your HomeKit app on your iOS device to pair with Homebridge
 [37m[5/1/2022, 2:30:00 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
 [37m[5/1/2022, 2:30:00 PM] [39m[36m[FHEM][39m query: TargetDoorState for dummyGarageCarsten-state
 [37m[5/1/2022, 2:30:00 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:06:22 PM][0m [36m[HB Supervisor][0m OS: Linux 5.15.32-v7+ arm
+[37m[5/1/2022, 3:06:22 PM][0m [36m[HB Supervisor][0m Node.js v16.15.0 /usr/local/bin/node
+[37m[5/1/2022, 3:06:22 PM][0m [36m[HB Supervisor][0m Homebridge Path: /usr/local/lib/node_modules/homebridge/bin/homebridge
+[37m[5/1/2022, 3:06:22 PM][0m [36m[HB Supervisor][0m UI Path: /usr/local/lib/node_modules/homebridge-config-ui-x/dist/bin/standalone.js
+[0;37m[5/1/2022, 3:06:39 PM] [0m[0;36m[Homebridge UI][0m [0;33mHomebridge Config UI X v4.43.1 is listening on 0.0.0.0 port 8581[0m
+[37m[5/1/2022, 3:06:41 PM][0m [36m[HB Supervisor][0m Starting Homebridge with extra flags: -I -P /homebridge/node_modules
+[37m[5/1/2022, 3:06:41 PM][0m [36m[HB Supervisor][0m Started Homebridge v1.4.0 with PID: 192
+[37m[5/1/2022, 3:06:44 PM] [39mLoaded config.json with 0 accessories and 2 platforms.
+[37m[5/1/2022, 3:06:44 PM] [39mLoaded 0 cached accessories from cachedAccessories.
+[37m[5/1/2022, 3:06:44 PM] [39m---
+[37m[5/1/2022, 3:06:46 PM] [39mLoaded plugin: homebridge-dummy@0.6.0
+[37m[5/1/2022, 3:06:46 PM] [39mRegistering accessory 'homebridge-dummy.DummySwitch'
+[37m[5/1/2022, 3:06:46 PM] [39m---
+[37m[5/1/2022, 3:06:46 PM] [39mLoaded plugin: homebridge-fhem@0.5.33
+homebridge API version: 2.7
+this is homebridge-fhem 0.5.33
+[37m[5/1/2022, 3:06:51 PM] [39mRegistering platform 'homebridge-fhem.FHEM'
+[37m[5/1/2022, 3:06:51 PM] [39m---
+[37m[5/1/2022, 3:06:51 PM] [39mLoaded plugin: homebridge-config-ui-x@4.43.1
+[37m[5/1/2022, 3:06:51 PM] [39mRegistering platform 'homebridge-config-ui-x.config'
+[37m[5/1/2022, 3:06:51 PM] [39m---
+[37m[5/1/2022, 3:06:51 PM] [39mLoading 2 platforms...
+[37m[5/1/2022, 3:06:51 PM] [39m[36m[Config][39m Initializing config platform...
+[37m[5/1/2022, 3:06:51 PM] [39m[36m[Config][39m Running in Service Mode
+[37m[5/1/2022, 3:06:51 PM] [39m[36m[FHEM][39m Initializing FHEM platform...
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651410412266
+Server listening on: http://<ip>:8282
+[37m[5/1/2022, 3:06:52 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: connect ECONNREFUSED 127.0.0.1:8083, retry in: 3000msec[39m
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651410415407
+[37m[5/1/2022, 3:06:55 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: connect ECONNREFUSED 127.0.0.1:8083, retry in: 6000msec[39m
+
+
+    [1;37mThank you for using the [4;36moznu/homebridge[0m [1;37mdocker image![0m
+
+  If you find this project useful please [1;33mSTAR[0m it on GitHub:
+
+         [4;37mhttps://github.com/oznu/docker-homebridge[0m
+
+                Or donate to the project:
+
+            [4;37mhttps://github.com/sponsors/oznu[0m
+                  [4;37mhttps://paypal.me/oznu[0m
+
+[37m[5/1/2022, 3:06:58 PM][0m [36m[HB Supervisor][0m Stopping services...
+[37m[5/1/2022, 3:06:58 PM] [39mGot SIGTERM, shutting down Homebridge...
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651410421422
+[37m[5/1/2022, 3:07:01 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: connect ECONNREFUSED 127.0.0.1:8083, retry in: 9000msec[39m
+[37m[5/1/2022, 3:12:28 PM][0m [36m[HB Supervisor][0m OS: Linux 5.15.32-v7+ arm
+[37m[5/1/2022, 3:12:28 PM][0m [36m[HB Supervisor][0m Node.js v16.15.0 /usr/local/bin/node
+[37m[5/1/2022, 3:12:28 PM][0m [36m[HB Supervisor][0m Homebridge Path: /usr/local/lib/node_modules/homebridge/bin/homebridge
+[37m[5/1/2022, 3:12:28 PM][0m [36m[HB Supervisor][0m UI Path: /usr/local/lib/node_modules/homebridge-config-ui-x/dist/bin/standalone.js
+[0;37m[5/1/2022, 3:12:41 PM] [0m[0;36m[Homebridge UI][0m [0;33mHomebridge Config UI X v4.43.1 is listening on 0.0.0.0 port 8581[0m
+[37m[5/1/2022, 3:12:42 PM][0m [36m[HB Supervisor][0m Starting Homebridge with extra flags: -I -P /homebridge/node_modules
+[37m[5/1/2022, 3:12:42 PM][0m [36m[HB Supervisor][0m Started Homebridge v1.4.0 with PID: 192
+[37m[5/1/2022, 3:12:46 PM] [39mLoaded config.json with 0 accessories and 2 platforms.
+[37m[5/1/2022, 3:12:46 PM] [39mLoaded 0 cached accessories from cachedAccessories.
+[37m[5/1/2022, 3:12:46 PM] [39m---
+[37m[5/1/2022, 3:12:48 PM] [39mLoaded plugin: homebridge-dummy@0.6.0
+[37m[5/1/2022, 3:12:48 PM] [39mRegistering accessory 'homebridge-dummy.DummySwitch'
+[37m[5/1/2022, 3:12:48 PM] [39m---
+[37m[5/1/2022, 3:12:49 PM] [39mLoaded plugin: homebridge-fhem@0.5.33
+homebridge API version: 2.7
+this is homebridge-fhem 0.5.33
+[37m[5/1/2022, 3:12:54 PM] [39mRegistering platform 'homebridge-fhem.FHEM'
+[37m[5/1/2022, 3:12:54 PM] [39m---
+[37m[5/1/2022, 3:12:54 PM] [39mLoaded plugin: homebridge-config-ui-x@4.43.1
+[37m[5/1/2022, 3:12:54 PM] [39mRegistering platform 'homebridge-config-ui-x.config'
+[37m[5/1/2022, 3:12:54 PM] [39m---
+[37m[5/1/2022, 3:12:54 PM] [39mLoading 2 platforms...
+[37m[5/1/2022, 3:12:54 PM] [39m[36m[Config][39m Initializing config platform...
+[37m[5/1/2022, 3:12:54 PM] [39m[36m[Config][39m Running in Service Mode
+[37m[5/1/2022, 3:12:54 PM] [39m[36m[FHEM][39m Initializing FHEM platform...
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651410776139
+Server listening on: http://<ip>:8282
+[37m[5/1/2022, 3:12:56 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: connect ECONNREFUSED 127.0.0.1:8083, retry in: 3000msec[39m
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651410779219
+[37m[5/1/2022, 3:12:59 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: connect ECONNREFUSED 127.0.0.1:8083, retry in: 6000msec[39m
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651410785231
+[37m[5/1/2022, 3:13:05 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: connect ECONNREFUSED 127.0.0.1:8083, retry in: 9000msec[39m
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651410794240
+[37m[5/1/2022, 3:13:14 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: connect ECONNREFUSED 127.0.0.1:8083, retrys exhausted[39m
+Setup Payload:
+X-HM://0023ISYWYY43S
+Enter this code with your HomeKit app on your iOS device to pair with Homebridge:
+[30m[47m                       [49m[39m
+[30m[47m    ┌────────────┐     [49m[39m
+[30m[47m    │ 031-45-154 │     [49m[39m
+[30m[47m    └────────────┘     [49m[39m
+[30m[47m                       [49m[39m
+[37m[5/1/2022, 3:13:14 PM] [39mHomebridge v1.4.0 (HAP v0.10.0) (Homebridge 3D65) is running on port 52988.
+[0;37m[5/1/2022, 3:16:33 PM] [0m[0;36m[Homebridge UI][0m Restarting the docker container, make sure you have --restart=always turned on or the container will not come back online
+
+
+    [1;37mThank you for using the [4;36moznu/homebridge[0m [1;37mdocker image![0m
+
+  If you find this project useful please [1;33mSTAR[0m it on GitHub:
+
+         [4;37mhttps://github.com/oznu/docker-homebridge[0m
+
+                Or donate to the project:
+
+            [4;37mhttps://github.com/sponsors/oznu[0m
+                  [4;37mhttps://paypal.me/oznu[0m
+
+[37m[5/1/2022, 3:16:34 PM][0m [36m[HB Supervisor][0m Stopping services...
+[37m[5/1/2022, 3:16:34 PM] [39mGot SIGTERM, shutting down Homebridge...
+[37m[5/1/2022, 3:22:52 PM][0m [36m[HB Supervisor][0m OS: Linux 5.15.32-v7+ arm
+[37m[5/1/2022, 3:22:52 PM][0m [36m[HB Supervisor][0m Node.js v16.15.0 /usr/local/bin/node
+[37m[5/1/2022, 3:22:52 PM][0m [36m[HB Supervisor][0m Homebridge Path: /usr/local/lib/node_modules/homebridge/bin/homebridge
+[37m[5/1/2022, 3:22:52 PM][0m [36m[HB Supervisor][0m UI Path: /usr/local/lib/node_modules/homebridge-config-ui-x/dist/bin/standalone.js
+[0;37m[5/1/2022, 3:23:04 PM] [0m[0;36m[Homebridge UI][0m [0;33mHomebridge Config UI X v4.43.2 is listening on 0.0.0.0 port 8581[0m
+[37m[5/1/2022, 3:23:06 PM][0m [36m[HB Supervisor][0m Starting Homebridge with extra flags: -I -P /homebridge/node_modules
+[37m[5/1/2022, 3:23:07 PM][0m [36m[HB Supervisor][0m Started Homebridge v1.4.0 with PID: 234
+[37m[5/1/2022, 3:23:09 PM] [39mLoaded config.json with 0 accessories and 2 platforms.
+[37m[5/1/2022, 3:23:09 PM] [39mLoaded 0 cached accessories from cachedAccessories.
+[37m[5/1/2022, 3:23:09 PM] [39m---
+[37m[5/1/2022, 3:23:12 PM] [39mLoaded plugin: homebridge-dummy@0.6.0
+[37m[5/1/2022, 3:23:12 PM] [39mRegistering accessory 'homebridge-dummy.DummySwitch'
+[37m[5/1/2022, 3:23:12 PM] [39m---
+[37m[5/1/2022, 3:23:12 PM] [39mLoaded plugin: homebridge-fhem@0.5.33
+homebridge API version: 2.7
+this is homebridge-fhem 0.5.33
+[37m[5/1/2022, 3:23:17 PM] [39mRegistering platform 'homebridge-fhem.FHEM'
+[37m[5/1/2022, 3:23:17 PM] [39m---
+[37m[5/1/2022, 3:23:18 PM] [39mLoaded plugin: homebridge-config-ui-x@4.43.2
+[37m[5/1/2022, 3:23:18 PM] [39mRegistering platform 'homebridge-config-ui-x.config'
+[37m[5/1/2022, 3:23:18 PM] [39m---
+[37m[5/1/2022, 3:23:18 PM] [39mLoading 2 platforms...
+[37m[5/1/2022, 3:23:18 PM] [39m[36m[Config][39m Initializing config platform...
+[37m[5/1/2022, 3:23:18 PM] [39m[36m[Config][39m Running in Service Mode
+[37m[5/1/2022, 3:23:18 PM] [39m[36m[FHEM][39m Initializing FHEM platform...
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651411399122
+Server listening on: http://<ip>:8282
+[37m[5/1/2022, 3:23:19 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: connect ECONNREFUSED 127.0.0.1:8083, retry in: 3000msec[39m
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651411402193
+[37m[5/1/2022, 3:23:22 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: connect ECONNREFUSED 127.0.0.1:8083, retry in: 6000msec[39m
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651411408210
+[37m[5/1/2022, 3:23:28 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: connect ECONNREFUSED 127.0.0.1:8083, retry in: 9000msec[39m
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651411417226
+[37m[5/1/2022, 3:23:37 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: connect ECONNREFUSED 127.0.0.1:8083, retrys exhausted[39m
+Setup Payload:
+X-HM://0023ISYWYY43S
+Enter this code with your HomeKit app on your iOS device to pair with Homebridge:
+[30m[47m                       [49m[39m
+[30m[47m    ┌────────────┐     [49m[39m
+[30m[47m    │ 031-45-154 │     [49m[39m
+[30m[47m    └────────────┘     [49m[39m
+[30m[47m                       [49m[39m
+[37m[5/1/2022, 3:23:37 PM] [39mHomebridge v1.4.0 (HAP v0.10.0) (Homebridge 3D65) is running on port 52988.
+[0;37m[5/1/2022, 3:32:20 PM] [0m[0;36m[Homebridge UI][0m Changes to config.json saved.
+[0;37m[5/1/2022, 3:32:24 PM] [0m[0;36m[Homebridge UI][0m Homebridge restart request received
+[0;37m[5/1/2022, 3:32:24 PM] [0m[0;36m[Homebridge UI][0m UI / Bridge settings have not changed; only restarting Homebridge process
+[0;37m[5/1/2022, 3:32:24 PM] [0m[0;36m[Homebridge UI][0m Sending SIGTERM to Homebridge
+[37m[5/1/2022, 3:32:24 PM] [39mGot SIGTERM, shutting down Homebridge...
+[37m[5/1/2022, 3:32:29 PM][0m [36m[HB Supervisor][0m Homebridge Process Ended. Code: 143, Signal: null
+[37m[5/1/2022, 3:32:34 PM][0m [36m[HB Supervisor][0m Restarting Homebridge...
+[37m[5/1/2022, 3:32:34 PM][0m [36m[HB Supervisor][0m Starting Homebridge with extra flags: -I -P /homebridge/node_modules
+[37m[5/1/2022, 3:32:34 PM][0m [36m[HB Supervisor][0m Started Homebridge v1.4.0 with PID: 358
+[37m[5/1/2022, 3:32:36 PM] [39mLoaded config.json with 0 accessories and 2 platforms.
+[37m[5/1/2022, 3:32:37 PM] [39mLoaded 0 cached accessories from cachedAccessories.
+[37m[5/1/2022, 3:32:37 PM] [39m---
+[37m[5/1/2022, 3:32:39 PM] [39mLoaded plugin: homebridge-dummy@0.6.0
+[37m[5/1/2022, 3:32:39 PM] [39mRegistering accessory 'homebridge-dummy.DummySwitch'
+[37m[5/1/2022, 3:32:39 PM] [39m---
+[37m[5/1/2022, 3:32:39 PM] [39mLoaded plugin: homebridge-fhem@0.5.33
+homebridge API version: 2.7
+this is homebridge-fhem 0.5.33
+[37m[5/1/2022, 3:32:43 PM] [39mRegistering platform 'homebridge-fhem.FHEM'
+[37m[5/1/2022, 3:32:43 PM] [39m---
+[37m[5/1/2022, 3:32:43 PM] [39mLoaded plugin: homebridge-config-ui-x@4.43.2
+[37m[5/1/2022, 3:32:43 PM] [39mRegistering platform 'homebridge-config-ui-x.config'
+[37m[5/1/2022, 3:32:43 PM] [39m---
+[37m[5/1/2022, 3:32:43 PM] [39mLoading 2 platforms...
+[37m[5/1/2022, 3:32:43 PM] [39m[36m[Config][39m Initializing config platform...
+[37m[5/1/2022, 3:32:43 PM] [39m[36m[Config][39m Running in Service Mode
+[37m[5/1/2022, 3:32:43 PM] [39m[36m[FHEM][39m Initializing FHEM platform...
+starting longpoll: http://fhem:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651411964544
+Server listening on: http://<ip>:8282
+[37m[5/1/2022, 3:32:44 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: getaddrinfo ENOTFOUND fhem, retry in: 3000msec[39m
+starting longpoll: http://fhem:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651411967676
+[37m[5/1/2022, 3:32:47 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: getaddrinfo ENOTFOUND fhem, retry in: 6000msec[39m
+starting longpoll: http://fhem:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651411973694
+[37m[5/1/2022, 3:32:53 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: getaddrinfo ENOTFOUND fhem, retry in: 9000msec[39m
+starting longpoll: http://fhem:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651411982706
+[37m[5/1/2022, 3:33:02 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: getaddrinfo ENOTFOUND fhem, retrys exhausted[39m
+Setup Payload:
+X-HM://0023ISYWYY43S
+Enter this code with your HomeKit app on your iOS device to pair with Homebridge:
+[30m[47m                       [49m[39m
+[30m[47m    ┌────────────┐     [49m[39m
+[30m[47m    │ 031-45-154 │     [49m[39m
+[30m[47m    └────────────┘     [49m[39m
+[30m[47m                       [49m[39m
+[37m[5/1/2022, 3:33:03 PM] [39mHomebridge v1.4.0 (HAP v0.10.0) (Homebridge 3D65) is running on port 52988.
+[0;37m[5/1/2022, 3:33:43 PM] [0m[0;36m[Homebridge UI][0m Running Command: npm install -g homebridge@1.4.1
+[0;37m[5/1/2022, 3:34:51 PM] [0m[0;36m[Homebridge UI][0m Homebridge restart request received
+[0;37m[5/1/2022, 3:34:51 PM] [0m[0;36m[Homebridge UI][0m UI / Bridge settings have not changed; only restarting Homebridge process
+[0;37m[5/1/2022, 3:34:51 PM] [0m[0;36m[Homebridge UI][0m Sending SIGTERM to Homebridge
+[37m[5/1/2022, 3:34:51 PM] [39mGot SIGTERM, shutting down Homebridge...
+[37m[5/1/2022, 3:34:56 PM][0m [36m[HB Supervisor][0m Homebridge Process Ended. Code: 143, Signal: null
+[37m[5/1/2022, 3:35:01 PM][0m [36m[HB Supervisor][0m Restarting Homebridge...
+[37m[5/1/2022, 3:35:01 PM][0m [36m[HB Supervisor][0m Starting Homebridge with extra flags: -I -P /homebridge/node_modules
+[37m[5/1/2022, 3:35:01 PM][0m [36m[HB Supervisor][0m Started Homebridge v1.4.1 with PID: 467
+[37m[5/1/2022, 3:35:03 PM] [39mLoaded config.json with 0 accessories and 2 platforms.
+[37m[5/1/2022, 3:35:04 PM] [39mLoaded 0 cached accessories from cachedAccessories.
+[37m[5/1/2022, 3:35:04 PM] [39m---
+[37m[5/1/2022, 3:35:06 PM] [39mLoaded plugin: homebridge-dummy@0.6.0
+[37m[5/1/2022, 3:35:06 PM] [39mRegistering accessory 'homebridge-dummy.DummySwitch'
+[37m[5/1/2022, 3:35:06 PM] [39m---
+[37m[5/1/2022, 3:35:06 PM] [39mLoaded plugin: homebridge-fhem@0.5.33
+homebridge API version: 2.7
+this is homebridge-fhem 0.5.33
+[37m[5/1/2022, 3:35:11 PM] [39mRegistering platform 'homebridge-fhem.FHEM'
+[37m[5/1/2022, 3:35:11 PM] [39m---
+[37m[5/1/2022, 3:35:11 PM] [39mLoaded plugin: homebridge-config-ui-x@4.43.2
+[37m[5/1/2022, 3:35:11 PM] [39mRegistering platform 'homebridge-config-ui-x.config'
+[37m[5/1/2022, 3:35:11 PM] [39m---
+[37m[5/1/2022, 3:35:11 PM] [39mLoading 2 platforms...
+[37m[5/1/2022, 3:35:11 PM] [39m[36m[Config][39m Initializing config platform...
+[37m[5/1/2022, 3:35:11 PM] [39m[36m[Config][39m Running in Service Mode
+[37m[5/1/2022, 3:35:11 PM] [39m[36m[FHEM][39m Initializing FHEM platform...
+starting longpoll: http://fhem:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651412112026
+Server listening on: http://<ip>:8282
+[37m[5/1/2022, 3:35:12 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: getaddrinfo ENOTFOUND fhem, retry in: 3000msec[39m
+starting longpoll: http://fhem:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651412115108
+[37m[5/1/2022, 3:35:15 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: getaddrinfo ENOTFOUND fhem, retry in: 6000msec[39m
+starting longpoll: http://fhem:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651412121120
+[37m[5/1/2022, 3:35:21 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: getaddrinfo ENOTFOUND fhem, retry in: 9000msec[39m
+starting longpoll: http://fhem:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651412130143
+[37m[5/1/2022, 3:35:30 PM] [39m[36m[FHEM][39m [31mlongpoll error: Error: getaddrinfo ENOTFOUND fhem, retrys exhausted[39m
+Setup Payload:
+X-HM://0023ISYWYY43S
+Enter this code with your HomeKit app on your iOS device to pair with Homebridge:
+[30m[47m                       [49m[39m
+[30m[47m    ┌────────────┐     [49m[39m
+[30m[47m    │ 031-45-154 │     [49m[39m
+[30m[47m    └────────────┘     [49m[39m
+[30m[47m                       [49m[39m
+[37m[5/1/2022, 3:35:30 PM] [39mHomebridge v1.4.1 (HAP v0.10.2) (Homebridge 3D65) is running on port 52988.
+
+
+    [1;37mThank you for using the [4;36moznu/homebridge[0m [1;37mdocker image![0m
+
+  If you find this project useful please [1;33mSTAR[0m it on GitHub:
+
+         [4;37mhttps://github.com/oznu/docker-homebridge[0m
+
+                Or donate to the project:
+
+            [4;37mhttps://github.com/sponsors/oznu[0m
+                  [4;37mhttps://paypal.me/oznu[0m
+
+[37m[5/1/2022, 3:43:48 PM][0m [36m[HB Supervisor][0m Stopping services...
+[37m[5/1/2022, 3:43:48 PM] [39mGot SIGTERM, shutting down Homebridge...
+[37m[5/1/2022, 3:50:48 PM][0m [36m[HB Supervisor][0m OS: Linux 5.15.32-v7+ arm
+[37m[5/1/2022, 3:50:48 PM][0m [36m[HB Supervisor][0m Node.js v16.15.0 /usr/local/bin/node
+[37m[5/1/2022, 3:50:48 PM][0m [36m[HB Supervisor][0m Homebridge Path: /usr/local/lib/node_modules/homebridge/bin/homebridge
+[37m[5/1/2022, 3:50:48 PM][0m [36m[HB Supervisor][0m UI Path: /usr/local/lib/node_modules/homebridge-config-ui-x/dist/bin/standalone.js
+[0;37m[5/1/2022, 3:51:01 PM] [0m[0;36m[Homebridge UI][0m [0;33mHomebridge Config UI X v4.43.1 is listening on :: port 8581[0m
+[37m[5/1/2022, 3:51:03 PM][0m [36m[HB Supervisor][0m Starting Homebridge with extra flags: -I -P /homebridge/node_modules
+[37m[5/1/2022, 3:51:03 PM][0m [36m[HB Supervisor][0m Started Homebridge v1.4.0 with PID: 192
+[37m[5/1/2022, 3:51:05 PM] [39mLoaded config.json with 0 accessories and 2 platforms.
+[37m[5/1/2022, 3:51:06 PM] [39mLoaded 0 cached accessories from cachedAccessories.
+[37m[5/1/2022, 3:51:06 PM] [39m---
+[37m[5/1/2022, 3:51:08 PM] [39mLoaded plugin: homebridge-dummy@0.6.0
+[37m[5/1/2022, 3:51:08 PM] [39mRegistering accessory 'homebridge-dummy.DummySwitch'
+[37m[5/1/2022, 3:51:08 PM] [39m---
+[37m[5/1/2022, 3:51:08 PM] [39mLoaded plugin: homebridge-fhem@0.5.33
+homebridge API version: 2.7
+this is homebridge-fhem 0.5.33
+[37m[5/1/2022, 3:51:13 PM] [39mRegistering platform 'homebridge-fhem.FHEM'
+[37m[5/1/2022, 3:51:13 PM] [39m---
+[37m[5/1/2022, 3:51:13 PM] [39mLoaded plugin: homebridge-config-ui-x@4.43.1
+[37m[5/1/2022, 3:51:13 PM] [39mRegistering platform 'homebridge-config-ui-x.config'
+[37m[5/1/2022, 3:51:13 PM] [39m---
+[37m[5/1/2022, 3:51:13 PM] [39mLoading 2 platforms...
+[37m[5/1/2022, 3:51:13 PM] [39m[36m[Config][39m Initializing config platform...
+[37m[5/1/2022, 3:51:13 PM] [39m[36m[Config][39m Running in Service Mode
+[37m[5/1/2022, 3:51:13 PM] [39m[36m[FHEM][39m Initializing FHEM platform...
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651413074037
+Server listening on: http://<ip>:8282
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m Checking devices and attributes...
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   executing: http://127.0.0.1:8083/fhem?cmd=%7BAttrVal(%22global%22,%22userattr%22,%22%22)%7D&fwcsrf=csrf_28305632876968&XHR=1
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   executing: http://127.0.0.1:8083/fhem?cmd=jsonlist2%20TYPE=siri&fwcsrf=csrf_28305632876968&XHR=1
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m siri device is siri
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   executing: http://127.0.0.1:8083/fhem?cmd=%7B$defs%7Bsiri%7D-%3E%7B%22homebridge-fhem%20version%22%7D%20=%20%220.5.33%22%7D&fwcsrf=csrf_28305632876968&XHR=1
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m Fetching FHEM devices...
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m fetching: http://127.0.0.1:8083/fhem?cmd=jsonlist2%20room%3DHomekit&fwcsrf=csrf_28305632876968&XHR=1
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m got: 4 results
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m homebridgeMapping: On=open=state,valueOff=close,valueOn=open,cmdOff=close,cmdOn=open
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m dummyGarageCarsten is garage
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m dummyGarageCarsten has
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   CurrentDoorState [state]
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   TargetDoorState [state]
+  2022-05-01 15:51:14 caching: dummyGarageCarsten-state: close
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     caching: CurrentDoorState: 1 (as number; means CLOSED; from 'close')
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     caching: TargetDoorState: 1 (as number; means CLOSED; from 'close')
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m homebridgeMapping: On=open=state,valueOff=close,valueOn=open,cmdOff=close,cmdOn=open
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m dummyGarageTina is garage
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m dummyGarageTina has
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   CurrentDoorState [state]
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   TargetDoorState [state]
+  2022-05-01 15:51:14 caching: dummyGarageTina-state: close
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     caching: CurrentDoorState: 1 (as number; means CLOSED; from 'close')
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     caching: TargetDoorState: 1 (as number; means CLOSED; from 'close')
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m homebridgeMapping: On=state,valueOn=on,valueOff=off,cmdOn=on,cmdOff=off
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m gWLAN is switch
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m gWLAN has
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   On [state;on,off]
+  2022-05-01 15:51:14 caching: gWLAN-state: on
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     caching: On: true (as boolean; from 'on')
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m [31msiri: no service type detected[39m
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m no accessory created for siri (siri)
+[37m[5/1/2022, 3:51:14 PM] [39mInitializing platform accessory 'dummyGarageCarsten'...
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m creating services for dummyGarageCarsten
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   information service for dummyGarageCarsten
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     manufacturer, model and serial number characteristics for dummyGarageCarsten
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     name (siriName) characteristic for dummyGarageCarsten
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   GarageDoorOpener service for dummyGarageCarsten
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     CurrentDoorState characteristic for dummyGarageCarsten:state
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     TargetDoorState characteristic for dummyGarageCarsten:state
+[37m[5/1/2022, 3:51:14 PM] [39mInitializing platform accessory 'dummyGarageTina'...
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m creating services for dummyGarageTina
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   information service for dummyGarageTina
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     manufacturer, model and serial number characteristics for dummyGarageTina
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     name (siriName) characteristic for dummyGarageTina
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   GarageDoorOpener service for dummyGarageTina
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     CurrentDoorState characteristic for dummyGarageTina:state
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     TargetDoorState characteristic for dummyGarageTina:state
+[37m[5/1/2022, 3:51:14 PM] [39mInitializing platform accessory 'gWLAN'...
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m creating services for gWLAN
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   information service for gWLAN
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     manufacturer, model and serial number characteristics for gWLAN
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     name (siriName) characteristic for gWLAN
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m   Switch service for gWLAN
+[37m[5/1/2022, 3:51:14 PM] [39m[36m[FHEM][39m     On characteristic for gWLAN:state
+Setup Payload:
+X-HM://0023ISYWYY43S
+Enter this code with your HomeKit app on your iOS device to pair with Homebridge:
+[30m[47m                       [49m[39m
+[30m[47m    ┌────────────┐     [49m[39m
+[30m[47m    │ 031-45-154 │     [49m[39m
+[30m[47m    └────────────┘     [49m[39m
+[30m[47m                       [49m[39m
+[37m[5/1/2022, 3:51:14 PM] [39mHomebridge v1.4.0 (HAP v0.10.0) (Homebridge 3D65) is running on port 52988.
+[37m[5/1/2022, 3:51:15 PM] [39m[36m[FHEM][39m query: CurrentDoorState for dummyGarageCarsten-state
+[37m[5/1/2022, 3:51:15 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:51:15 PM] [39m[36m[FHEM][39m query: TargetDoorState for dummyGarageCarsten-state
+[37m[5/1/2022, 3:51:15 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:51:15 PM] [39m[36m[FHEM][39m query: CurrentDoorState for dummyGarageTina-state
+[37m[5/1/2022, 3:51:15 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:51:15 PM] [39m[36m[FHEM][39m query: TargetDoorState for dummyGarageTina-state
+[37m[5/1/2022, 3:51:15 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:51:15 PM] [39m[36m[FHEM][39m query: On for gWLAN-state
+[37m[5/1/2022, 3:51:15 PM] [39m[36m[FHEM][39m   cached: true (as boolean)
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m query: CurrentDoorState for dummyGarageCarsten-state
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m query: TargetDoorState for dummyGarageCarsten-state
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m query: CurrentDoorState for dummyGarageTina-state
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m query: TargetDoorState for dummyGarageTina-state
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m query: On for gWLAN-state
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m   cached: true (as boolean)
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m query: CurrentDoorState for dummyGarageCarsten-state
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m query: TargetDoorState for dummyGarageCarsten-state
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m query: CurrentDoorState for dummyGarageTina-state
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m query: TargetDoorState for dummyGarageTina-state
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m query: On for gWLAN-state
+[37m[5/1/2022, 3:51:21 PM] [39m[36m[FHEM][39m   cached: true (as boolean)
+[0;37m[5/1/2022, 3:51:45 PM] [0m[0;36m[Homebridge UI][0m Restarting the docker container, make sure you have --restart=always turned on or the container will not come back online
+
+
+    [1;37mThank you for using the [4;36moznu/homebridge[0m [1;37mdocker image![0m
+
+  If you find this project useful please [1;33mSTAR[0m it on GitHub:
+
+         [4;37mhttps://github.com/oznu/docker-homebridge[0m
+
+                Or donate to the project:
+
+            [4;37mhttps://github.com/sponsors/oznu[0m
+                  [4;37mhttps://paypal.me/oznu[0m
+
+[37m[5/1/2022, 3:51:45 PM][0m [36m[HB Supervisor][0m Stopping services...
+[37m[5/1/2022, 3:51:45 PM] [39mGot SIGTERM, shutting down Homebridge...
+[37m[5/1/2022, 3:57:15 PM][0m [36m[HB Supervisor][0m OS: Linux 5.15.32-v7+ arm
+[37m[5/1/2022, 3:57:15 PM][0m [36m[HB Supervisor][0m Node.js v16.15.0 /usr/local/bin/node
+[37m[5/1/2022, 3:57:15 PM][0m [36m[HB Supervisor][0m Homebridge Path: /usr/local/lib/node_modules/homebridge/bin/homebridge
+[37m[5/1/2022, 3:57:15 PM][0m [36m[HB Supervisor][0m UI Path: /usr/local/lib/node_modules/homebridge-config-ui-x/dist/bin/standalone.js
+[0;37m[5/1/2022, 3:57:27 PM] [0m[0;36m[Homebridge UI][0m [0;33mHomebridge Config UI X v4.43.2 is listening on :: port 8581[0m
+[37m[5/1/2022, 3:57:28 PM][0m [36m[HB Supervisor][0m Starting Homebridge with extra flags: -I -P /homebridge/node_modules
+[37m[5/1/2022, 3:57:29 PM][0m [36m[HB Supervisor][0m Started Homebridge v1.4.0 with PID: 234
+[37m[5/1/2022, 3:57:32 PM] [39mLoaded config.json with 0 accessories and 2 platforms.
+[37m[5/1/2022, 3:57:32 PM] [39mLoaded 0 cached accessories from cachedAccessories.
+[37m[5/1/2022, 3:57:32 PM] [39m---
+[37m[5/1/2022, 3:57:35 PM] [39mLoaded plugin: homebridge-dummy@0.6.0
+[37m[5/1/2022, 3:57:35 PM] [39mRegistering accessory 'homebridge-dummy.DummySwitch'
+[37m[5/1/2022, 3:57:35 PM] [39m---
+[37m[5/1/2022, 3:57:35 PM] [39mLoaded plugin: homebridge-fhem@0.5.33
+homebridge API version: 2.7
+this is homebridge-fhem 0.5.33
+[37m[5/1/2022, 3:57:41 PM] [39mRegistering platform 'homebridge-fhem.FHEM'
+[37m[5/1/2022, 3:57:41 PM] [39m---
+[37m[5/1/2022, 3:57:41 PM] [39mLoaded plugin: homebridge-config-ui-x@4.43.2
+[37m[5/1/2022, 3:57:41 PM] [39mRegistering platform 'homebridge-config-ui-x.config'
+[37m[5/1/2022, 3:57:41 PM] [39m---
+[37m[5/1/2022, 3:57:41 PM] [39mLoading 2 platforms...
+[37m[5/1/2022, 3:57:41 PM] [39m[36m[Config][39m Initializing config platform...
+[37m[5/1/2022, 3:57:41 PM] [39m[36m[Config][39m Running in Service Mode
+[37m[5/1/2022, 3:57:41 PM] [39m[36m[FHEM][39m Initializing FHEM platform...
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651413462830
+Server listening on: http://<ip>:8282
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m Checking devices and attributes...
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m   executing: http://127.0.0.1:8083/fhem?cmd=%7BAttrVal(%22global%22,%22userattr%22,%22%22)%7D&fwcsrf=csrf_28305632876968&XHR=1
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m   executing: http://127.0.0.1:8083/fhem?cmd=jsonlist2%20TYPE=siri&fwcsrf=csrf_28305632876968&XHR=1
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m siri device is siri
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m   executing: http://127.0.0.1:8083/fhem?cmd=%7B$defs%7Bsiri%7D-%3E%7B%22homebridge-fhem%20version%22%7D%20=%20%220.5.33%22%7D&fwcsrf=csrf_28305632876968&XHR=1
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m Fetching FHEM devices...
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m fetching: http://127.0.0.1:8083/fhem?cmd=jsonlist2%20room%3DHomekit&fwcsrf=csrf_28305632876968&XHR=1
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m got: 4 results
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m homebridgeMapping: On=open=state,valueOff=close,valueOn=open,cmdOff=close,cmdOn=open
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m dummyGarageCarsten is garage
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m dummyGarageCarsten has
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m   CurrentDoorState [state]
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m   TargetDoorState [state]
+  2022-05-01 15:57:43 caching: dummyGarageCarsten-state: close
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m     caching: CurrentDoorState: 1 (as number; means CLOSED; from 'close')
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m     caching: TargetDoorState: 1 (as number; means CLOSED; from 'close')
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m homebridgeMapping: On=open=state,valueOff=close,valueOn=open,cmdOff=close,cmdOn=open
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m dummyGarageTina is garage
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m dummyGarageTina has
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m   CurrentDoorState [state]
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m   TargetDoorState [state]
+  2022-05-01 15:57:43 caching: dummyGarageTina-state: close
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m     caching: CurrentDoorState: 1 (as number; means CLOSED; from 'close')
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m     caching: TargetDoorState: 1 (as number; means CLOSED; from 'close')
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m homebridgeMapping: On=state,valueOn=on,valueOff=off,cmdOn=on,cmdOff=off
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m gWLAN is switch
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m gWLAN has
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m   On [state;on,off]
+  2022-05-01 15:57:43 caching: gWLAN-state: on
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m     caching: On: true (as boolean; from 'on')
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m [31msiri: no service type detected[39m
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m no accessory created for siri (siri)
+[37m[5/1/2022, 3:57:43 PM] [39mInitializing platform accessory 'dummyGarageCarsten'...
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m creating services for dummyGarageCarsten
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m   information service for dummyGarageCarsten
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m     manufacturer, model and serial number characteristics for dummyGarageCarsten
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m     name (siriName) characteristic for dummyGarageCarsten
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m   GarageDoorOpener service for dummyGarageCarsten
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m     CurrentDoorState characteristic for dummyGarageCarsten:state
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m     TargetDoorState characteristic for dummyGarageCarsten:state
+[37m[5/1/2022, 3:57:43 PM] [39mInitializing platform accessory 'dummyGarageTina'...
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m creating services for dummyGarageTina
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m   information service for dummyGarageTina
+[37m[5/1/2022, 3:57:43 PM] [39m[36m[FHEM][39m     manufacturer, model and serial number characteristics for dummyGarageTina
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m     name (siriName) characteristic for dummyGarageTina
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m   GarageDoorOpener service for dummyGarageTina
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m     CurrentDoorState characteristic for dummyGarageTina:state
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m     TargetDoorState characteristic for dummyGarageTina:state
+[37m[5/1/2022, 3:57:44 PM] [39mInitializing platform accessory 'gWLAN'...
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m creating services for gWLAN
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m   information service for gWLAN
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m     manufacturer, model and serial number characteristics for gWLAN
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m     name (siriName) characteristic for gWLAN
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m   Switch service for gWLAN
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m     On characteristic for gWLAN:state
+Setup Payload:
+X-HM://0023ISYWYY43S
+Enter this code with your HomeKit app on your iOS device to pair with Homebridge:
+[30m[47m                       [49m[39m
+[30m[47m    ┌────────────┐     [49m[39m
+[30m[47m    │ 031-45-154 │     [49m[39m
+[30m[47m    └────────────┘     [49m[39m
+[30m[47m                       [49m[39m
+[37m[5/1/2022, 3:57:44 PM] [39mHomebridge v1.4.0 (HAP v0.10.0) (Homebridge 3D65) is running on port 52988.
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m query: CurrentDoorState for dummyGarageCarsten-state
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m query: TargetDoorState for dummyGarageCarsten-state
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m query: CurrentDoorState for dummyGarageTina-state
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m query: TargetDoorState for dummyGarageTina-state
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m query: On for gWLAN-state
+[37m[5/1/2022, 3:57:44 PM] [39m[36m[FHEM][39m   cached: true (as boolean)
+[0;37m[5/1/2022, 3:58:54 PM] [0m[0;36m[Homebridge UI][0m Running Command: npm install -g homebridge@1.4.1
+[0;37m[5/1/2022, 4:00:02 PM] [0m[0;36m[Homebridge UI][0m Homebridge restart request received
+[0;37m[5/1/2022, 4:00:02 PM] [0m[0;36m[Homebridge UI][0m UI / Bridge settings have not changed; only restarting Homebridge process
+[0;37m[5/1/2022, 4:00:02 PM] [0m[0;36m[Homebridge UI][0m Sending SIGTERM to Homebridge
+[37m[5/1/2022, 4:00:02 PM] [39mGot SIGTERM, shutting down Homebridge...
+[37m[5/1/2022, 4:00:07 PM][0m [36m[HB Supervisor][0m Homebridge Process Ended. Code: 143, Signal: null
+[37m[5/1/2022, 4:00:12 PM][0m [36m[HB Supervisor][0m Restarting Homebridge...
+[37m[5/1/2022, 4:00:12 PM][0m [36m[HB Supervisor][0m Starting Homebridge with extra flags: -I -P /homebridge/node_modules
+[37m[5/1/2022, 4:00:13 PM][0m [36m[HB Supervisor][0m Started Homebridge v1.4.1 with PID: 683
+[37m[5/1/2022, 4:00:15 PM] [39mLoaded config.json with 0 accessories and 2 platforms.
+[37m[5/1/2022, 4:00:15 PM] [39mLoaded 0 cached accessories from cachedAccessories.
+[37m[5/1/2022, 4:00:15 PM] [39m---
+[37m[5/1/2022, 4:00:18 PM] [39mLoaded plugin: homebridge-dummy@0.6.0
+[37m[5/1/2022, 4:00:18 PM] [39mRegistering accessory 'homebridge-dummy.DummySwitch'
+[37m[5/1/2022, 4:00:18 PM] [39m---
+[37m[5/1/2022, 4:00:18 PM] [39mLoaded plugin: homebridge-fhem@0.5.33
+homebridge API version: 2.7
+this is homebridge-fhem 0.5.33
+[37m[5/1/2022, 4:00:23 PM] [39mRegistering platform 'homebridge-fhem.FHEM'
+[37m[5/1/2022, 4:00:23 PM] [39m---
+[37m[5/1/2022, 4:00:24 PM] [39mLoaded plugin: homebridge-config-ui-x@4.43.2
+[37m[5/1/2022, 4:00:24 PM] [39mRegistering platform 'homebridge-config-ui-x.config'
+[37m[5/1/2022, 4:00:24 PM] [39m---
+[37m[5/1/2022, 4:00:24 PM] [39mLoading 2 platforms...
+[37m[5/1/2022, 4:00:24 PM] [39m[36m[Config][39m Initializing config platform...
+[37m[5/1/2022, 4:00:24 PM] [39m[36m[Config][39m Running in Service Mode
+[37m[5/1/2022, 4:00:24 PM] [39m[36m[FHEM][39m Initializing FHEM platform...
+starting longpoll: http://127.0.0.1:8083/fhem?XHR=1&inform=type=status;addglobal=1;filter=.*;since=null;fmt=JSON&timestamp=1651413624978
+Server listening on: http://<ip>:8282
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m Checking devices and attributes...
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   executing: http://127.0.0.1:8083/fhem?cmd=%7BAttrVal(%22global%22,%22userattr%22,%22%22)%7D&fwcsrf=csrf_28305632876968&XHR=1
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   executing: http://127.0.0.1:8083/fhem?cmd=jsonlist2%20TYPE=siri&fwcsrf=csrf_28305632876968&XHR=1
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m siri device is siri
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   executing: http://127.0.0.1:8083/fhem?cmd=%7B$defs%7Bsiri%7D-%3E%7B%22homebridge-fhem%20version%22%7D%20=%20%220.5.33%22%7D&fwcsrf=csrf_28305632876968&XHR=1
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m Fetching FHEM devices...
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m fetching: http://127.0.0.1:8083/fhem?cmd=jsonlist2%20room%3DHomekit&fwcsrf=csrf_28305632876968&XHR=1
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m got: 4 results
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m homebridgeMapping: On=open=state,valueOff=close,valueOn=open,cmdOff=close,cmdOn=open
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m dummyGarageCarsten is garage
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m dummyGarageCarsten has
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   CurrentDoorState [state]
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   TargetDoorState [state]
+  2022-05-01 16:00:25 caching: dummyGarageCarsten-state: close
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     caching: CurrentDoorState: 1 (as number; means CLOSED; from 'close')
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     caching: TargetDoorState: 1 (as number; means CLOSED; from 'close')
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m homebridgeMapping: On=open=state,valueOff=close,valueOn=open,cmdOff=close,cmdOn=open
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m dummyGarageTina is garage
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m dummyGarageTina has
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   CurrentDoorState [state]
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   TargetDoorState [state]
+  2022-05-01 16:00:25 caching: dummyGarageTina-state: close
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     caching: CurrentDoorState: 1 (as number; means CLOSED; from 'close')
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     caching: TargetDoorState: 1 (as number; means CLOSED; from 'close')
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m homebridgeMapping: On=state,valueOn=on,valueOff=off,cmdOn=on,cmdOff=off
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m gWLAN is switch
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m gWLAN has
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   On [state;on,off]
+  2022-05-01 16:00:25 caching: gWLAN-state: on
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     caching: On: true (as boolean; from 'on')
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m no accessory created for siri (siri)
+[37m[5/1/2022, 4:00:25 PM] [39mInitializing platform accessory 'dummyGarageCarsten'...
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m [31msiri: no service type detected[39m
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m creating services for dummyGarageCarsten
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   information service for dummyGarageCarsten
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     manufacturer, model and serial number characteristics for dummyGarageCarsten
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     name (siriName) characteristic for dummyGarageCarsten
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   GarageDoorOpener service for dummyGarageCarsten
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     CurrentDoorState characteristic for dummyGarageCarsten:state
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     TargetDoorState characteristic for dummyGarageCarsten:state
+[37m[5/1/2022, 4:00:25 PM] [39mInitializing platform accessory 'dummyGarageTina'...
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m creating services for dummyGarageTina
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   information service for dummyGarageTina
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     manufacturer, model and serial number characteristics for dummyGarageTina
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     name (siriName) characteristic for dummyGarageTina
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   GarageDoorOpener service for dummyGarageTina
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     CurrentDoorState characteristic for dummyGarageTina:state
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     TargetDoorState characteristic for dummyGarageTina:state
+[37m[5/1/2022, 4:00:25 PM] [39mInitializing platform accessory 'gWLAN'...
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m creating services for gWLAN
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   information service for gWLAN
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     manufacturer, model and serial number characteristics for gWLAN
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     name (siriName) characteristic for gWLAN
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m   Switch service for gWLAN
+[37m[5/1/2022, 4:00:25 PM] [39m[36m[FHEM][39m     On characteristic for gWLAN:state
+Setup Payload:
+X-HM://0023ISYWYY43S
+Enter this code with your HomeKit app on your iOS device to pair with Homebridge:
+[30m[47m                       [49m[39m
+[30m[47m    ┌────────────┐     [49m[39m
+[30m[47m    │ 031-45-154 │     [49m[39m
+[30m[47m    └────────────┘     [49m[39m
+[30m[47m                       [49m[39m
+[37m[5/1/2022, 4:00:25 PM] [39mHomebridge v1.4.1 (HAP v0.10.2) (Homebridge 3D65) is running on port 52988.
+[37m[5/1/2022, 4:00:26 PM] [39m[36m[FHEM][39m query: CurrentDoorState for dummyGarageCarsten-state
+[37m[5/1/2022, 4:00:26 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 4:00:26 PM] [39m[36m[FHEM][39m query: TargetDoorState for dummyGarageCarsten-state
+[37m[5/1/2022, 4:00:26 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 4:00:26 PM] [39m[36m[FHEM][39m query: CurrentDoorState for dummyGarageTina-state
+[37m[5/1/2022, 4:00:26 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 4:00:26 PM] [39m[36m[FHEM][39m query: TargetDoorState for dummyGarageTina-state
+[37m[5/1/2022, 4:00:26 PM] [39m[36m[FHEM][39m   cached: 1 (as number; means CLOSED)
+[37m[5/1/2022, 4:00:26 PM] [39m[36m[FHEM][39m query: On for gWLAN-state
+[37m[5/1/2022, 4:00:26 PM] [39m[36m[FHEM][39m   cached: true (as boolean)

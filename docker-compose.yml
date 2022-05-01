@@ -56,10 +56,7 @@ services:
     homebridge:
         image: oznu/homebridge:ubuntu
         restart: always
-        expose:
-            - "8581"
-        ports:
-            - "8581:8581"
+        network_mode: host
         volumes:
           - ./homebridge:/homebridge
         environment:

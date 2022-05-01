@@ -7,4 +7,6 @@
 /fhem/restoreDir/*
 /fhem/.ssh/*
 /fhem/.npm/*
+/homebridge/backups/*
+/homebridge/logs/*
 *.sqlc
