@@ -1,11 +1,12 @@
 # FHEM Docker Base
 
-This is a template for a docker based FHEM installation with Postgres.
+This is a template for a docker based FHEM installation with Postgres and Homebridge.
 
 ## Contains
 
 - FHEM
 - Postgres
+- Homebridge
 
 ## Requirements
 
@@ -29,3 +30,5 @@ docker exec -i fhem-docker-postgres-1 pg_restore -Fc -v --clean -h localhost -U 
 ## Defaults / Ports
 
 - FHEM: http://[ip]:8083/fhem
+- Postgres: [ip]:5432
+- Homebridge: http://[ip]:8581
