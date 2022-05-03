@@ -1,10 +1,10 @@
-# Created by FHEM/98_SVG.pm, 2022-05-02 14:43:33
+# Created by FHEM/98_SVG.pm, 2022-05-02 22:36:15
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
 set timefmt "%Y-%m-%d_%H:%M:%S"
 set xlabel " "
-set title 'Systemtemperatur Charon (Pi-hole)'
+set title 'Systemtemperatur Charon'
 set ytics 
 set y2tics 
 set grid ytics

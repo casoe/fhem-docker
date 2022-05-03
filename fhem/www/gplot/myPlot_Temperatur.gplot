@@ -1,10 +1,10 @@
-# Created by FHEM/98_SVG.pm, 2022-05-02 14:43:27
+# Created by FHEM/98_SVG.pm, 2022-05-02 22:36:11
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
 set timefmt "%Y-%m-%d_%H:%M:%S"
 set xlabel " "
-set title 'Systemtemperatur Hades (FHEM)'
+set title 'Systemtemperatur Hades'
 set ytics 
 set y2tics 
 set grid ytics
