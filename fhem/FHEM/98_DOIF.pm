@@ -1,5 +1,5 @@
 #############################################
-# $Id: 98_DOIF.pm 25975 2022-04-17 09:48:15Z Damian $
+# $Id: 98_DOIF.pm 26020 2022-05-03 16:28:02Z Damian $
 #
 # This file is part of fhem.
 #
@@ -972,7 +972,7 @@ sub AggrIntDoIf
     foreach my $reading ((defined $readingRegex) ? grep {/$readingRegex/} keys %{$defs{$name}{READINGS}} : $reading) {
       $value="";
       $number="";
-      if ($reading) {
+      if (defined($reading)) {
         if (defined $defs{$name}{READINGS}{$reading}) {
           $value=$defs{$name}{READINGS}{$reading}{VAL};
           $number = ($value =~ /(-?\d+(\.\d+)?)/ ? $1 : 0);
@@ -1641,7 +1641,7 @@ sub ReplaceReadingDoIf
     $format=$3;
   }
   if ($name) {
-    if ($reading) {
+    if (defined ($reading)) {
       if (substr($reading,0,1) eq "\?") {
         $notifyExp=substr($reading,1);
         return("::EventDoIf('$name',".'$hash,'."'$notifyExp',1)","",$name,undef,undef);
@@ -1775,7 +1775,7 @@ sub AddRegexpTriggerDoIf
   $reading="" if (!defined($reading));
   my $regexpid='"'.$regexp.'"';
   if ($dev) {
-    if ($reading){
+    if (defined ($reading)){
       $hash->{Regex}{$type}{$dev}{$element}{$reading}=(($reading =~ "^\&") ? "\^$dev\$":"\^$dev\$:\^$reading: ");
     } elsif ($regexp) {
       $hash->{Regex}{$type}{$dev}{$element}{$regexpid}="\^$dev\$:$regexp";

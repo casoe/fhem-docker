@@ -472,6 +472,8 @@ FHEM/95_FLOORPLAN.pm         ulimaass             Frontends/FLOORPLAN
 FHEM/95_holiday.pm           rudolfkoenig         Sonstiges
 FHEM/95_PostMe.pm            pahenning            Unterstützende Dienste
 FHEM/95_remotecontrol.pm     ulimaass             Frontends
+FHEM/95_Shares.pm            pahenning            Sonstiges
+FHEM/95/ShareMaster.pm       pahenning            Sonstiges
 FHEM/95_YAAHM.pm             pahenning            Unterstützende Dienste
 FHEM/96_allowed.pm           rudolfkoenig         Automatisierung
 FHEM/96_SIP.pm               Wzut,plin            Sonstiges
@@ -534,7 +536,7 @@ FHEM/98_ModbusAttr.pm        StefanStrobel        Sonstiges
 FHEM/98_ModbusElsnerWS.pm    klaus.schauer        Sonstiges
 FHEM/98_ModbusSET.pm         StefanStrobel        Sonstiges
 FHEM/98_ModbusTrovis5576.pm  Reinerlein           Heizungssteuerung/Raumklima
-FHEM/98_monitoring.pm        Beta-User            Automatisierung
+FHEM/98_monitoring.pm        Beta-User            Automatisierung https://forum.fhem.de/index.php/topic,126515.0.html
 FHEM/98_notice.pm            mfr69bs              Sonstiges
 FHEM/98_PHC.pm               StefanStrobel        Sonstiges
 FHEM/98_PID20.pm             John                 Automatisierung

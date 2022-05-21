@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 25997 2022-04-25 18:39:55Z rudolfkoenig $
+# $Id: fhem.pl 26034 2022-05-09 09:50:54Z rudolfkoenig $
 
 
 use strict;
@@ -277,7 +277,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 25997 2022-04-25 18:39:55Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 26034 2022-05-09 09:50:54Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -2162,6 +2162,22 @@ CommandDefine($$)
       addStructChange("define", $name, $def) if(!$opt{silent});
       DoTrigger("global", "DEFINED $name", 1);
     }
+
+    if($init_done && $modules{$m}{Match}) { # reset multiple IOdev, #127565
+      foreach my $an (keys %defs) {
+        my $ah = $defs{$an};
+        my $cl = $ah->{Clients};
+        $cl = $modules{$ah->{TYPE}}{Clients} if(!$cl);
+        next if(!$cl || !$ah->{'.clientArray'});
+        foreach my $cmRe ( split(/:/, $cl) ) {
+          if($m =~ m/^$cmRe$/) {
+            delete($ah->{'.clientArray'});
+            last;
+          }
+        }
+      }
+    }
+
   }
   return ($ret && $opt{ignoreErr} ?
         "Cannot define $name, remove -ignoreErr for details" : $ret);
