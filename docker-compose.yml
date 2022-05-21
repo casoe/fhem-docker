@@ -6,7 +6,7 @@ services:
         volumes:
             - "./fhem/:/opt/fhem/"
         devices:
-            - "/dev/lesekopf:/dev/lesekopf"
+            - "/dev/ttyUSB0:/dev/ttyUSB0"
         environment:
             FHEM_UID: 1000
             FHEM_GID: 1000
