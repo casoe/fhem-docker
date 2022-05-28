@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 00_MQTT2_SERVER.pm 25999 2022-04-26 09:22:19Z rudolfkoenig $
+# $Id: 00_MQTT2_SERVER.pm 26055 2022-05-17 20:12:20Z rudolfkoenig $
 package main;
 
 use strict;
@@ -576,8 +576,7 @@ MQTT2_SERVER_doPublish($$$$;$)
         delete($fl->{$fwid});
         next;
       }
-      FW_AsyncOutput($cl, "", 
-                  defined($cid) ? "RCVD: $tp $val<br>" : "SENT: $tp $val<br>");
+      FW_AsyncOutput($cl, "", toJSON([defined($cid)?$cid:"SENT", $tp, $val]));
     }
     delete($server->{".feedList"}) if(!keys %{$fl});
   }

@@ -1,4 +1,4 @@
-# $Id: 72_FB_CALLMONITOR.pm 25908 2022-04-01 12:25:06Z markusbloch $
+# $Id: 72_FB_CALLMONITOR.pm 26090 2022-05-25 15:53:02Z markusbloch $
 ##############################################################################
 #
 #     72_FB_CALLMONITOR.pm
@@ -835,7 +835,7 @@ FB_CALLMONITOR_reverseSearch($$)
                     else
                     {
                         #Debug($result);
-                        if($result =~ m,<span class="st-treff-name">(.+?)</span>,)
+                        if($result =~ m,\@type":.+?"name":"(.+?)",)
                         {
                             $invert_match = $1;
                             $invert_match = FB_CALLMONITOR_html2txt($invert_match);

@@ -1,5 +1,5 @@
 ##############################################
-# $Id: DevIo.pm 25716 2022-02-20 17:39:00Z rudolfkoenig $
+# $Id: DevIo.pm 26055 2022-05-17 20:12:20Z rudolfkoenig $
 package main;
 
 use strict;
@@ -360,9 +360,10 @@ DevIo_Expect($$$)
 # - UNIX:(SEQPACKET|STREAM):filename => Open filename as a UNIX socket
 # - FHEM:DEVIO:IoDev[:IoPort] => Cascade I/O over another FHEM Device
 #
-# callback is only meaningful for TCP/IP (in which case a nonblocking connect
-# is executed) every cases. It will be called with $hash and a (potential)
-# error message. If $hash->{SSL} is set, SSL encryption is activated.
+# callback is only meaningful for TCP/IP, in which case a nonblocking connect
+# is executed. It will be called with $hash and a (potential) error message.
+# If # $hash->{SSL} is set, SSL encryption is activated.
+
 sub
 DevIo_OpenDev($$$;$)
 {

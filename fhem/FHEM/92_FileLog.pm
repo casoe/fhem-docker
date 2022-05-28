@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 92_FileLog.pm 25748 2022-02-27 10:29:56Z rudolfkoenig $
+# $Id: 92_FileLog.pm 26084 2022-05-24 11:22:55Z rudolfkoenig $
 package main;
 
 use strict;
@@ -498,6 +498,7 @@ FileLog_Set($@)
     $hash->{REGEXP} = $re;
     $hash->{DEF} = $hash->{logfile} ." $re";
     notifyRegexpChanged($hash, $re);
+    addStructChange("set", $me, join(" ", @a));
     
   } elsif($cmd eq "removeRegexpPart") {
     my %h;
@@ -512,6 +513,7 @@ FileLog_Set($@)
     $hash->{REGEXP} = $re;
     $hash->{DEF} = $hash->{logfile} ." $re";
     notifyRegexpChanged($hash, $re);
+    addStructChange("set", $me, join(" ", @a));
 
   } elsif($cmd eq "absorb") {
     my $victim = $a[2];

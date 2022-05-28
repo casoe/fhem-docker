@@ -1,5 +1,5 @@
 ##########################################################################
-# $Id: 98_monitoring.pm 26038 2022-05-10 16:59:40Z Beta-User $
+# $Id: 98_monitoring.pm 26048 2022-05-16 05:31:56Z Beta-User $
 #
 # copyright ###################################################################
 #
@@ -337,9 +337,7 @@ sub Notify {
     my $removeMatch = $removeRegex ? "$name:$event" =~ m{\A$removeRegex\z}xms : 0;
     #Log3($hash, 3, "notify called with add $addMatch and remove $removeMatch");
 
-    #next unless(defined($event) && ($addMatch || $removeMatch));
     next if !$addMatch && !$removeMatch;
-    #Log3($hash, 3, "notify unless 1 replacement passed w. $addMatch and remove $removeMatch");
 
     Log3($SELF, 4 , "$TYPE ($SELF) triggered by \"$name $event\"");
 
@@ -350,8 +348,11 @@ sub Notify {
 
       my $cmd = AttrVal($SELF, $list.'Wait', 0);
       my %specials = (
-         '$name'   => $name,      #Name des Event auslösenden Gerätes
-         '$SELF'   => $SELF,      #Eigenname des monitoring
+         '$name'        => $name,      #Name des Event auslösenden Gerätes
+         '$SELF'        => $SELF,      #Eigenname des monitoring
+         '$event'       => $event,
+         '$addMatch'    => $addMatch,
+         '$removeMatch' => $removeMatch
       );
 
       $cmd  = EvalSpecials($cmd, %specials);
