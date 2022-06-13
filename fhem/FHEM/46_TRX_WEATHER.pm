@@ -1,4 +1,4 @@
-# $Id: 46_TRX_WEATHER.pm 18095 2018-12-30 14:37:23Z KernSani $
+# $Id: 46_TRX_WEATHER.pm 26129 2022-06-06 10:13:53Z rudolfkoenig $
 ##############################################################################
 #
 # 46_TRX_WEATHER.pm
@@ -144,7 +144,7 @@ TRX_WEATHER_Initialize($)
 {
   my ($hash) = @_;
 
-  $hash->{Match}     = "^..(40|4e|50|51|52|54|55|56|57|58|5a|5c|5d|71).*";
+  $hash->{Match}     = "^..(40|4e|50|51|52|54|55|56|57|58|5a|5b|5c|5d|71).*";
   $hash->{DefFn}     = "TRX_WEATHER_Define";
   $hash->{UndefFn}   = "TRX_WEATHER_Undef";
   $hash->{ParseFn}   = "TRX_WEATHER_Parse";

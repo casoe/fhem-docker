@@ -1,8 +1,8 @@
 ##############################################
 # 00_THZ
-# $Id: 00_THZ.pm 26085 2022-05-24 12:36:06Z immi $
-# by immi 05/2022
-my $thzversion = "0.201";
+# $Id: 00_THZ.pm 26140 2022-06-10 15:55:38Z immi $
+# by immi 06/2022
+my $thzversion = "0.203";
 # this code is based on the hard work of Robert; I just tried to port it
 # http://robert.penz.name/heat-pump-lwz/
 ########################################################################################
@@ -986,7 +986,7 @@ sub THZ_Refresh_all_gets($) {
 #        my %par = (hash => $hash, command => $cmdhash, NAME => $hash->{NAME} ); #does not group in apptime
         InternalTimer((gettimeofday() + $timedelay), "THZ_GetRefresh", \%par, 0);		#increment 0.6 $timedelay++
         $timedelay += 2;                      #0.6 seconds were ok but considering winter 2017/2018 I prefer to increase
-	$timedelay += 2 if (AttrVal($hash->{NAME}, "firmware" , "4.39")  =~ /^2/);  # I added 2 more seconds for joerg 05/2022
+	$timedelay += 5 if (AttrVal($hash->{NAME}, "firmware" , "4.39")  =~ /^2/);  # I added 5 more seconds for joerg 05/2022
   }  
 }
 
@@ -999,18 +999,23 @@ sub THZ_Refresh_all_gets($) {
 # it get the intervall directly from a attribute; the register with interval_command ne 0 will keep on refreshing
 ########################################################################################
 sub THZ_GetRefresh($) {
-	my ($par)=@_;
-	my $hash=$par->{hash};
-	my $command=$par->{command};    
+    my ($par)=@_;
+    my $hash=$par->{hash};
+    my $command=$par->{command};    
     my $name =$hash->{NAME};
     
-    if (ReadingsAge($name ,'z_Last_fhem_err', 100) < 100) {
-            Log3 $hash, 5, "[$name] THZ_GetRefresh($command) rescheduled (stop 100s after one error)";
+    if (ReadingsAge($name ,'z_Last_fhem_err', 120) < 120) {
+            Log3 $hash, 5, "[$name] THZ_GetRefresh($command) rescheduled (stop 120s after one error)";
             InternalTimer(gettimeofday() + 200, "THZ_GetRefresh", $par, 1);
             return;
     }
+    if (ReadingsAge($name ,$command, 41) < 41) {
+            Log3 $hash, 5, "[$name] THZ_GetRefresh($command) rescheduled (the reading has been updated in the last 40s)";
+            InternalTimer(gettimeofday() + 300, "THZ_GetRefresh", $par, 1);
+            return;
+    }
     
-	if (AttrVal($name, "nonblocking" , "0")  =~ /1/ ) {
+    if (AttrVal($name, "nonblocking" , "0")  =~ /1/ ) {
         if (!(exists($hash->{helper}{RUNNING_PID}))) {
             DevIo_CloseDev($hash);          #close device in parent process
             #$hash->{STATE}="disconnected";
@@ -1072,57 +1077,20 @@ sub THZ_Read($) {
     my $buf = DevIo_SimpleRead($hash);
     return "" if(!defined($buf));
     my $name = $hash->{NAME};
-    $hash->{helper}{PARTIAL} .= uc(unpack('H*', $buf));
-    my $msg=$hash->{helper}{PARTIAL};
+    my $msg=uc(unpack('H*', $buf));
     my $err;
-    if ( !defined($hash->{helper}{step}) or (length($msg) == 1)  or (($msg =~ m/^01/) and ($msg !~ m/1003$/m ))) {} 
-    else {
-        if    ($hash->{helper}{step} eq "step0") { #Expectedanswer0    is  "10"  DLE data link escape
-            if ($msg ne "10")   {$err .= " THZ_Get_Com: error found at step0 $msg"; $err .=" NAK!!" if ($msg eq "15");  THZ_Resethelper($hash);}
-            else                { THZ_Write($hash, $hash->{helper}{cmdHex}); 		$hash->{helper}{step}="step1";       $hash->{helper}{PARTIAL}="";  }
-        }    
-	elsif ($hash->{helper}{step} eq "step1") { #Expectedanswer1     is "1002",		DLE data link escape -- STX start of text  
-            if      ($msg eq "10") 	{ }
-            elsif   ($msg eq "15")  { $err .=  " THZ_Get_Com: error found at step1  NAK!! ";    THZ_Resethelper($hash); }
-            elsif   ($msg eq "1002" || $msg eq "02") {THZ_Write($hash,  "10"); 	                $hash->{helper}{step}="step2"; $hash->{helper}{PARTIAL}=""; }
-        }
-	elsif ($hash->{helper}{step} eq "step2") { #Expectedanswer2     is  message from the heatpump
-            ($err, $msg) = THZ_decode($msg);
-            $msg.=THZ_Parse1($hash,$msg);
-            THZ_Write($hash,  "10");
-            #THZ_Resethelper($hash);
-        }    
-    }   
-    Log3 $name, 3, "$name/RAW: $msg - $err - $hash->{helper}{step}";
+    if ($msg =~ m/^02|/^1002) {
+	THZ_Write($hash,  "10");
+	($err, $msg) = THZ_ReadAnswer($hash);	
+	THZ_Write($hash,  "10");  
+	($err, $msg) = THZ_decode($msg)  if  (!defined($err));
+	$msg= THZ_Parse1($hash,$msg)	 if  (!defined($err));  #only missing unit and readingupdate
+	$msg.= $err 			 if  (defined($err));
+     }
+    Log3 $name, 3, "$name/RAW: $msg";
 }
 
 
-#####################################
-#
-# THZ_Resethelper()
-#
-# Parameter hash
-#
-########################################################################################
-
-sub THZ_Resethelper($) {
-    my ($hash) = @_;
-    $hash->{helper}{step}="";
-    $hash->{helper}{cmdHex}="";
-    $hash->{helper}{PARTIAL}="";     
-}
-
-
-sub THZ_Testloopapproach($) {
-    my ($hash) = @_;
-    my $cmd="sGlobal";
-    #my $cmd="sHC1";
-    my $cmdhash = $gets{$cmd};
-    THZ_Write($hash,  "02");
-    $hash->{helper}{step}="step0";
-    $hash->{helper}{cmdHex}=THZ_encodecommand($cmdhash->{cmd2},"get");
-    $hash->{helper}{PARTIAL}="";
-}
 
 sub THZ_testtimer($) {
     my ($hash) = @_;
@@ -1446,7 +1414,7 @@ sub THZ_Get($@) {
         my ($seconds, $microseconds) = gettimeofday();
         $seconds= abs($seconds - time_str2num(ReadingsTimestamp($name, $parent, "1970-01-01 01:00:00")));
         my $risultato=ReadingsVal($name, $parent, 0);
-        $risultato=THZ_Get($hash, $name, $parent) if ($seconds > 20 );	#update of the parent: if under 20sec use the current value
+        $risultato=THZ_Get($hash, $name, $parent) if ($seconds > 29 );	#update of the parent: if under 29sec use the current value
         #$risultato=THZ_Parse1($hash,"B81700C800BE00A001C20190006402010000E601D602");
         my $parenthash=$gets{$parent}; my $parsingrule = $parsinghash{$parenthash->{type}};
         my $i=0; 
@@ -1513,7 +1481,7 @@ sub THZ_Get_Comunication($$) {
     ($err, $msg) = THZ_ReadAnswer($hash);
     if  (defined($err))     {$err .=  " THZ_Get_Com: error found at step1 "; select(undef, undef, undef, 0.1); return($err, $msg) ;}
     # Expectedanswer1     is "1002",		DLE data link escape -- STX start of text    
-    if  ($msg eq "10") 	    {($err, $msg) = THZ_ReadAnswer($hash);} # read again sometimes "10" pause "02"
+    if  ($msg eq "10") 	    {select(undef, undef, undef, 0.005) if (AttrVal($hash->{NAME}, "firmware" , "4.39")  =~ /^2/); ($err, $msg) = THZ_ReadAnswer($hash);} # read again sometimes "10" pause "02"
     if  ($msg ne "1002" and $msg ne "02") {$err .= " THZ_Get_Com: error found at step1 $msg"; $err .=" NAK!!" if ($msg eq "15"); select(undef, undef, undef, 0.1); return($err, $msg) ;}
     
     # ---------step2 send  DLE data link escape
@@ -1542,16 +1510,15 @@ sub THZ_ReadAnswer($) {
     my $rtimeout = (AttrVal($name, "simpleReadTimeout", "0.8"));
     $rtimeout +=1 if (AttrVal($hash->{NAME}, "firmware" , "4.39")  =~ /^2/);
     $rtimeout = minNum($rtimeout,1.8) if (AttrVal($name, "nonblocking", "0") eq 0); # set to max 1.8s if nonblocking disabled
-    my $count = 0; my $countmax = 40;
+    my $count = 0; my $countmax = 300;
     while ((!defined($buf)) and ($count <= $countmax)) {
-        if ($^O =~ /Win/){
-            select(undef, undef, undef, 0.005);  ###delay of 5 ms for windows-OS, because SimpleReadWithTimeout does not wait
-            select(undef, undef, undef, 0.02) if (AttrVal($hash->{NAME}, "firmware" , "4.39")  =~ /^2/);   # possible fix for joerg may2022, add 20ms wait time to the above -----    
+        select(undef, undef, undef, 0.002) if (AttrVal($hash->{NAME}, "firmware" , "4.39")  =~ /^2/);   # possible fix for joerg may2022, add 5ms wait time to the above -----    
+	if ($^O =~ /Win/){
+            select(undef, undef, undef, 0.002);  ###delay of 2 ms for windows-OS, because SimpleReadWithTimeout does not wait
             $buf =    DevIo_DoSimpleRead($hash);
             $buf =  undef if (length($buf)==0);
         }
         else {
-            select(undef, undef, undef, 0.02) if (AttrVal($hash->{NAME}, "firmware" , "4.39")  =~ /^2/);   # possible fix for joerg may2022, add 20ms wait time to the above -----    
             $buf = DevIo_SimpleReadWithTimeout($hash, (minNum($count,1)*$rtimeout/$countmax + 0.001)); ##pay attention with DevIo_SimpleRead: it closes the connection if no answe given; DevIo_SimpleReadWithTimeout does not close
         }
         $count ++;

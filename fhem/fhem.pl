@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 26034 2022-05-09 09:50:54Z rudolfkoenig $
+# $Id: fhem.pl 26115 2022-06-04 09:50:00Z rudolfkoenig $
 
 
 use strict;
@@ -230,7 +230,7 @@ sub cfgDB_FileWrite;
 # IODev   - attached to io device
 # CHANGED - Currently changed attributes of this device. Used by NotifyFn
 # VOLATILE- Set if the definition should be saved to the "statefile"
-# NOTIFYDEV - if set, the notifyFn will only be called for this device
+# NOTIFYDEV - if set, the NotifyFn will only be called for this device
 
 use vars qw($addTimerStacktrace);# set to 1 by fhemdebug
 use vars qw($auth_refresh);
@@ -277,7 +277,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 26034 2022-05-09 09:50:54Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 26115 2022-06-04 09:50:00Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -1633,6 +1633,7 @@ WriteStatefile()
     if($defs{$d}{VOLATILE}) {
       my $def = $defs{$d}{DEF};
       $def =~ s/;/;;/g; # follow-on-for-timer at
+      $def =~ s/\n/\\\n/g;
       print $SFH "define $d $defs{$d}{TYPE} $def\n";
     }
 
@@ -3848,6 +3849,7 @@ DoTrigger($$@)
   # the inner loop.
   if($max && !defined($hash->{INTRIGGER})) {
     $hash->{INTRIGGER}=1;
+    $hash->{eventCount}++;
     if($attr{global}{verbose} >= 5) {
       Log 5, "Starting notify loop for $dev, " . scalar(@{$hash->{CHANGED}}) . 
         " event(s), first is " . escapeLogLine($hash->{CHANGED}->[0]);

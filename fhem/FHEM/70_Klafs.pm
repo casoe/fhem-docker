@@ -1,4 +1,4 @@
-# $Id: 70_Klafs.pm 26082 2022-05-24 07:54:23Z xasher $
+# $Id: 70_Klafs.pm 26110 2022-06-02 09:14:02Z xasher $
 ##############################################################################
 #
 #     70_Klafs.pm
@@ -21,9 +21,6 @@
 #     Forum: https://forum.fhem.de/index.php?topic=127701
 #
 ##############################################################################
-# ToDo
-# get SaunaID
-##############################################################################
 package main;
 
 use strict;
@@ -35,7 +32,7 @@ use JSON            qw(decode_json encode_json);
 #use Encode          qw(encode_utf8 decode_utf8);
 use Time::Piece;
 use Time::Local;
-#use Data::Dumper;
+use Data::Dumper;
 use HttpUtils;
 use FHEM::Core::Authentication::Passwords qw(:ALL);
 
@@ -175,9 +172,9 @@ sub Klafs_CONNECTED {
       $hash->{Klafs}->{CONNECTED} = $set;
 
       if ( $notUseBulk ) {
-        readingsSingleUpdate($hash,'state',$set,1) if $set eq ReadingsVal($hash->{NAME},'state','');
+        readingsSingleUpdate($hash,'state',$set,1) if $set ne ReadingsVal($hash->{NAME},'state','');
       } else {
-        readingsBulkUpdate($hash,'state',$set) if $set eq ReadingsVal($hash->{NAME},'state','');
+        readingsBulkUpdate($hash,'state',$set) if $set ne ReadingsVal($hash->{NAME},'state','');
       }
       return;
     }
@@ -371,7 +368,6 @@ sub klafs_getStatusResponse {
   my $hash = $param->{hash};
   my $name = $hash->{NAME};
   my $header = $param->{httpheader};
-  my $power = ReadingsVal( $name, "power", "off" );
   
   Log3 ($name, 5, "Status header: $header");
   Log3 ($name, 5, "Status Data: $data");
@@ -392,6 +388,11 @@ sub klafs_getStatusResponse {
      for my $key (qw( saunaSelected sanariumSelected irSelected isConnected isPoweredOn isReadyForUse showBathingHour)) {
       $entries->{$key} = $entries->{$key} ?  q{true} : q{false} ;
      }
+     my $power = $entries->{isPoweredOn} eq q{true}  ? 'on' 
+               : $entries->{isPoweredOn} eq q{false} ? 'off'
+               : 0;
+     $entries->{power} = $power;
+
      $entries->{statusMessage} //= '';
      $entries->{currentTemperature} = '0' if $entries->{currentTemperature} eq '141';
      $entries->{RemainTime} = sprintf("%2.2d:%2.2d" , $entries->{bathingHours}, $entries->{bathingMinutes});
@@ -666,10 +667,11 @@ sub Klafs_Set {
     }
     my $next = scalar localtime $now;
     my @Zeit = split(/ /,$next);
-    my @Uhrzeit = split(/:/,$Zeit[3]);
+    my @Uhrzeit = split(/:/,$Zeit[4]);
     my $std = $Uhrzeit[0];
     my $min = $Uhrzeit[1];
-    
+
+
     if($std < 10){
       if(substr($std,0,1) eq "0"){
         $std = substr($std,1,1);
