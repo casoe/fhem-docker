@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 01_FHEMWEB.pm 25943 2022-04-10 11:34:15Z rudolfkoenig $
+# $Id: 01_FHEMWEB.pm 26246 2022-07-19 11:05:05Z rudolfkoenig $
 package main;
 
 use strict;
@@ -468,7 +468,8 @@ FW_Read($$)
                        } @FW_httpheader;
   if(!$hash->{encoding}) {
     my $ct = $FW_httpheader{"Content-Type"};
-    $hash->{encoding} = ($ct && $ct =~ m/charset\s*=\s*(\S*)/i ? $1 : $FW_encoding);
+    $hash->{encoding} =
+        ($ct && $ct =~ m/charset\s*=\s*(\S*)/i ? $1 : $FW_encoding);
   }
   delete($hash->{HDR});
 
@@ -679,7 +680,7 @@ FW_initInform($$)
   $FW_id2inform{$FW_id} = $me if($FW_id);
 
   my $filter = $me->{inform}{filter};
-  $filter =~ s/([[\]().+?])/\\$1/g if($filter =~ m/room=/); # Forum #80390
+  # Regexp escaping moved to fhemweb.js (#80390, #128362, #128442 )
   $filter = "NAME=.*" if($filter eq "room=all");
   $filter = "room!=.+" if($filter eq "room=Unsorted");
 
@@ -728,6 +729,7 @@ sub
 FW_addToWritebuffer($$@)
 {
   my ($hash, $txt, $callback, $nolimit, $encoded) = @_;
+  return 0 if(!defined($hash->{FD})); # No success
 
   $txt = Encode::encode($hash->{encoding}, $txt)
           if($hash->{encoding} && !$encoded && ($unicodeEncoding ||
@@ -1982,8 +1984,10 @@ FW_sortIndex($)
 sub
 FW_showRoom()
 {
+  my $roomRe = $FW_room;
+  $roomRe =~ s/([[\]().+*?])/\\$1/g;
   return 0 if(!$FW_room ||
-              AttrVal($FW_wname,"forbiddenroom","") =~ m/\b$FW_room\b/);
+              AttrVal($FW_wname,"forbiddenroom","") =~ m/\b$roomRe\b/);
 
   %FW_hiddengroup = ();
   foreach my $r (split(",",AttrVal($FW_wname, "hiddengroup", ""))) {

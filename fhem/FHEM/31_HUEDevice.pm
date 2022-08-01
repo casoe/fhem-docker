@@ -1,4 +1,4 @@
-# $Id: 31_HUEDevice.pm 26012 2022-05-01 10:32:54Z justme1968 $
+# $Id: 31_HUEDevice.pm 26204 2022-07-09 18:04:20Z justme1968 $
 # "Hue Personal Wireless Lighting" is a trademark owned by Koninklijke Philips Electronics N.V.,
 # see www.meethue.com for more information.
 # I am in no way affiliated with the Philips organization.
@@ -950,7 +950,7 @@ HUEDevice_Set($@)
 
     } elsif( $cmd eq 'json' ) {
       return "usage: json [setsensor|configsensor] <json>" if( !@args );
-      my $type = 'setsensor';
+      my $type = 'updatesensor';
       if( $args[0] eq 'setsensor' || $args[0] eq 'configsensor' ) {
         $type = shift @args;
        }
@@ -1898,6 +1898,10 @@ HUEDevice_Parse($$)
       $readings{input} = $state->{input} if( defined($state->{input}) );
       $readings{eventtype} = $state->{eventtype} if( defined($state->{eventtype}) );
       $readings{eventduration} = $state->{eventduration} if( defined($state->{eventduration}) );
+
+      $readings{action} = $state->{action} if( defined($state->{action}) );
+      $readings{steps} = $state->{steps} if( defined($state->{steps}) );
+      $readings{direction} = $state->{direction} if( defined($state->{direction}) );
 
       $readings{dark} = $state->{dark}?'1':'0' if( defined($state->{dark}) );
       $readings{humidity} = $state->{humidity} * 0.01 if( defined($state->{humidity}) );

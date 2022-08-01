@@ -1,5 +1,5 @@
 "use strict";
-FW_version["f18.js"] = "$Id: f18.js 25656 2022-02-08 09:49:53Z rudolfkoenig $";
+FW_version["f18.js"] = "$Id: f18.js 26271 2022-07-29 15:22:05Z rudolfkoenig $";
 
 // TODO: hierMenu+Pin,SVGcolors,floorplan
 // Known bugs: AbsSize is wrong for ColorSlider
@@ -146,11 +146,11 @@ f18_tables()
   }
 
 
-  if(FW_urlParams.cmd == "style%20list" ||
-     FW_urlParams.cmd == "style%20select")
+  if(FW_urlParams.cmd == "style list" ||
+     FW_urlParams.cmd == "style select")
     $("div.fileList").each(function(){ f18_addPinToStyleDiv(this) });
 
-  if(FW_urlParams.cmd == "style%20select") 
+  if(FW_urlParams.cmd == "style select") 
     f18_special();
   else if(f18_getAttr("showDragger"))
     $("[data-name]").each(function(){ f18_addDragger(this) });

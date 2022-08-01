@@ -1,5 +1,29 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - bugfix:  50_Signalbot: update contacts on startup, signal-cli 0.10.9
+ - feature: 96_Snapcast: group volume now can be set
+ - feature: 49_SSCam: text field long for some attributes, the body text 
+                      can contain HTML-Tags when sending snaps/recordings
+ - bugfix:  57_SSCal: fix problem recurring MONTHLY appointment by day
+ - bugfix:  96_Snapcast: prevent crash in case of external group commands
+ - feature: 70_ESCVP21net: added undocumented settings (IMGPROC, IRIS, LIRIS)
+ - feature: 30_HUEBridge, 31_HUEDevice: support for Hue tap dial switch
+ - change:  96_Snapcast: PBP code restructured (part I)
+ - bugfix:  49_SSCam: fix noQuotesForSID using in streaming devices type mjpeg
+ - feature: 74_GardenaSmartDevice: add lona readings, [fix] - setter procedure
+ - feature: 14_CUL_TCM97001:
+               add KW9015 (TFA 30.3161)
+               add Mebus HQ7312
+               update log Unkown
+               new attribute disableCreateUndefDevice:
+                  this can be used to deactivate the creation of new devices
+               new attribute disableUnknownEvents:
+                  with this, the events can be deactivated for unknown messages
+ - bugfix:  14_CUL_TCM97001:
+               fix Battery at the model NC_WS
+               fix Ventus W174, update log
+ - change:  mqtt2.template: zigbee2mqtt now uses lowercase state
+ - bugfix:  79_Klafs: minor bugfix for date format 
  - bugfix:  38_netatmo: fixed csrf error on home notification settings
  - bugfix:  10_SOMFY: Correct match for long commands according to #msg1224029
  - bugfix:  70_Klafs: Start time error fixed

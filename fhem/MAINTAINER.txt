@@ -52,6 +52,7 @@ FHEM/00_ZWDongle.pm          rudolfkoenig         ZWave
 FHEM/01_FHEMWEB.pm           rudolfkoenig         Frontends/FHEMWEB
 FHEM/02_FRAMEBUFFER.pm       kaihs                Frontends
 FHEM/02_FTUISRV.pm           viegener             Frontends/TabletUI
+FHEM/02_HTTPAPI.pm           klaus.schauer        Automatisierung
 FHEM/02_HTTPSRV.pm           neubert              Frontends
 FHEM/02_RSS.pm               neubert              Frontends/RSS
 FHEM/09_BS.pm                neubert              SlowRF
@@ -67,7 +68,7 @@ FHEM/10_FRM.pm               jensb                Sonstige Systeme
 FHEM/10_FS20.pm              rudolfkoenig         SlowRF
 FHEM/10_GFPROBT.pm           dominik              Sonstige Systeme
 FHEM/10_HXBDevice.pm         neubert              Sonstige Systeme
-FHEM/10_IT.pm                dancer0705/bjoernh   InterTechno
+FHEM/10_IT.pm                Ralf9/KoelnSolar     InterTechno
 FHEM/10_Itach_IR             ulimaass             Sonstige Systeme
 FHEM/10_KNX.pm               erwin                KNX/EIB (Forum #122582) https://forum.fhem.de/index.php/topic,122582.0.html
 FHEM/10_KOPP_FC.pm           raspii               Sonstige Systeme
@@ -101,7 +102,7 @@ FHEM/12_OilFox.pm            eisler               Sonstige Systeme
 FHEM/13_KS300.pm             rudolfkoenig         SlowRF
 FHEM/14_CUL_MAX.pm           Wzut                 MAX
 FHEM/14_CUL_REDIRECT.pm      dancer0705/bjoernh   Sonstiges
-FHEM/14_CUL_TCM97001.pm      dancer0705/bjoernh   Sonstiges
+FHEM/14_CUL_TCM97001.pm      Ralf9                Sonstiges https://forum.fhem.de/index.php/topic,101425.0.html
 FHEM/14_CUL_TX.pm            rudolfkoenig         SlowRF
 FHEM/14_CUL_WS.pm            rudolfkoenig         SlowRF
 FHEM/14_FLAMINGO.pm          HomeAuto_User        Sonstige Systeme (Link als PM an HomeAuto_User)
@@ -479,7 +480,7 @@ FHEM/95/ShareMaster.pm       pahenning            Sonstiges
 FHEM/95_YAAHM.pm             pahenning            Unterstützende Dienste
 FHEM/96_allowed.pm           rudolfkoenig         Automatisierung
 FHEM/96_SIP.pm               Wzut,plin            Sonstiges
-FHEM/96_Snapcast.pm          rudolfkoenig/orphan  Multimedia
+FHEM/96_Snapcast.pm          Beta-User            Multimedia
 FHEM/97_PiXtendV2            PiXtend              Sonstige Systeme https://forum.fhem.de/index.php/topic,116308.0.html
 FHEM/97_TrashCal.pm          Tobias               Unterstützende Dienste
 FHEM/98_alarmclock.pm        FlorianZ             Unterstützende Dienste

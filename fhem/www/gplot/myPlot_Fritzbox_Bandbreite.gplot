@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2021-11-07 17:39:14
+# Created by FHEM/98_SVG.pm, 2022-07-14 23:04:45
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -11,7 +11,7 @@ set grid
 set ylabel "MBit/s"
 set y2label ""
 set yrange [0:55]
-set y2range [0:12]
+set y2range [0:11]
 
 #lp DbLog:dblog:Fritzbox:rateDownInMB
 #lp DbLog:dblog:Fritzbox:rateUpInMB

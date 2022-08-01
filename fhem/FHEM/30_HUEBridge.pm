@@ -1,5 +1,5 @@
 
-# $Id: 30_HUEBridge.pm 25953 2022-04-13 07:43:38Z justme1968 $
+# $Id: 30_HUEBridge.pm 26204 2022-07-09 18:04:20Z justme1968 $
 
 # "Hue Personal Wireless Lighting" is a trademark owned by Koninklijke Philips Electronics N.V.,
 # see www.meethue.com for more information.
@@ -2672,6 +2672,18 @@ HUEBridge_dispatch($$$;$)
                   $obj->{state}{input} = $input;
                   $obj->{state}{eventtype} = $eventtype;
                   $obj->{state}{buttonevent} = $buttonevent;
+
+                } elsif( $data->{type} eq 'relative_rotary' ) {
+                  $obj->{eventtype} = $data->{type};
+
+                  if( my $last_event = $data->{relative_rotary}{last_event} ) {
+                    $obj->{state}{action} = $last_event->{action};
+
+                    if( my $rotation = $last_event->{rotation} ) {
+                      $obj->{state}{steps} = $rotation->{steps};
+                      $obj->{state}{direction} = $rotation->{direction};
+                    }
+                  }
 
                 } elsif( $data->{type} eq 'temperature' ) {
                   $obj->{state}{temperature} = int($data->{temperature}{temperature}*100) if( defined($data->{temperature})
