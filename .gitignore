@@ -8,6 +8,7 @@
 /fhem/.ssh/*
 /fhem/.npm/*
 /fhem/.bash_history
+/homebridge/node_modules/*
 /homebridge/backups/*
 /homebridge/logs/*
 /homebridge/homebridge.log
