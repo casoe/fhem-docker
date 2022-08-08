@@ -2,9 +2,9 @@
   "private": true,
   "description": "This file keeps track of which plugins should be installed.",
   "dependencies": {
+    "homebridge": "^1.5.0",
     "homebridge-dummy": "^0.6.0",
     "homebridge-fhem": "^0.5.36",
-    "homebridge-network-presence": "^1.2.3",
-    "homebridge": "^1.4.1"
+    "homebridge-network-presence": "^1.2.3"
   }
 }
