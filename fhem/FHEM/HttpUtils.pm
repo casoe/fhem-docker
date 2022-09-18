@@ -1,5 +1,5 @@
 ##############################################
-# $Id: HttpUtils.pm 26007 2022-04-30 18:12:02Z rudolfkoenig $
+# $Id: HttpUtils.pm 26411 2022-09-17 14:09:48Z rudolfkoenig $
 package main;
 
 use strict;
@@ -510,12 +510,20 @@ HttpUtils_Connect2NonblockingSSL($$)
 
   $hash->{conn}->blocking(0);
   $par->{SSL_startHandshake} = 0;
-  if(!IO::Socket::SSL->start_SSL($hash->{conn}, $par) ||
-     $hash->{conn}->connect_SSL() ||
-     $! != EWOULDBLOCK) {
+  eval {
+    if(!IO::Socket::SSL->start_SSL($hash->{conn}, $par) ||
+       $hash->{conn}->connect_SSL() ||
+       $! != EWOULDBLOCK) {
+      HttpUtils_Close($hash);
+      return $hash->{callback}($hash,
+                  "$! ".($SSL_ERROR ? $SSL_ERROR : IO::Socket::SSL::errstr()));
+    }
+  };
+  if($@) {
+    my $err = $@;
+    Log3 $hash, $hash->{loglevel}, $err;
     HttpUtils_Close($hash);
-    return $hash->{callback}($hash,
-                "$! ".($SSL_ERROR ? $SSL_ERROR : IO::Socket::SSL::errstr()));
+    return $hash->{callback}($hash, $err);
   }
 
   $hash->{FD} = $hash->{conn}->fileno();

@@ -1,5 +1,17 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - change:  93_DbRep: enable setter 'index' for device model 'Agent'
+ - bugfix:  70_Klafs: Transferred to namespace of FHEM. 
+                      One bug fixed. If necessary, set password again.
+ - feature: 14_SD_UT: new rc models´
+ - feature: 51_MOBILEALERTS: Add MA 10860
+ - change:  93_DbRep: NOTE: !! syntax of set ... changeValue" is changed !!
+ - feature: 10_RHASSPY: new module for Rhasspy integration (from contrib)
+ - bugfix:  73_AutoShuttersControl: fix can't locate object method after update
+ - bugfix:  73_AutoShuttersControl: fix many reported bugs
+ - feature: 93_DbRep: reduceLog - add max, max=day, min, min=day, sum, sum=day
+                      some fixes of reduceLog routine 
+ - feature: 50_Signalbot: support to link 2 FHEM instance under the same number
  - feature: 93_DbLog: new Attr convertTimezone -> logging in UTC time
  - bugfix:  93_DbRep: fix set ... deleteOther for SQLite
  - feature: 60_allergy: alternative data source with Attribute alternative3Day

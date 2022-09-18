@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 50_MOBILEALERTSGW.pm 19394 2019-05-17 18:23:31Z MarkusF $
+# $Id: 50_MOBILEALERTSGW.pm 26393 2022-09-10 18:37:41Z MarkusF $
 # Written by Markus Feist, 2017
 package main;
 
@@ -97,7 +97,12 @@ sub MOBILEALERTSGW_Get ($$@) {
         my $destpaddr;
         my $command;
 
-        if ( $gateway =~ /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/ ) {
+        if ( !defined($gateway)) {
+            $gateway   = "000000000000";
+            $destpaddr = sockaddr_in( 8003, INADDR_BROADCAST );
+            $command   = 1;
+        }
+        elsif ( $gateway =~ /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/ ) {
             $destpaddr = sockaddr_in( 8003, inet_aton($gateway) );
             $gateway   = "000000000000";
             $command   = 1;

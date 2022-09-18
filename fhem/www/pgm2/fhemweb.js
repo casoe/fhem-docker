@@ -1,6 +1,6 @@
 "use strict";
 var FW_version={};
-FW_version["fhemweb.js"] = "$Id: fhemweb.js 26247 2022-07-19 11:18:01Z rudolfkoenig $";
+FW_version["fhemweb.js"] = "$Id: fhemweb.js 26334 2022-08-18 15:42:05Z rudolfkoenig $";
 
 var FW_serverGenerated;
 var FW_jsLog;
@@ -1269,8 +1269,8 @@ FW_longpoll()
 
   // Build the notify filter for the backend
   var filter = $("body").attr("longpollfilter");
-  if(filter == null)
-    filter = "";
+  filter = filter ? decodeURIComponent(filter) : "";
+
   var retry;
   if(filter == "") {
     $("embed").each(function() {        // wait for all embeds to be there
@@ -1321,8 +1321,10 @@ FW_longpoll()
   if(FW_serverGenerated)
     since = FW_serverLastMsg + (FW_serverGenerated-FW_serverFirstMsg);
 
+  let inform = encodeURIComponent("type=status;filter="+filter+
+                                  ";since="+since+";fmt=JSON"); // 128651
   var query = "?XHR=1"+
-              "&inform=type=status;filter="+filter+";since="+since+";fmt=JSON"+
+              "&inform="+inform+
               '&fw_id='+$("body").attr('fw_id')+
               "&timestamp="+new Date().getTime();
 

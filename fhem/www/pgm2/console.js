@@ -1,5 +1,5 @@
 "use strict";
-FW_version["console.js"] = "$Id: console.js 26055 2022-05-17 20:12:20Z rudolfkoenig $";
+FW_version["console.js"] = "$Id: console.js 26335 2022-08-18 16:02:03Z rudolfkoenig $";
 
 var consConn;
 var consName="#console";
@@ -101,9 +101,9 @@ consFill()
   if(FW_pollConn)
     FW_closeConn();
 
-  var query = "?XHR=1"+
-       "&inform=type=raw;withLog="+withLog+";filter="+
-       encodeURIComponent(consFilter)+consFType+
+  var query = "?XHR=1&inform="+
+        encodeURIComponent("type=raw;withLog="+withLog+
+                                   ";filter="+consFilter+consFType)+
        "&fw_id="+$("body").attr('fw_id')+
        "&timestamp="+new Date().getTime();
   query = addcsrf(query);

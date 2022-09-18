@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 26248 2022-07-19 11:20:41Z rudolfkoenig $
+# $Id: fhem.pl 26379 2022-09-03 15:40:42Z rudolfkoenig $
 
 
 use strict;
@@ -277,7 +277,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 26248 2022-07-19 11:20:41Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 26379 2022-09-03 15:40:42Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -1718,7 +1718,12 @@ CommandSave($$)
   @structChangeHist = ();
   DoTrigger("global", "SAVE", 1);
 
-  restoreDir_saveFile($restoreDir, $attr{global}{statefile}) if(!configDBUsed());
+  if(!configDBUsed()) {
+    my @t = localtime(gettimeofday());
+    my $stf = ResolveDateWildcards(AttrVal("global", "statefile",  ""), @t);
+    restoreDir_saveFile($restoreDir, $stf);
+  }
+
   $data{saveID} = createUniqueId(); # for configDB, #126323
   my $ret = WriteStatefile();
 
@@ -3709,6 +3714,7 @@ EvalSpecials($%)
   if(defined($specials{"%EVENT"})) {
     foreach my $part (split(" ", $specials{"%EVENT"})) {
       $specials{"%EVTPART$idx"} = $part;
+      last if($idx >= 20);
       $idx++;
     }
   }
@@ -5342,7 +5348,10 @@ json2nameValue($;$$$$)
         $esc = !$esc;
       } elsif($s eq '"' && !$esc) {
         my $val = substr($t,1,$off-1);
-        $val =~ s/\\u([0-9A-F]{4})/chr(hex($1))/gsie; # toJSON reverse
+        if($val =~ m/\\u([0-9A-F]{4})/i) {
+          $val =~ s/\\u([0-9A-F]{4})/chr(hex($1))/gsie; # toJSON reverse
+          $val = Encode::encode("UTF-8", $val) if(!$unicodeEncoding); #128932
+        }
         my %t = ( n =>"\n", '"'=>'"', '\\'=>'\\' );
         $val =~ s/\\([n"\\])/$t{$1}/ge;
         return (undef, $val, substr($t,$off+1));

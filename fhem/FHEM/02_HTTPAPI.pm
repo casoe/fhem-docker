@@ -1,4 +1,4 @@
-# $Id: 02_HTTPAPI.pm 26287 2022-08-05 12:40:47Z klaus.schauer $
+# $Id: 02_HTTPAPI.pm 26361 2022-08-30 09:21:46Z klaus.schauer $
 # HTTP API commands
 #   set command: http://<ip-addr>:<ip-port>/<apiName>/set?device=<devname>&action=<cmd>
 #   get command: http://<ip-addr>:<ip-port>/<apiName>/get?device=<devname>&action=<cmd>
@@ -196,7 +196,12 @@ sub HTTPAPI_CGI($$$) {
               # url decoding
               $readingVal =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/eg;
               if ($readingVal ne '') {
-                ($readingName, $readingVal) = split(/:\s?/, readingsSingleUpdate($defs{$fhemDevName}, $readingName, $readingVal, 1));
+                my $result = readingsSingleUpdate($defs{$fhemDevName}, $readingName, $readingVal, 1);
+                if ($readingName eq 'state') {
+                  $readingVal = $result;
+                } else {
+                  ($readingName, $readingVal) = split(/:\s?/, $result);
+                }
                 return($hash, 200, 'close', "text/plain; charset=utf-8", encode($encoding, "$readingName=$readingVal"))
               } else {
                 readingsDelete($defs{$fhemDevName}, $readingName);

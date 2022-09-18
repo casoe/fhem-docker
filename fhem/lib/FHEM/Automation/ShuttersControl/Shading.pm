@@ -33,7 +33,7 @@
 #  GNU General Public License for more details.
 #
 #
-# $Id: Shading.pm 25464 2022-01-14 07:55:06Z CoolTux $
+# $Id: Shading.pm 26357 2022-08-29 08:57:14Z CoolTux $
 #
 ###############################################################################
 
@@ -287,6 +287,8 @@ sub ShadingProcessing {
         || $FHEM::Automation::ShuttersControl::shutters->getShadingMode eq 'off'
         || $FHEM::Automation::ShuttersControl::ascDev
         ->getAutoShuttersControlShading eq 'off'
+        || $FHEM::Automation::ShuttersControl::shutters
+        ->getExternalTriggerStatus
       );
 
     ::Log3( $name, 4,
