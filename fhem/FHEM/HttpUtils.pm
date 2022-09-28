@@ -1,5 +1,5 @@
 ##############################################
-# $Id: HttpUtils.pm 26411 2022-09-17 14:09:48Z rudolfkoenig $
+# $Id: HttpUtils.pm 26420 2022-09-18 14:56:03Z rudolfkoenig $
 package main;
 
 use strict;
@@ -519,6 +519,7 @@ HttpUtils_Connect2NonblockingSSL($$)
                   "$! ".($SSL_ERROR ? $SSL_ERROR : IO::Socket::SSL::errstr()));
     }
   };
+  return if(!$hash->{conn}); # HttpClose was called in the EVAL
   if($@) {
     my $err = $@;
     Log3 $hash, $hash->{loglevel}, $err;

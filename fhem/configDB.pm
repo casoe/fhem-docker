@@ -1,4 +1,4 @@
-# $Id: configDB.pm 26297 2022-08-07 13:19:35Z betateilchen $
+# $Id: configDB.pm 26446 2022-09-26 08:03:12Z betateilchen $
 
 =for comment (License)
 
@@ -664,6 +664,22 @@ sub cfgDB_MigrationImport {
 		push @files, $fn;
 	}
 
+# find LightScene configurations
+	@def = '';
+	@def = _cfgDB_findDef('TYPE=LightScene','CONFIGFILE');
+	foreach my $fn (@def) {
+		next unless $fn;
+		push @files, $fn;
+	}
+
+# find RHASSPY configurations
+	@def = '';
+	@def = _cfgDB_findDef('TYPE=RHASSPY','CONFIGFILE');
+	foreach my $fn (@def) {
+		next unless $fn;
+		push @files, $fn;
+	}
+
 # find holiday files
 	@def = '';
 	@def = _cfgDB_findDef('TYPE=holiday','NAME');
@@ -695,7 +711,7 @@ sub cfgDB_MigrationImport {
 
 # return SVN Id, called by fhem's CommandVersion
 sub cfgDB_svnId { 
-	return "# ".'$Id: configDB.pm 26297 2022-08-07 13:19:35Z betateilchen $' 
+	return "# ".'$Id: configDB.pm 26446 2022-09-26 08:03:12Z betateilchen $' 
 }
 
 # return filelist depending on directory and regexp

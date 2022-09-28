@@ -1,5 +1,5 @@
 ﻿##########################################################################################################
-# $Id: 93_DbRep.pm 26413 2022-09-17 18:08:05Z DS_Starter $
+# $Id: 93_DbRep.pm 26429 2022-09-19 20:37:20Z DS_Starter $
 ##########################################################################################################
 #       93_DbRep.pm
 #
@@ -57,6 +57,7 @@ no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 # Version History intern
 my %DbRep_vNotesIntern = (
+  "8.50.3"  => "19.09.2022  reduce memory allocation of function DbRep_reduceLog ",
   "8.50.2"  => "17.09.2022  release setter 'index' for device model 'Agent' ",
   "8.50.1"  => "05.09.2022  DbRep_setLastCmd, change changeValue syntax, minor fixes ",
   "8.50.0"  => "20.08.2022  rework of DbRep_reduceLog - add max, max=day, min, min=day, sum, sum=day ",
@@ -8944,7 +8945,6 @@ sub DbRep_reduceLog {
     my $ots        = $paref->{rsn} // "";
 
     my @a          = @{$hash->{HELPER}{REDUCELOG}};
-    #my $rlpar      = join " ", @a;
     
     my $err = q{};
     
@@ -9117,7 +9117,7 @@ sub DbRep_reduceLog {
                     $err = _DbRep_rl_deleteDayRows ($params); 
                     return "$name|$err" if ($err);                    
                     
-                    @dayRows = ();
+                    undef @dayRows;
                 }
                 
                 if ($mode =~ /average|max|min|sum/i) {                    
@@ -9140,7 +9140,7 @@ sub DbRep_reduceLog {
                     $err = _DbRep_rl_updateHour ($params); 
                     return "$name|$err" if ($err);           
                     
-                    @updateHour = ();
+                    undef @updateHour;
                 }
                 
                 if ($mode =~ /=day/i && scalar @updateDay) {                    
@@ -9165,9 +9165,9 @@ sub DbRep_reduceLog {
 
                 }
 
-                %hourlyKnown = ();
-                @updateHour  = ();
-                @updateDay   = ();
+                undef %hourlyKnown;
+                undef @updateHour;
+                undef @updateDay;
                 $currentHour = 99;
             }
             
@@ -9182,7 +9182,7 @@ sub DbRep_reduceLog {
                 push(@updateHour, {%hourlyKnown});
             }
             
-            %hourlyKnown = ();
+            undef %hourlyKnown;
             $currentHour = $hour;
         }
             
@@ -13077,12 +13077,12 @@ sub DbRep_setVersionInfo {
   if($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {
       # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;              # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{SMAPortal}{META}}
-      if($modules{$type}{META}{x_version}) {                                                                             # {x_version} ( nur gesetzt wenn $Id: 93_DbRep.pm 26413 2022-09-17 18:08:05Z DS_Starter $ im Kopf komplett! vorhanden )
+      if($modules{$type}{META}{x_version}) {                                                                             # {x_version} ( nur gesetzt wenn $Id: 93_DbRep.pm 26429 2022-09-19 20:37:20Z DS_Starter $ im Kopf komplett! vorhanden )
           $modules{$type}{META}{x_version} =~ s/1.1.1/$v/g;
       } else {
           $modules{$type}{META}{x_version} = $v; 
       }
-      return $@ unless (FHEM::Meta::SetInternals($hash));                                                                # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbRep.pm 26413 2022-09-17 18:08:05Z DS_Starter $ im Kopf komplett! vorhanden )
+      return $@ unless (FHEM::Meta::SetInternals($hash));                                                                # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbRep.pm 26429 2022-09-19 20:37:20Z DS_Starter $ im Kopf komplett! vorhanden )
       if(__PACKAGE__ eq "FHEM::$type" || __PACKAGE__ eq $type) {
           # es wird mit Packages gearbeitet -> Perl übliche Modulversion setzen
           # mit {<Modul>->VERSION()} im FHEMWEB kann Modulversion abgefragt werden

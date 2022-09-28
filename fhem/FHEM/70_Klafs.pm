@@ -1,4 +1,4 @@
-# $Id: 70_Klafs.pm 26398 2022-09-13 05:47:41Z xasher $
+# $Id: 70_Klafs.pm 26433 2022-09-20 15:32:58Z xasher $
 ##############################################################################
 #
 #     70_Klafs.pm
@@ -21,11 +21,9 @@
 #     Forum: https://forum.fhem.de/index.php?topic=127701
 #
 ##############################################################################
-package main;
+package FHEM::Klafs;
 use strict;
 use warnings;
-
-package FHEM::Klafs;
 
 sub ::Klafs_Initialize { goto &Initialize }
 

@@ -1,5 +1,5 @@
 #############################################
-# $Id: 98_DOIF.pm 26182 2022-06-29 18:57:26Z Damian $
+# $Id: 98_DOIF.pm 26444 2022-09-25 16:29:19Z Damian $
 #
 # This file is part of fhem.
 #
@@ -961,7 +961,9 @@ sub AggrIntDoIf
     }
   }
   
-  if (defined $reading) {
+  $reading = "" if (!defined $reading);
+  
+  if ($reading ne "") {
     if ($reading =~ /^"(.*)"$/) {
       $readingRegex = $1;
     }
@@ -972,7 +974,7 @@ sub AggrIntDoIf
     foreach my $reading ((defined $readingRegex) ? grep {/$readingRegex/} keys %{$defs{$name}{READINGS}} : $reading) {
       $value="";
       $number="";
-      if (defined($reading)) {
+      if ($reading ne "") {
         if (defined $defs{$name}{READINGS}{$reading}) {
           $value=$defs{$name}{READINGS}{$reading}{VAL};
           $number = ($value =~ /(-?\d+(\.\d+)?)/ ? $1 : 0);
@@ -3916,7 +3918,7 @@ DOIF_Set($@)
   if ($arg eq "disable" or  $arg eq "initialize" or  $arg eq "enable") {
     if (AttrVal($hash->{NAME},"disable","")) {
       $hs=$cur_hs;
-      return ("modul ist deactivated by disable attribut, delete disable attribut first");
+      return ("device is deactivated by disable attribute, delete disable attribute first");
     }
   }
   if ($arg eq "disable") {
@@ -4990,36 +4992,58 @@ sub card
   my $timebeginn=$time-$hours*3600;
   
   my $scale;
+  my $scale_strokes;
+  my $description;
   my $strokes;
   
   my $div = $hours > 168 ? ($hours % 168 == 0 ? 168 : ($hours % 24 == 0 ? 24 : 1)):1;
   
   if ($div==168 and $hours/$div/2 == 1) {  #2w
     $scale=$hours/7;
-    $strokes=7;
+    $description=7;
+    $strokes=$description;
+    $scale_strokes=$scale;
   } elsif ($hours <= 168*7) {
     for (my $i=7;$i>=3;$i--) {
       if  ($hours/$div % $i == 0) {
         $scale=$hours/$i;
-        $strokes=$i;
+        $scale_strokes=$scale;
+        $description=$i;
+        $strokes=$description;
+        if ($div == 168 and $chart_dim > 130) {
+          $strokes=$description*7;
+          $scale_strokes=$scale/7;
+        }        
         last;
       }
     }
   }
+    
 
   if (defined $scale) {
     my ($sec,$minutes,$hour,$mday,$month,$year,$wday,$yday,$isdst) = localtime($timebeginn);
     my $beginhour=int($hour/$scale)*$scale;
     my $diffsec=($hour-$beginhour)*3600+$minutes*60+$sec;
-    my $pos=(1-$diffsec/($scale*3600))*$chart_dim/$strokes-$x_prop;
+    my $pos=(1-$diffsec/($scale*3600))*$chart_dim/$description-$x_prop;
+    my $pos_strokes=(1-$diffsec/($scale_strokes*3600))*$chart_dim/$strokes-$x_prop;    
+     
+    for (my $i=0;$i<=$strokes;$i++) {
+     my $x=int((($i)*($chart_dim/$strokes)+$pos_strokes)*10)/10;
+     $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0 and $x <= $chart_dim);
+    }
     
-    ##$out.=sprintf('<text text-anchor="start" x="0" y="40" style="fill:#CCCCCC;font-size:7px">%s</text>',"chart_dim:$chart_dim, pos:$pos");
-    for (my $i=0;$i<$strokes;$i++) {
+   # for (my $i=0;$i<$description;$i++) {
+   #   my $x=int((($i)*($chart_dim/$description)+$pos)*10)/10;
+   #   $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0);
+   # }
+  
+    
+    
+    for (my $i=0;$i<$description;$i++) {
       my $h=$beginhour+($i+1)*$scale;
       $hour=($h >= 24 ? $h % 24:$h);
-      my $x=int((($i*($chart_dim/$strokes)+$pos))*10)/10;
-      $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0);
-      ##$out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:gray; stroke-width:0.2; stroke-dasharray:1,1; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0);
+      my $x=int((($i*($chart_dim/$description)+$pos))*10)/10;
+      ##$out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0);
       if ($hour == 0) {
         if ($hours <= 168) {
           $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,substr(::strftime("%a",localtime($timebeginn+$h*3600)),0,2));
@@ -5031,18 +5055,19 @@ sub card
       }
     }
   } else {
-    for (my $i=0;$i<=6;$i++) {
-      my $x=int((($i)*($chart_dim/6)+1)*10)/10;
+    for (my $i=0;$i<=12;$i++) {
+      my $x=int((($i)*($chart_dim/12)+1)*10)/10;
       $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0 and $x <= $chart_dim);
     }
+   
     for (my $i=0;$i<=3;$i++) {
       my $x=int(($i*($chart_dim/3)-1)*10)/10;
       if  ($hours <=168) {
-        $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%H:%M",localtime($time-$hours*3600*(1-$i/3))));
+        $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x+2,::strftime("%H:%M",localtime($time-$hours*3600*(1-$i/3))));
       } elsif ($hours <=168*7 and $hours % 24 == 0) {
         $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%d.%H:",localtime($time-$hours*3600*(1-$i/3))));
       } else {
-        $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%d.%m",localtime($time-$hours*3600*(1-$i/3))));
+        $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x+2,::strftime("%d.%m",localtime($time-$hours*3600*(1-$i/3))));
       }
     }
   }
@@ -6219,7 +6244,7 @@ sub cylinder_mode
   $out.= sprintf('<text x="%d" y="%d" style="fill:white; font-size:10px">%s</text>',$xBegin,$null+$heightoffset+2,0) if (defined $null);
   $out.= sprintf('<text x="%d" y="%d" style="fill:white; font-size:10px">%s</text>',$xBegin,+$heightoffset,$max);  
 
-  my $yBegin=13+($height-@values*$heightval)/2;
+  my $yBegin=14+($height-@values*$heightval)/2;
   my $xValue=$xLeft;
   my $yValue=$yBegin+$heightval-1;
   my $val_sum_pos=0;
@@ -6251,11 +6276,11 @@ sub cylinder_mode
     my $yText;
     if (defined $text and $text ne "") {
       $out.= sprintf('<text x="%d" y="%d" style="fill:%s; font-size:12px">%s</text>',$xBegin+10,$yBegin+$i*$heightval,hsl_color($color),$text.":");
-    } else {
-      $yValue -=7;
-    }
-    if ($heightval == 10) {
-      $yText=$yValue+7;
+      if ($heightval == 10) {
+        $yText=$yValue+7;
+      } else {
+        $yText=$yValue-4;
+      }
     } else {
       $yText=$yValue-4;
     }
@@ -6544,7 +6569,7 @@ weil z. B. Garage nicht nur über die Fernbedienung geschaltet wird, dann muss m
 <br>
 Bei der Angabe von zyklisch sendenden Sensoren (Temperatur, Feuchtigkeit, Helligkeit usw.) wie z. B.:<br>
 <br>
-<code>define di_heating DOIF ([sens:temperature] < 20) (set heating on)</code><br>
+<code>define di_heating DOIF ([sens:temperature] &lt 20) (set heating on)</code><br>
 <br>
 ist die Nutzung des Attributes <code>do always</code> nicht sinnvoll, da das entsprechende Kommando hier: "set heating on" jedes mal ausgeführt wird,
 wenn der Temperatursensor in regelmäßigen Abständen eine Temperatur unter 20 Grad sendet.
@@ -6558,7 +6583,7 @@ Soll bei Nicht-Erfüllung aller Bedingungen ein Zustandswechsel erfolgen, so mus
 Im Perl-Modus arbeitet das DOIF-Modul im Gegensatz zum FHEM-Modus ohne den eigenen Status auszuwerten. Es kommt immer zur Auswertung des definierten Block, wenn er getriggert wird.
 Diese Verhalten entspricht dem Verhalten mit dem Attribut do always im FHEM-Modus. Damit bei zyklisch sendenden Sensoren nicht zum ständigen Schalten kommt, muss das Schalten unterbunden werden. Das obige Beispiel lässt sich, wie folgt definieren:<br>
 <br>
-<code>define di_heating DOIF {if ([sens:temperature] < 20) {if (Value("heating") ne "on") {fhem_set"heating on"}}}</code><br>
+<code>define di_heating DOIF {if ([sens:temperature] &lt 20) {if (Value("heating") ne "on") {fhem_set"heating on"}}}</code><br>
 <br> 
 <a name="DOIF_Teilausdruecke_abfragen"></a><br>
 <b>Teilausdrücke abfragen</b>&nbsp;&nbsp;&nbsp;<a href="#DOIF_Inhaltsuebersicht">back</a><br>
@@ -6635,11 +6660,11 @@ Syntax:<br>
 <br>
 Anwendungsbeispiel:<br>
 <br>
-<code>define di_warning DOIF ([":^temperature",0]< 0) (set pushmsg danger of frost $DEVICE)</code><br>
+<code>define di_warning DOIF ([":^temperature",0] &lt 0) (set pushmsg danger of frost $DEVICE)</code><br>
 <code>attr di_warning do always</code><br>
 <br>
 <a href="#DOIF_Perl_Modus"><b>Perl-Modus</b>:</a><br>
-<code>define di_warning DOIF {if ([":^temperature",0]< 0) {fhem_set"pushmsg danger of frost $DEVICE}}</code><br>
+<code>define di_warning DOIF {if ([":^temperature",0] &lt 0) {fhem_set"pushmsg danger of frost $DEVICE}}</code><br>
 <br>
 Damit wird auf alle Devices getriggert, die mit "temperature" im Event beginnen. Zurückgeliefert wird der Wert, der im Event hinter "temperature: " steht.
 Wenn kein Event stattfindet, wird der Defaultwert, hier 0,  zurückgeliefert.
@@ -6871,11 +6896,11 @@ In der Aggregationsbedingung <condition> können alle in FHEM definierten Perlfu
 <br>
 Liste der Devices, die mit "rooms" enden und im Reading "temperature" einen Wert größer 20 haben:<br>
 <br>
-<code>[@"rooms$":temperature:$_ > 20]</code><br>
+<code>[@"rooms$":temperature:$_ &gt 20]</code><br>
 <br>
 Liste der Devices im Raum "livingroom", die mit "rooms" enden und im Reading "temperature" einen Wert größer 20 haben:<br>
 <br>
-<code>[@"rooms$":temperature:$_ > 20 and $room eq "livingroom"]</code><br>
+<code>[@"rooms$":temperature:$_ &gt 20 and $room eq "livingroom"]</code><br>
 <br>
 Liste der Devices in der Gruppe "windows", die mit "rooms" enden, deren Status (nicht state-Reading) "on" ist:<br>
 <br>
@@ -6924,13 +6949,13 @@ attr di_Fenster cmdState [$SELF:Device] zuletzt geöffnet|alle geschlossen</code
 <br>
 Raumtemperatur-Überwachung:<br>
 <br>
-<code>define di_temp DOIF (([08:00] or [20:00]) and [?#"^Rooms":temperature: $_ < 20] != 0)<br>
-  (push "In folgenden Zimmern ist zu kalt [@"^Rooms":temperature:$_ < 20,"keine"]")<br>
+<code>define di_temp DOIF (([08:00] or [20:00]) and [?#"^Rooms":temperature: $_ &lt 20] != 0)<br>
+  (push "In folgenden Zimmern ist zu kalt [@"^Rooms":temperature:$_ &lt 20,"keine"]")<br>
 DOELSE<br>
   (push "alle Zimmmer sind warm")<br>  
 <br>
 attr di_temp do always<br>
-attr di_Raumtemp state In folgenden Zimmern ist zu kalt: [@"^Rooms":temperature:$_ < 20,"keine"])</code><br>
+attr di_Raumtemp state In folgenden Zimmern ist zu kalt: [@"^Rooms":temperature:$_ &lt 20,"keine"])</code><br>
 <br>
 Es soll beim Öffnen eines Fensters eine Meldung über alle geöffneten Fenster erfolgen:<br>
 <br>
@@ -6951,7 +6976,7 @@ Für reine Perlangaben gibt es eine entsprechende Perlfunktion namens <code>Aggr
 <a href="#DOIF_Perl_Modus"><b>Perl-Modus</b>:</a><br>
 <code>define di_Fenster DOIF {if (["^Window:open"]) {foreach (AggrDoIf('@','^windows','state','"open"')) {Log3 "di_Fenster",3,"Das Fenster $_ ist noch offen"}}}</code><br>
 <br>
-<code>define di_Temperature DOIF {if (["^room:temperature"]) {foreach (AggrDoIf('@','^room','temperature','$_ < 15')) {Log3 "di_Temperatur",3,"im Zimmer $_ ist zu kalt"}}</code><br>
+<code>define di_Temperature DOIF {if (["^room:temperature"]) {foreach (AggrDoIf('@','^room','temperature','$_ &lt 15')) {Log3 "di_Temperatur",3,"im Zimmer $_ ist zu kalt"}}</code><br>
 <br>
 <a name="DOIF_Zeitsteuerung"></a><br>
 <b>Zeitsteuerung</b>&nbsp;&nbsp;&nbsp;<a href="#DOIF_Inhaltsuebersicht">back</a><br>
@@ -7515,7 +7540,7 @@ In der angegebenen Zeitspanne wird ein Kommando nicht ausgeführt, auch wenn die
 <br>
 <u>Anwendungsbeispiel</u>: Meldung über Frostgefahr alle 60 Minuten<br>
 <br>
-<code>define di_frost DOIF ([outdoor:temperature] < 0) (set pushmsg "danger of frost")<br>
+<code>define di_frost DOIF ([outdoor:temperature] &lt 0) (set pushmsg "danger of frost")<br>
 attr di_frost cmdpause 3600<br>
 attr di_frost do always</code><br>
 <br>
@@ -7768,7 +7793,7 @@ Beispiel<br>
 <br>
 <a href="#DOIF_Perl_Modus"><b>Perl-Modus</b>:</a><br>
 <code>define heating DOIF {if ([switch] eq "on" and [$SELF:frost]) {fhem_set"heating on"} else {fhem_set"heating off"}}<br>
-attr heating DOIF_Readings frost:([outdoor:temperature] < 0)</code><br>
+attr heating DOIF_Readings frost:([outdoor:temperature] &lt 0)</code><br>
 <br>
 Das Reading frost triggert nur dann die definierte Abfrage, wenn sich sein Zustand ändert. Dadurch wird sichergestellt, dass ein wiederholtes Schalten der Heizung vermieden wird, obwohl der Sensor outdoor zyklisch sendet.<br>
 <br>
@@ -7926,7 +7951,7 @@ Zusätzlich führt die Definition von <code>setList</code> zur Ausführung von <
 <br>
 Zweipunktregler a la THRESHOLD<br>
 <br>
-<code>define di_threshold DOIF ([sensor:temperature] <  [$SELF:desired]-1)<br>
+<code>define di_threshold DOIF ([sensor:temperature] &lt [$SELF:desired]-1)<br>
   (set heating on)<br>
 DOELSEIF ([sensor:temperature]>[$SELF:desired])<br>
   (set heating off)<br>

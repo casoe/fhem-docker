@@ -1,5 +1,5 @@
 
-# $Id: 30_HUEBridge.pm 26204 2022-07-09 18:04:20Z justme1968 $
+# $Id: 30_HUEBridge.pm 26438 2022-09-22 06:40:39Z justme1968 $
 
 # "Hue Personal Wireless Lighting" is a trademark owned by Koninklijke Philips Electronics N.V.,
 # see www.meethue.com for more information.
@@ -2595,7 +2595,7 @@ HUEBridge_dispatch($$$;$)
 
               my(undef, $t, $id) = split( '/', $data->{id_v1} );
               if( !defined($t) || !defined($id) ) {
-                Log3 $name, 3, "$name: EventStream: ignoring event type $data->{type}";
+                Log3 $name, 4, "$name: EventStream: ignoring event type $data->{type}";
                 Log3 $name, 5, Dumper $data;
                 next;
               }

@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2022-08-14 16:41:36
+# Created by FHEM/98_SVG.pm, 2022-09-28 22:00:38
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -9,14 +9,14 @@ set ytics
 set y2tics 
 set grid
 set ylabel "MBit/s"
-set y2label "MBit/s"
+set y2label "ms"
 set yrange [0:55]
-set y2range [0:12]
+set y2range [0:100]
 
 #dblog speedtest:download
 #dblog speedtest:upload
 #dblog speedtest:ping
 
 plot "<IN>" using 1:2 axes x1y1 title 'download (MBit/s)' ls l0 lw 1 with lines,\
-     "<IN>" using 1:2 axes x1y2 title 'upload (MBit/s)' ls l1 lw 1 with lines,\
-     "<IN>" using 1:2 axes x1y1 title 'ping (ms)' ls l2 lw 1 with lines
+     "<IN>" using 1:2 axes x1y1 title 'upload (MBit/s)' ls l1 lw 1 with lines,\
+     "<IN>" using 1:2 axes x1y2 title 'ping (ms)' ls l2 lw 1 with lines
