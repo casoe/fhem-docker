@@ -3312,7 +3312,7 @@ attr DEVICE setList \
   valve:slider,0,1,100,1 $\DEVICETOPIC/thermostat/0/command/valve_pos $EVTPART1\
   valve_min_percent:slider,0,1,100,1 $\DEVICETOPIC/thermostat/0/command/valve_min_percent $EVTPART1\
   boost_minutes $\DEVICETOPIC/thermostat/0/command/boost_minutes $EVTPART1\
-  set_boost_minutes $\DEVICETOPIC/thermostat/0/command/set_boost_minutes $EVTPART1\
+  set_boost_minutes $\DEVICETOPIC/thermostat/0/command/set_boost_minutes $EVTPART1
 attr DEVICE jsonMap bat:0 bat_value:batteryPercent bat_voltage:batteryVoltage target_t_value:desired-temp thermostats_1_tmp_value:temperature thermostats_1_valve_min_percent:valve_min_percent 
 attr DEVICE stateFormat Measured: temperature Battery: batteryPercent %
 attr DEVICE webCmd desired-temp
