@@ -21,7 +21,7 @@
 #  GNU General Public License for more details.
 #
 #
-# $Id: Bridge.pm 25350 2021-12-17 11:43:10Z CoolTux $
+# $Id: Bridge.pm 26447 2022-09-26 10:17:37Z CoolTux $
 #
 ###############################################################################
 
@@ -750,7 +750,7 @@ sub DistributionErrHandle2 {
             ::asyncOutput( $param->{cl}, "Request Error: $err\r\n" )
               if ( $param->{cl} && $param->{cl}{canAsyncOutput} );
 
-            return;
+            return $json;
         }
 
         ::readingsBulkUpdate( $hash, 'lastError',

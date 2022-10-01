@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 25957 2022-04-14 09:05:11Z rudolfkoenig $
+# $Id: fhem.pl 26379 2022-09-03 15:40:42Z rudolfkoenig $
 
 
 use strict;
@@ -230,7 +230,7 @@ sub cfgDB_FileWrite;
 # IODev   - attached to io device
 # CHANGED - Currently changed attributes of this device. Used by NotifyFn
 # VOLATILE- Set if the definition should be saved to the "statefile"
-# NOTIFYDEV - if set, the notifyFn will only be called for this device
+# NOTIFYDEV - if set, the NotifyFn will only be called for this device
 
 use vars qw($addTimerStacktrace);# set to 1 by fhemdebug
 use vars qw($auth_refresh);
@@ -277,7 +277,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 25957 2022-04-14 09:05:11Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 26379 2022-09-03 15:40:42Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -407,7 +407,8 @@ my %ra = (
   "event-on-update-reading"    => { s=>",", c=>".attreour" },
   "event-on-change-reading"    => { s=>",", c=>".attreocr",   r=>":.*" },
   "timestamp-on-change-reading"=> { s=>",", c=>".attrtocr" },
-  "event-min-interval"         => { s=>",", c=>".attrminint", r=>":.*" },
+  "event-min-interval"         => { s=>",", c=>".attrminint", r=>":.*",
+                                    isNum=>1 },
   "oldreadings"                => { s=>",", c=>".or" },
   "devStateIcon"               => { s=>" ", r=>":.*", p=>"^{.*}\$",
                                     pv=>{"%name"=>1, "%state"=>1, "%type"=>1} },
@@ -723,6 +724,7 @@ while (1) {
                               (!defined($timeout) || $timeout > $readytimeout));
   $timeout = 5 if $winService->{AsAService} && $timeout > 5;
   $nfound = select($rout=$rin, $wout=$win, $eout=$ein, $timeout) if(!$nfound);
+  my $err = int($!);
 
   $winService->{serviceCheck}->() if($winService->{serviceCheck});
   if($gotSig) {
@@ -733,14 +735,14 @@ while (1) {
   }
 
   if($nfound < 0) {
-    my $err = int($!);
     next if($err==0 || $err==4); # 4==EINTR
 
     Log 1, "ERROR: Select error $nfound ($err), error count= $errcount";
     $errcount++;
 
     # Handling "Bad file descriptor". This is a programming error.
-    if($err == 9 || $err == 10038) {  # BADF, don't want to "use errno.ph"
+    # 9/10038 => BADF, 11=>EAGAIN. don't want to "use errno.ph"
+    if($err == 11 || $err == 9 || $err == 10038) { 
       my $nbad = 0;
       foreach my $p (keys %selectlist) {
         my ($tin, $tout) = ('', '');
@@ -1358,8 +1360,7 @@ devspec2array($;$$)
         };
 
         if($@) {
-          Log 1, "devspec2array $name: $@";
-          stacktrace();
+          warn "devspec2array $name: $@"; #128362
           return $name;
         }
       }
@@ -1632,6 +1633,7 @@ WriteStatefile()
     if($defs{$d}{VOLATILE}) {
       my $def = $defs{$d}{DEF};
       $def =~ s/;/;;/g; # follow-on-for-timer at
+      $def =~ s/\n/\\\n/g;
       print $SFH "define $d $defs{$d}{TYPE} $def\n";
     }
 
@@ -1716,7 +1718,12 @@ CommandSave($$)
   @structChangeHist = ();
   DoTrigger("global", "SAVE", 1);
 
-  restoreDir_saveFile($restoreDir, $attr{global}{statefile}) if(!configDBUsed());
+  if(!configDBUsed()) {
+    my @t = localtime(gettimeofday());
+    my $stf = ResolveDateWildcards(AttrVal("global", "statefile",  ""), @t);
+    restoreDir_saveFile($restoreDir, $stf);
+  }
+
   $data{saveID} = createUniqueId(); # for configDB, #126323
   my $ret = WriteStatefile();
 
@@ -2161,6 +2168,22 @@ CommandDefine($$)
       addStructChange("define", $name, $def) if(!$opt{silent});
       DoTrigger("global", "DEFINED $name", 1);
     }
+
+    if($init_done && $modules{$m}{Match}) { # reset multiple IOdev, #127565
+      foreach my $an (keys %defs) {
+        my $ah = $defs{$an};
+        my $cl = $ah->{Clients};
+        $cl = $modules{$ah->{TYPE}}{Clients} if(!$cl);
+        next if(!$cl || !$ah->{'.clientArray'});
+        foreach my $cmRe ( split(/:/, $cl) ) {
+          if($m =~ m/^$cmRe$/) {
+            delete($ah->{'.clientArray'});
+            last;
+          }
+        }
+      }
+    }
+
   }
   return ($ret && $opt{ignoreErr} ?
         "Cannot define $name, remove -ignoreErr for details" : $ret);
@@ -3137,6 +3160,11 @@ CommandAttr($$)
         my @a = split($ra{$attrName}{s}, $lval) ;
         for my $v (@a) {
           my $v = $v; # resolve the reference to avoid changing @a itself
+          if($ra{$attrName}{isNum}) {
+            my @va = split(":", $v);
+            return "attr $sdev $attrName $v: argument is not a number" 
+                if(!defined($va[1]) || !looks_like_number($va[1]));
+          }
           $v =~ s/$ra{$attrName}{r}// if($ra{$attrName}{r});
           my $err ="Argument $v for attr $sdev $attrName is not a valid regexp";
           return "$err: use .* instead of *" if($v =~ /^\*/); # no err in eval!?
@@ -3686,6 +3714,7 @@ EvalSpecials($%)
   if(defined($specials{"%EVENT"})) {
     foreach my $part (split(" ", $specials{"%EVENT"})) {
       $specials{"%EVTPART$idx"} = $part;
+      last if($idx >= 20);
       $idx++;
     }
   }
@@ -3831,6 +3860,7 @@ DoTrigger($$@)
   # the inner loop.
   if($max && !defined($hash->{INTRIGGER})) {
     $hash->{INTRIGGER}=1;
+    $hash->{eventCount}++;
     if($attr{global}{verbose} >= 5) {
       Log 5, "Starting notify loop for $dev, " . scalar(@{$hash->{CHANGED}}) . 
         " event(s), first is " . escapeLogLine($hash->{CHANGED}->[0]);
@@ -5318,7 +5348,10 @@ json2nameValue($;$$$$)
         $esc = !$esc;
       } elsif($s eq '"' && !$esc) {
         my $val = substr($t,1,$off-1);
-        $val =~ s/\\u([0-9A-F]{4})/chr(hex($1))/gsie; # toJSON reverse
+        if($val =~ m/\\u([0-9A-F]{4})/i) {
+          $val =~ s/\\u([0-9A-F]{4})/chr(hex($1))/gsie; # toJSON reverse
+          $val = Encode::encode("UTF-8", $val) if(!$unicodeEncoding); #128932
+        }
         my %t = ( n =>"\n", '"'=>'"', '\\'=>'\\' );
         $val =~ s/\\([n"\\])/$t{$1}/ge;
         return (undef, $val, substr($t,$off+1));
@@ -6170,6 +6203,7 @@ restoreDir_mkDir($$$)
   if($isFile) { # Delete the file Component
     $dir =~ m,^(.*)/([^/]*)$,;
     $dir = $1;
+    $dir = "" if(!defined($dir)); # file in .
   }
   return if($restoreDir_dirs{$dir});
   $restoreDir_dirs{$dir} = 1;

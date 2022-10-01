@@ -33,7 +33,7 @@
 #  GNU General Public License for more details.
 #
 #
-# $Id: ShuttersControl.pm 25934 2022-04-07 19:36:15Z CoolTux $
+# $Id: ShuttersControl.pm 26362 2022-08-30 16:19:28Z CoolTux $
 #
 ###############################################################################
 
@@ -1764,7 +1764,11 @@ sub SetCmdFn {
     return
       if ( $shutters->getASCenable eq 'off'
         || $ascDev->getASCenable eq 'off'
-        || $idleDetection !~ m{^$idleDetectionValue$}xms );
+        || $idleDetection !~ m{^$idleDetectionValue$}xms
+        || $FHEM::Automation::ShuttersControl::shutters
+        ->getWindProtectionStatus eq 'protected'
+        || $FHEM::Automation::ShuttersControl::shutters
+        ->getRainProtectionStatus eq 'protected' );
 
     if ( $shutters->getStatus != $posValue ) {
         $shutters->setLastPos( $shutters->getStatus );

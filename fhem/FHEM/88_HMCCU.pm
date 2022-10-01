@@ -2,7 +2,7 @@
 #
 #  88_HMCCU.pm
 #
-#  $Id: 88_HMCCU.pm 25675 2022-02-13 15:00:07Z zap $
+#  $Id: 88_HMCCU.pm 26434 2022-09-20 19:41:02Z zap $
 #
 #  Version 5.0
 #
@@ -57,7 +57,7 @@ my %HMCCU_CUST_CHN_DEFAULTS;
 my %HMCCU_CUST_DEV_DEFAULTS;
 
 # HMCCU version
-my $HMCCU_VERSION = '5.0 220431743';
+my $HMCCU_VERSION = '5.0 222632130';
 
 # Timeout for CCU requests (seconds)
 my $HMCCU_TIMEOUT_REQUEST = 4;
@@ -8362,133 +8362,6 @@ sub HMCCU_DetectSCAttr ($$$$$)
 	return ($sc, $sd, $cc, $cd, $rsdCnt, $rcdCnt);
 }
 
-sub HMCCU_DetectSCChn ($;$$)
-{
-	my ($clHash, $sd, $cd) = @_;
-	$sd //= '';
-	$cd //= '';
-
-	my $role = HMCCU_GetChannelRole ($clHash);
-	HMCCU_Trace ($clHash, 2, "role=$role");
-	
-	if ($role ne '' && exists($HMCCU_STATECONTROL->{$role}) && $HMCCU_STATECONTROL->{$role}{F} & 1) {
-		my $nsd = HMCCU_DetectSCDatapoint ($HMCCU_STATECONTROL->{$role}{S}, $clHash->{ccuif});
-		my $ncd = HMCCU_DetectSCDatapoint ($HMCCU_STATECONTROL->{$role}{C}, $clHash->{ccuif});
-		HMCCU_Log ($clHash, 2, "statedatapoint of role and attribute do not match")
-			if ($nsd ne '' && $sd ne '' && $nsd ne $sd);
-		HMCCU_Log ($clHash, 2, "controldatapoint of role and attribute do not match")
-			if ($ncd ne '' && $cd ne '' && $ncd ne $cd);
-			
-		$sd = $nsd if ($nsd ne '' && $sd eq '');
-		$cd = $ncd if ($ncd ne '' && $cd eq '');
-		$clHash->{ccurolestate} = $role if ($nsd ne '');
-		$clHash->{ccurolectrl}  = $role if ($ncd ne '');
-	}
-	
-	return ($sd, $cd, $sd ne '' ? 1 : 0, $cd ne '' ? 1 : 0);
-}
-
-sub HMCCU_DetectSCDev ($;$$$$)
-{
-	my ($clHash, $sc, $sd, $cc, $cd) = @_;
-	$sc //= '';
-	$sd //= '';
-	$cc //= '';
-	$cd //= '';
-
-	# Count matching roles to prevent ambiguous definitions 
-	my ($rsc, $rsd, $rcc, $rcd) = ('', '', '', '');
-	# Priorities
-	my ($ccp, $scp) = (0, 0);
-	# Number of matching roles
-	my $rsdCnt = $sc ne '' && $sd ne '' ? 1 : 0;
-	my $rcdCnt = $cc ne '' && $cd ne '' ? 1 : 0;
-	
-	my $defRole = $HMCCU_DEF_ROLE->{$clHash->{ccusubtype}};
-	my $resRole;
-	
-	foreach my $roleDef (split(',', $clHash->{hmccu}{role})) {
-		my ($rc, $role) = split(':', $roleDef);	
-		
-		next if (!defined($role) || (defined($defRole) && $role ne $defRole));		
-
-		if (defined($role) && exists($HMCCU_STATECONTROL->{$role}) && $HMCCU_STATECONTROL->{$role}{F} & 2) {
-			my $nsd = HMCCU_DetectSCDatapoint ($HMCCU_STATECONTROL->{$role}{S}, $clHash->{ccuif});
-			if ($sd eq '' && $nsd ne '') {
-				# If state datapoint is defined for this role
-				if ($sc ne '' && $rc eq $sc) {
-					# If channel of current role matches state channel, use datapoint specified
-					# in $HMCCU_STATECONTROL as state datapoint 
-					$rsc = $sc;
-					$rsd = $nsd;
-					$clHash->{ccurolestate} = $role;
-					$rsdCnt = 1;
-				}
-				else {
-					# If state channel is not defined or role channel doesn't match state channel,
-					# assign state channel and datapoint considering role priority
-					if ($HMCCU_STATECONTROL->{$role}{P} > $scp) {
-						# Priority of this role is higher than the previous priority
-						$scp = $HMCCU_STATECONTROL->{$role}{P};
-						$rsc = $rc;
-						$rsd = $nsd;
-						$rsdCnt = 1;
-						$clHash->{ccurolestate} = $role;
-					}
-					elsif ($HMCCU_STATECONTROL->{$role}{P} == $scp) {
-						# Priority of this role is equal to previous priority. We found more
-						# than 1 matching roles. We use the first matching role/channel, but count
-						# the number of matching roles.
-						if ($rsc eq '') {
-							$rsc = $rc;
-							$rsd = $nsd;
-							$clHash->{ccurolestate} = $role;
-						}
-						$rsdCnt++;
-					}
-				}
-			}
-			if ($cd eq '' && $HMCCU_STATECONTROL->{$role}{C} ne '') {
-				my $ncd = HMCCU_DetectSCDatapoint ($HMCCU_STATECONTROL->{$role}{C}, $clHash->{ccuif});
-				if ($cc ne '' && $rc eq $cc) {
-					$rcc = $cc;
-					$rcd = $ncd;
-					$clHash->{ccurolectrl} = $role;
-					$rcdCnt = 1;
-				}
-				else {
-					# If control channel is not defined or role channel doesn't match control channel,
-					# assign control channel and datapoint considering role priority
-					if ($HMCCU_STATECONTROL->{$role}{P} > $scp) {
-						# Priority of this role is higher than the previous priority
-						$scp = $HMCCU_STATECONTROL->{$role}{P};
-						$rcc = $rc;
-						$rcd = $ncd;
-						$rcdCnt = 1;
-						$clHash->{ccurolectrl} = $role;
-					}
-					elsif ($HMCCU_STATECONTROL->{$role}{P} == $scp) {
-						# Priority of this role is equal to previous priority. We found more
-						# than 1 matching roles. We use the first matching role/channel, but count
-						# the number of matching roles.
-						if ($rcc eq '') {
-							$rcc = $rc;
-							$rcd = $ncd;
-							$clHash->{ccurolectrl} = $role;
-						}
-						$rcdCnt++;
-					}
-				}
-			}
-		}
-	}
-
-	($sc, $sd) = ($rsc, $rsd) if ($rsdCnt > 0 && $sd eq '');
-	($cc, $cd) = ($rcc, $rcd) if ($rcdCnt > 0 && $cd eq '');
-	
-	return ($sc, $sd, $cc, $cd, $rsdCnt, $rcdCnt);
-}
-
 ######################################################################
 # Detect roles, channel and datapoint to be used for controlling and
 # displaying the state of a device or channel identified by its
@@ -9442,7 +9315,8 @@ sub HMCCU_ScaleValue ($$$$$;$)
 	my $name = $hash->{NAME};
 	my $ioHash = HMCCU_GetHash ($hash);
 
-	my $boundsChecking = HMCCU_IsFlag ($name, 'noBoundsChecking') ? 0 : 1;
+#	my $boundsChecking = HMCCU_IsFlag ($name, 'noBoundsChecking') ? 0 : 1;
+	my $boundsChecking = $dpt =~ /^LEVEL/ && ($value == -0.005 || $value == 1.005 || $value == 1.01) ? 0 : 1;
 
 	# Get parameter definition and min/max values
 	my $min;
@@ -9542,8 +9416,8 @@ sub HMCCU_ScaleValue ($$$$$;$)
 	elsif (defined($unit) && ($unit eq 'minutes' || $unit eq 's')) {
 		$value = HMCCU_ConvertTime ($value, $unit, $mode);
 	}
-	elsif (defined($unit) && $unit =~ /^([0-9]+)%$/) {
-		# percentage values
+	elsif (defined($unit) && $unit =~ /^([0-9]+)%$/ && $boundsChecking) {
+		# percentage values. Values < 0 won't be scaled
 		my $f = $1;
 		$min //= 0;
 		$max //= 1.0;
@@ -9551,7 +9425,7 @@ sub HMCCU_ScaleValue ($$$$$;$)
 			$value = HMCCU_MinMax ($value, $min, $max)*$f;
 		}
 		else {
-			$value = $boundsChecking ? HMCCU_MinMax($value, $min*$f, $max*$f)/$f : $value/$f;
+			$value = HMCCU_MinMax($value, $min*$f, $max*$f)/$f;
 		}
 	}
 	
@@ -10154,7 +10028,7 @@ sub HMCCU_BuildURL ($$)
 		$password = HMCCU_Decrypt ($encpass);
 	}
 	my $auth = ($username ne '' && $password ne '') ? "$username:$password".'@' : '';
-		
+
 	if ($backend eq 'rega') {
 		$url = $hash->{prot}."://$auth".$hash->{host}.':'.
 			$HMCCU_REGA_PORT{$hash->{prot}}.'/tclrega.exe';
@@ -10812,8 +10686,7 @@ sub HMCCU_MaxHashEntries ($$)
       	Acknowledge "device was unreachable" messages in CCU.
       </li><br/>
       <li><b>set &lt;name&gt; authentication [&lt;username&gt; &lt;password&gt;]</b><br/>
-      	Set credentials for CCU authentication. Authentication must be activated by setting flag
-      	'authenticate' in attribute 'ccuflags'.<br/>
+      	Set credentials for CCU authentication.<br/>
       	When executing this command without arguments, the credentials are deleted.
       </li><br/>
       <li><b>set &lt;name&gt; clear [&lt;reading-exp&gt;]</b><br/>

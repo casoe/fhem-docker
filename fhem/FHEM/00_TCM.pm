@@ -1,4 +1,4 @@
-# $Id: 00_TCM.pm 25207 2021-11-09 16:17:13Z klaus.schauer $
+# $Id: 00_TCM.pm 26092 2022-05-26 08:58:03Z klaus.schauer $
 
 # This modules handles the communication with a TCM 120 or TCM 310 / TCM 400J /
 # TCM 515 EnOcean transceiver chip. As the protocols are radically different,
@@ -394,7 +394,7 @@ sub TCM_Read($) {
   my $name = $hash->{NAME};
   my $blockSenderID = AttrVal($name, "blockSenderID", "own");
   my $data = $hash->{PARTIAL} . uc(unpack('H*', $buf));
-  Log3 $name, 5, "TCM $name received ESP: $data";
+  #Log3 $name, 5, "TCM $name received ESP: $data";
 
   if($hash->{MODEL} eq "ESP2") {
     # TCM 120
@@ -409,6 +409,8 @@ sub TCM_Read($) {
         $data = $rest;
         next;
       }
+
+      Log3 $name, 5, "TCM $name received ESP: $data";
 
       if($net =~ m/^0B(..)(........)(........)(..)/) {
         # Receive Radio Telegram (RRT)
@@ -474,6 +476,9 @@ sub TCM_Read($) {
       last if(length($data) < $tlen);
       my $rest = substr($data, $tlen);
       $data = substr($data, 0, $tlen);
+
+      Log3 $name, 5, "TCM $name received ESP: $data";
+
       my $hdr = substr($data, 2, 8);
       my $mdata = substr($data, 12, $ldata * 2);
       my $odata = substr($data, 12 + $ldata * 2, $lodata * 2);
@@ -1127,7 +1132,7 @@ sub TCM_ReadAnswer($$) {
     }
 
     if (length($data) > 4) {
-      Log3 $name, 5, "TCM $name received ESP: $data";
+      #Log3 $name, 5, "TCM $name received ESP: $data";
 
       if ($hash->{MODEL} eq "ESP2") {
         # TCM 120
@@ -1136,6 +1141,9 @@ sub TCM_ReadAnswer($$) {
             $hash->{PARTIAL} = '';
             return ("$arg: Bogus answer received: $data", undef);
           }
+
+          Log3 $name, 5, "TCM $name received ESP: $data";
+
           my ($net, $crc) = ($1, $2);
           my $mycrc = TCM_CSUM($net);
           $hash->{PARTIAL} = substr($data, 28);
@@ -1164,6 +1172,9 @@ sub TCM_ReadAnswer($$) {
         next if (length($data) < $tlen);
         my $rest = substr($data, $tlen);
         $data = substr($data, 0, $tlen);
+
+        Log3 $name, 5, "TCM $name received ESP: $data";
+
         my $hdr = substr($data, 2, 8);
         my $mdata = substr($data, 12, $ldata * 2);
         my $odata = substr($data, 12 + $ldata * 2, $lodata * 2);

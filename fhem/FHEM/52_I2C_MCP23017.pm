@@ -1,5 +1,5 @@
 ##############################################################################
-# $Id: 52_I2C_MCP23017.pm 19551 2019-06-04 20:10:50Z klausw $
+# $Id: 52_I2C_MCP23017.pm 26423 2022-09-18 19:56:54Z klausw $
 ##############################################################################
 # Modul for I2C GPIO Extender MCP23017
 #
@@ -130,7 +130,7 @@ sub I2C_MCP23017_Init($$) {																										#Geraet beim anlegen/booten
 				data => 			$regval,
 				}) if (defined $hash->{I2C_Address});
 		} else {
-			return "no IODev assigned to '$hash->{NAME}'";
+			Log3 $hash, 3, "no IODev assigned to '$hash->{NAME}'";
 		}
 		
 	}
@@ -226,7 +226,7 @@ sub I2C_MCP23017_Attr(@) {
 				data => 			$regval,
 				}) if (defined $hash->{I2C_Address});
 		} else {
-			return "no IODev assigned to '$hash->{NAME}'";
+			Log3 $hash, 3, "no IODev assigned to '$hash->{NAME}'";
 		}
  }
  return ($msg) ? $msg : undef;
@@ -296,7 +296,7 @@ sub I2C_MCP23017_SetRegPair {																									#set register pair for Por
 				}) if (defined $hash->{I2C_Address});
 				}
 	} else {
-		return "no IODev assigned to '$hash->{NAME}'";
+		Log3 $hash, 3, "no IODev assigned to '$hash->{NAME}'";
 	}
 }
 ###############################################################################

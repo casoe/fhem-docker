@@ -1,8 +1,73 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
- - bugfix: 14_SD_WS09: fixed windDirAverage bug
- - bugfix: 95_Dashboard: fix perl warnings, Forum: #127216
- - bugfix: 74_GardenaSmartDevice: fix ic24,fix regex,fix state_string variable
+ - change:  37_SHC: Support current smarthomatic version.
+                    Basestation uses 115200 Baud by default and CRC.
+                    EnvSensor supports particulate matter sensor.
+ - bugfix:  73_NUKIBridge: Fix 503 Unavailable message
+ - change:  88_HMCCU: Switched close to closed
+ - bugfix:  70_Klafs: package main was removed from source code
+ - bugfix:  31_LightScene: fixes for configDB (by Beta-User)
+ - change:  93_DbRep: reduce memory allocation of reduceLog command
+ - change:  88_HMCCU: Bug fixes and improvements
+ - change:  93_DbRep: enable setter 'index' for device model 'Agent'
+ - bugfix:  70_Klafs: Transferred to namespace of FHEM. 
+                      One bug fixed. If necessary, set password again.
+ - feature: 14_SD_UT: new rc models´
+ - feature: 51_MOBILEALERTS: Add MA 10860
+ - change:  93_DbRep: NOTE: !! syntax of set ... changeValue" is changed !!
+ - feature: 10_RHASSPY: new module for Rhasspy integration (from contrib)
+ - bugfix:  73_AutoShuttersControl: fix can't locate object method after update
+ - bugfix:  73_AutoShuttersControl: fix many reported bugs
+ - feature: 93_DbRep: reduceLog - add max, max=day, min, min=day, sum, sum=day
+                      some fixes of reduceLog routine 
+ - feature: 50_Signalbot: support to link 2 FHEM instance under the same number
+ - feature: 93_DbLog: new Attr convertTimezone -> logging in UTC time
+ - bugfix:  93_DbRep: fix set ... deleteOther for SQLite
+ - feature: 60_allergy: alternative data source with Attribute alternative3Day
+ - feature: 49_SSCAM: allow placeholders #CAM, #DATE, #TIME, #FILE, #CTIME
+ - bugfix:  50_Signalbot: update contacts on startup, signal-cli 0.10.9
+ - feature: 96_Snapcast: group volume now can be set
+ - feature: 49_SSCam: text field long for some attributes, the body text 
+                      can contain HTML-Tags when sending snaps/recordings
+ - bugfix:  57_SSCal: fix problem recurring MONTHLY appointment by day
+ - bugfix:  96_Snapcast: prevent crash in case of external group commands
+ - feature: 70_ESCVP21net: added undocumented settings (IMGPROC, IRIS, LIRIS)
+ - feature: 30_HUEBridge, 31_HUEDevice: support for Hue tap dial switch
+ - change:  96_Snapcast: PBP code restructured (part I)
+ - bugfix:  49_SSCam: fix noQuotesForSID using in streaming devices type mjpeg
+ - feature: 74_GardenaSmartDevice: add lona readings, [fix] - setter procedure
+ - feature: 14_CUL_TCM97001:
+               add KW9015 (TFA 30.3161)
+               add Mebus HQ7312
+               update log Unkown
+               new attribute disableCreateUndefDevice:
+                  this can be used to deactivate the creation of new devices
+               new attribute disableUnknownEvents:
+                  with this, the events can be deactivated for unknown messages
+ - bugfix:  14_CUL_TCM97001:
+               fix Battery at the model NC_WS
+               fix Ventus W174, update log
+ - change:  mqtt2.template: zigbee2mqtt now uses lowercase state
+ - bugfix:  79_Klafs: minor bugfix for date format 
+ - bugfix:  38_netatmo: fixed csrf error on home notification settings
+ - bugfix:  10_SOMFY: Correct match for long commands according to #msg1224029
+ - bugfix:  70_Klafs: Start time error fixed
+ - bugfix:  70_Klafs: minor bugfix for Reading power
+ - bugfix:  70_Klafs: minor bugfix for automatic reconnect
+ - change:  72_FB_CALLMONITOR: adapt regexp for dasoertliche.de reverse
+                               search 
+ - new:     00_KNXIO: new IO-module for KNX/EIB
+ - new:     70_Klafs: Klafs Sauna control
+ - change:  93_DbRep: allow optionally set device/reading insert command,
+                      minor fixes
+ - feature: 70_ESCVP21net: added Epson model TW9400
+ - change:  98_monitoring: now packaged
+ - change:  50_Signalbot: send message box, 0.10.5 group functions
+ - bugfix:  32_withings: fixed sessionkey retrieval
+ - bugfix:  70_SVDRP: handle timers with german Umlaute
+ - bugfix:  14_SD_WS09: fixed windDirAverage bug
+ - bugfix:  95_Dashboard: fix perl warnings, Forum: #127216
+ - bugfix:  74_GardenaSmartDevice: fix ic24,fix regex,fix state_string variable
                    add sensor2 support, fix open + paused 
  - bugfix:  93_DbRep: minor fix in reduceLog 
             forum: topic,53584.msg1217329.html#msg1217329

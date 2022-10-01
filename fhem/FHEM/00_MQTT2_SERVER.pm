@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 00_MQTT2_SERVER.pm 25958 2022-04-14 13:35:48Z rudolfkoenig $
+# $Id: 00_MQTT2_SERVER.pm 26405 2022-09-16 18:15:35Z rudolfkoenig $
 package main;
 
 use strict;
@@ -49,6 +49,7 @@ MQTT2_SERVER_Initialize($)
     rawEvents
     sslVersion
     sslCertPrefix
+    topicConversion:0,1
   );
   use warnings 'qw';
   $hash->{AttrList} = join(" ", @attrList)." ".$readingFnAttributes;
@@ -233,10 +234,10 @@ MQTT2_SERVER_Set($@)
     MQTT2_SERVER_doPublish($hash->{CL}, $hash, $tp, $val, $retain);
 
   } elsif($a[0] eq "clearRetain") {
-    my $rname = AttrVal($hash->{NAME}, "hideRetain", 0) ? "RETAIN" : ".RETAIN";
+    my $rname = AttrVal($hash->{NAME}, "hideRetain", 0) ? ".RETAIN" : "RETAIN";
     delete($hash->{READINGS}{$rname});
     delete($hash->{retain});
-
+    return undef;
   }
 }
 
@@ -540,8 +541,8 @@ MQTT2_SERVER_doPublish($$$$;$)
     # Save it
     my %nots = map { $_ => $server->{retain}{$_}{val} }
                keys %{$server->{retain}};
-    my $rname = AttrVal($server->{NAME}, "hideRetain", 0) ? ".RETAIN" : "RETAIN";
-    setReadingsVal($server, $rname, toJSON(\%nots), FmtDateTime(gettimeofday()));
+    my $rname = AttrVal($server->{NAME}, "hideRetain", 0) ? ".RETAIN":"RETAIN";
+    setReadingsVal($server, $rname, toJSON(\%nots),FmtDateTime(gettimeofday()));
   }
 
   foreach my $clName (keys %{$server->{clients}}) {
@@ -553,7 +554,7 @@ MQTT2_SERVER_doPublish($$$$;$)
   return if(defined($ir) && "$tp:$val" =~ m/$ir/);
 
   my $cid = $src->{cid};
-  $tp =~ s/:/_/g; # 96608
+  $tp =~ s/:/_/g if(AttrVal($serverName, "topicConversion", 1)); # 96608
   if(defined($cid) ||                    # "real" MQTT client
      AttrVal($serverName, "rePublish", undef)) {
     $cid = $src->{NAME} if(!defined($cid));
@@ -576,8 +577,7 @@ MQTT2_SERVER_doPublish($$$$;$)
         delete($fl->{$fwid});
         next;
       }
-      FW_AsyncOutput($cl, "", 
-                  defined($cid) ? "RCVD: $tp $val<br>" : "SENT: $tp $val<br>");
+      FW_AsyncOutput($cl, "", toJSON([defined($cid)?$cid:"SENT", $tp, $val]));
     }
     delete($server->{".feedList"}) if(!keys %{$fl});
   }
@@ -890,14 +890,23 @@ MQTT2_SERVER_ReadDebug($$)
       restarted.
       </li><br>
 
+    <a id="MQTT2_SERVER-attr-sslVersion"></a>
     <li>sslVersion<br>
        See the global attribute sslVersion.
        </li><br>
 
+    <a id="MQTT2_SERVER-attr-sslCertPrefix"></a>
     <li>sslCertPrefix<br>
        Set the prefix for the SSL certificate, default is certs/server-, see
        also the SSL attribute.
        </li><br>
+
+    <a id="MQTT2_SERVER-attr-topicConversion"></a>
+    <li>topicConversion [1|0]<br>
+      due to historic reasons colon (:) is converted in the topic to underscore
+      (_). Setting this attribute to 0 will disable this conversion.  Default
+      is 1.
+      </li><br>
 
   </ul>
 </ul>

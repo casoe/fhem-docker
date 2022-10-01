@@ -1,5 +1,5 @@
 #############################################
-# $Id: 98_DOIF.pm 25946 2022-04-11 08:24:02Z Damian $
+# $Id: 98_DOIF.pm 26444 2022-09-25 16:29:19Z Damian $
 #
 # This file is part of fhem.
 #
@@ -961,7 +961,9 @@ sub AggrIntDoIf
     }
   }
   
-  if (defined $reading) {
+  $reading = "" if (!defined $reading);
+  
+  if ($reading ne "") {
     if ($reading =~ /^"(.*)"$/) {
       $readingRegex = $1;
     }
@@ -972,7 +974,7 @@ sub AggrIntDoIf
     foreach my $reading ((defined $readingRegex) ? grep {/$readingRegex/} keys %{$defs{$name}{READINGS}} : $reading) {
       $value="";
       $number="";
-      if ($reading) {
+      if ($reading ne "") {
         if (defined $defs{$name}{READINGS}{$reading}) {
           $value=$defs{$name}{READINGS}{$reading}{VAL};
           $number = ($value =~ /(-?\d+(\.\d+)?)/ ? $1 : 0);
@@ -1641,7 +1643,7 @@ sub ReplaceReadingDoIf
     $format=$3;
   }
   if ($name) {
-    if ($reading) {
+    if (defined ($reading)) {
       if (substr($reading,0,1) eq "\?") {
         $notifyExp=substr($reading,1);
         return("::EventDoIf('$name',".'$hash,'."'$notifyExp',1)","",$name,undef,undef);
@@ -1775,7 +1777,7 @@ sub AddRegexpTriggerDoIf
   $reading="" if (!defined($reading));
   my $regexpid='"'.$regexp.'"';
   if ($dev) {
-    if ($reading){
+    if (defined ($reading)){
       $hash->{Regex}{$type}{$dev}{$element}{$reading}=(($reading =~ "^\&") ? "\^$dev\$":"\^$dev\$:\^$reading: ");
     } elsif ($regexp) {
       $hash->{Regex}{$type}{$dev}{$element}{$regexpid}="\^$dev\$:$regexp";
@@ -3916,7 +3918,7 @@ DOIF_Set($@)
   if ($arg eq "disable" or  $arg eq "initialize" or  $arg eq "enable") {
     if (AttrVal($hash->{NAME},"disable","")) {
       $hs=$cur_hs;
-      return ("modul ist deactivated by disable attribut, delete disable attribut first");
+      return ("device is deactivated by disable attribute, delete disable attribute first");
     }
   }
   if ($arg eq "disable") {
@@ -4573,7 +4575,7 @@ sub footer {
 
 sub plot {
   
-  my ($collect,$min_a,$max_a,$minColor,$maxColor,$dec,$func,$steps,$x_prop,$chart_dim,$noColor,$lmm,$ln,$lr,$plot,$bwidth,$footerPos,$fill,$pos,$anchor,$unitColor)=@_;
+  my ($collect,$min_a,$max_a,$minColor,$maxColor,$dec,$func,$steps,$x_prop,$chart_dim,$noColor,$lmm,$ln,$lr,$plot,$bwidth,$footerPos,$fill,$pos,$anchor,$unitColor,$unit)=@_;
   
   my $points="";
   my $v;
@@ -4590,6 +4592,7 @@ sub plot {
   my $minPlot;
   my $maxPlot;
   my $scaling=0;
+  $unit="" if (!defined $unit);
 
   my $val=${$collect}{value};
   my $a=@{$collect}{values};
@@ -4658,7 +4661,7 @@ sub plot {
   
   $minVal=$value if (!defined $minVal);
   $maxVal=$value if (!defined $maxVal);
-  my $opacity=0.2;
+  my $opacity=0.5;
   if ($minPlot < 0 and $maxPlot > 0) {
     $xpos=50-int($n*10)/10;
     $topVal=($maxVal > 0 ? $maxVal : 0);
@@ -4752,7 +4755,7 @@ sub plot {
     if (!defined $unitColor) {
       $out.=sprintf('<path d="M%s,%s L',$chart_dim,$xpos);
       $out.= $points;
-      $out.= sprintf('" style="fill:url(#gradplotLight_%s_%s_%s);stroke:url(#gradplot_%s_%s_%s);stroke-width:0.5" />',$topValColor,$bottomValColor,(defined $lr ? $lr:0),$topValColor,$bottomValColor,(defined $lr ? $lr:0));
+      $out.= sprintf('" style="fill:url(#gradplotLight_%s_%s_%s);stroke:url(#gradplot_%s_%s_%s);stroke-width:0.4" />',$topValColor,$bottomValColor,(defined $lr ? $lr:0),$topValColor,$bottomValColor,(defined $lr ? $lr:0));
     } else {
       $out.=sprintf('<path d="M%s,%s L',$chart_dim,$xpos);
       $out.= $points;
@@ -4763,34 +4766,35 @@ sub plot {
 
   ##$out.=sprintf('<circle cx="%s" cy="%s" r="2" fill="%s"  opacity="0.7" />',$maxValSlot*$x_prop,(50-int((${$a}[$maxValSlot]*$m+$n)*10)/10),defined $unitColor ? $unitColor:color($maxValColor,$ln)) if (defined $maxValSlot);
   my ($x1,$y1)=($maxValSlot*$x_prop,(50-int((${$a}[$maxValSlot]*$m+$n)*10)/10)-2.3);
-  $out.=sprintf('<path d="M%s %s L%s %s L%s %s Z" fill="%s" opacity="0.7"/>',$x1,$y1,$x1+2.4,$y1+4.3,$x1-2.4,$y1+4.3, defined $unitColor ? $unitColor:color($maxValColor,$ln)) if (defined $maxValSlot);
+  $out.=sprintf('<path d="M%s %s L%s %s L%s %s Z" fill="%s" opacity="0.5"/>',$x1,$y1,$x1+2.4,$y1+4.3,$x1-2.4,$y1+4.3, defined $unitColor ? $unitColor:color($maxValColor,$ln)) if (defined $maxValSlot);
  
  ##$out.=sprintf('<circle cx="%s" cy="%s" r="2" fill="%s"  opacity="0.7"/>,',$minValSlot*$x_prop,(50-int((${$a}[$minValSlot]*$m+$n)*10)/10),defined $unitColor ? $unitColor:color($minValColor,$ln)) if (defined $minValSlot);
   ($x1,$y1)=($minValSlot*$x_prop,(50-int((${$a}[$minValSlot]*$m+$n)*10)/10)+2.3);
-  $out.=sprintf('<path d="M%s %s L%s %s L%s %s Z" fill="%s" opacity="0.7"/>',$x1,$y1,$x1+2.4,$y1-4.3,$x1-2.4,$y1-4.3, defined $unitColor ? $unitColor:color($minValColor,$ln)) if (defined $minValSlot);
+  $out.=sprintf('<path d="M%s %s L%s %s L%s %s Z" fill="%s" opacity="0.5"/>',$x1,$y1,$x1+2.4,$y1-4.3,$x1-2.4,$y1-4.3, defined $unitColor ? $unitColor:color($minValColor,$ln)) if (defined $minValSlot);
   
-  $out.=sprintf(('<circle cx="%s" cy="%s" r="2" fill="%s"  opacity="0.7">'.$animate),$chart_dim,(50-int(($value*$m+$n)*10)/10),defined $unitColor ? $unitColor:color($currColor,$ln)) if ($val ne "N/A");
+  $out.=sprintf(('<circle cx="%s" cy="%s" r="2" fill="%s"  opacity="0.5">'.$animate),$chart_dim,(50-int(($value*$m+$n)*10)/10),defined $unitColor ? $unitColor:color($currColor,$ln)) if ($val ne "N/A");
   
   my $footer="";
   
   if ($footerPos) {
     if (defined $maxValTime) {
+      $footer.= sprintf('<text text-anchor="start" x="12" y="%s" style="fill:%s;font-size:8px"><tspan style="fill:#CCCCCC">%s</tspan></text>',$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", $unit);
       if ($hours > 168) {
-        $footer.= sprintf('<text text-anchor="start" x="12" y="%s" style="fill:%s;font-size:8px">&#x25B2<tspan style="fill:#CCCCCC">%s</tspan></text>',$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%d.%m %H:%M",localtime($maxValTime)));
+        $footer.= sprintf('<text text-anchor="start" x="40" y="%s" style="fill:%s;font-size:8px">&#x25B2<tspan style="fill:#CCCCCC">%s</tspan></text>',$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%d.%m %H:%M",localtime($maxValTime)));
       } else {
-        $footer.= sprintf('<text text-anchor="start" x="12" y="%s" style="fill:%s;font-size:9px">&#x25B2<tspan style="fill:#CCCCCC">%s</tspan></text>',$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%a",localtime($maxValTime)));
-        $footer.= sprintf('<text text-anchor="start" x="35" y="%s" style="fill:#CCCCCC;font-size:9px">%s</text>',$footerPos,::strftime("%H:%M",localtime($maxValTime)));
+        $footer.= sprintf('<text text-anchor="start" x="40" y="%s" style="fill:%s;font-size:8px">&#x25B2<tspan style="fill:#CCCCCC">%s</tspan></text>',$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%a",localtime($maxValTime)));
+        $footer.= sprintf('<text text-anchor="start" x="61" y="%s" style="fill:#CCCCCC;font-size:8px">%s</text>',$footerPos,::strftime("%H:%M",localtime($maxValTime)));
       }
-      $footer.= sprintf('<text text-anchor="end" x="%s" y="%s" style="fill:%s;font-size:9px;%s">%s</text>',$bwidth/2+7,$footerPos,color($maxValColor,$lmm),"",sprintf($format,${$collect}{max_value}));
+      $footer.= sprintf('<text text-anchor="end" x="%s" y="%s" style="fill:%s;font-size:8px;%s">%s</text>',$bwidth/2+22.5,$footerPos,color($maxValColor,$lmm),"",sprintf($format,${$collect}{max_value}));
     }
     if (defined $minValTime) {
       if ($hours > 168) {
-        $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px">&#x2022<tspan style="fill:%s">&#x25BC</tspan>%s</text>',$bwidth/2+9,$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%d.%m %H:%M",localtime($minValTime)));
+        $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px">&#x2022<tspan style="fill:%s">&#x25BC</tspan>%s</text>',$bwidth/2+23,$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%d.%m %H:%M",localtime($minValTime)));
       } else {
-        $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:9px">&#x2022<tspan style="fill:%s">&#x25BC</tspan>%s</text>',$bwidth/2+9,$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%a",localtime($minValTime)));
-        $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:9px">%s</text>',$bwidth/2+35,$footerPos,::strftime("%H:%M",localtime($minValTime)));
+        $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px">&#x2022<tspan style="fill:%s">&#x25BC</tspan>%s</text>',$bwidth/2+23,$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%a",localtime($minValTime)));
+        $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px">%s</text>',$bwidth/2+47,$footerPos,::strftime("%H:%M",localtime($minValTime)));
       }
-      $footer.= sprintf('<text text-anchor="end" x="%s" y="%s" style="fill:%s;font-size:9px;%s">%s</text>', $bwidth+7,$footerPos,color($minValColor,$lmm),"",sprintf($format,${$collect}{min_value}));
+      $footer.= sprintf('<text text-anchor="end" x="%s" y="%s" style="fill:%s;font-size:8px;%s">%s</text>', $bwidth+8,$footerPos,color($minValColor,$lmm),"",sprintf($format,${$collect}{min_value}));
     }
   }
 
@@ -4848,7 +4852,7 @@ sub card
   }
   
   
-  my $chart_dim = $hring eq "1" ? $bwidth-36: $bwidth-90 ;
+  my $chart_dim = $hring eq "" ? $bwidth-90: $bwidth-36 ;
   
   $chart_dim -= defined $collect2 ? ($hring eq "1" ? 13 : 15):0;
   
@@ -4934,8 +4938,8 @@ sub card
 
 
   $out.='<polyline points="11,23 '.($bwidth+9).',23"  style="stroke:gray; stroke-width:0.7" />' if (defined $header or $hring);
-  if (defined $header or $hring) {
-    $out.= sprintf('<text text-anchor="start" x="%s" y="19" style="fill:#CCCCCC; font-size:12.5px;%s">%s</text>',$hring eq "1" ? 34:14,$header_style,$header_txt) if (defined $header); 
+  if (defined $header or $hring ne "") {
+    $out.= sprintf('<text text-anchor="start" x="%s" y="19" style="fill:#CCCCCC; font-size:12.5px;%s">%s</text>',($hring eq "1" and defined $ic) ? 34:14,$header_style,$header_txt) if (defined $header); 
     if (defined $icon and $icon ne "" and  $icon ne " ") {
       my $svg_icon=::FW_makeImage($ic);
       if(!($svg_icon =~ s/\sheight="[^"]*"/ height="18"/)) {
@@ -4988,36 +4992,58 @@ sub card
   my $timebeginn=$time-$hours*3600;
   
   my $scale;
+  my $scale_strokes;
+  my $description;
   my $strokes;
   
   my $div = $hours > 168 ? ($hours % 168 == 0 ? 168 : ($hours % 24 == 0 ? 24 : 1)):1;
   
   if ($div==168 and $hours/$div/2 == 1) {  #2w
     $scale=$hours/7;
-    $strokes=7;
+    $description=7;
+    $strokes=$description;
+    $scale_strokes=$scale;
   } elsif ($hours <= 168*7) {
     for (my $i=7;$i>=3;$i--) {
       if  ($hours/$div % $i == 0) {
         $scale=$hours/$i;
-        $strokes=$i;
+        $scale_strokes=$scale;
+        $description=$i;
+        $strokes=$description;
+        if ($div == 168 and $chart_dim > 130) {
+          $strokes=$description*7;
+          $scale_strokes=$scale/7;
+        }        
         last;
       }
     }
   }
+    
 
   if (defined $scale) {
     my ($sec,$minutes,$hour,$mday,$month,$year,$wday,$yday,$isdst) = localtime($timebeginn);
     my $beginhour=int($hour/$scale)*$scale;
     my $diffsec=($hour-$beginhour)*3600+$minutes*60+$sec;
-    my $pos=(1-$diffsec/($scale*3600))*$chart_dim/$strokes-$x_prop;
+    my $pos=(1-$diffsec/($scale*3600))*$chart_dim/$description-$x_prop;
+    my $pos_strokes=(1-$diffsec/($scale_strokes*3600))*$chart_dim/$strokes-$x_prop;    
+     
+    for (my $i=0;$i<=$strokes;$i++) {
+     my $x=int((($i)*($chart_dim/$strokes)+$pos_strokes)*10)/10;
+     $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0 and $x <= $chart_dim);
+    }
     
-    ##$out.=sprintf('<text text-anchor="start" x="0" y="40" style="fill:#CCCCCC;font-size:7px">%s</text>',"chart_dim:$chart_dim, pos:$pos");
-    for (my $i=0;$i<$strokes;$i++) {
+   # for (my $i=0;$i<$description;$i++) {
+   #   my $x=int((($i)*($chart_dim/$description)+$pos)*10)/10;
+   #   $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0);
+   # }
+  
+    
+    
+    for (my $i=0;$i<$description;$i++) {
       my $h=$beginhour+($i+1)*$scale;
       $hour=($h >= 24 ? $h % 24:$h);
-      my $x=int((($i*($chart_dim/$strokes)+$pos))*10)/10;
-      $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0);
-      ##$out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:gray; stroke-width:0.2; stroke-dasharray:1,1; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0);
+      my $x=int((($i*($chart_dim/$description)+$pos))*10)/10;
+      ##$out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0);
       if ($hour == 0) {
         if ($hours <= 168) {
           $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,substr(::strftime("%a",localtime($timebeginn+$h*3600)),0,2));
@@ -5029,18 +5055,19 @@ sub card
       }
     }
   } else {
-    for (my $i=0;$i<=6;$i++) {
-      my $x=int((($i)*($chart_dim/6)+1)*10)/10;
+    for (my $i=0;$i<=12;$i++) {
+      my $x=int((($i)*($chart_dim/12)+1)*10)/10;
       $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0 and $x <= $chart_dim);
     }
+   
     for (my $i=0;$i<=3;$i++) {
       my $x=int(($i*($chart_dim/3)-1)*10)/10;
       if  ($hours <=168) {
-        $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%H:%M",localtime($time-$hours*3600*(1-$i/3))));
+        $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x+2,::strftime("%H:%M",localtime($time-$hours*3600*(1-$i/3))));
       } elsif ($hours <=168*7 and $hours % 24 == 0) {
         $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%d.%H:",localtime($time-$hours*3600*(1-$i/3))));
       } else {
-        $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%d.%m",localtime($time-$hours*3600*(1-$i/3))));
+        $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x+2,::strftime("%d.%m",localtime($time-$hours*3600*(1-$i/3))));
       }
     }
   }
@@ -5058,24 +5085,24 @@ sub card
       $maxVal=$max if (!defined $maxVal or $max > $maxVal);
     }
     for (my $i=0;$i<@{$col};$i++) {
-      ($outplot,$outfooter) = plot (${$col}[$i],[$min,$minVal],[$max,$maxVal],$minColor,$maxColor,$dec,$func,$steps,$x_prop,$chart_dim, $i ? $noColor:-1,$lmm,$ln,$lr,$plot,$bwidth,$noFooter eq "1" ? 0:84+$i*10,undef,-2.5,"end",(split(",",${$unit_a}[$i]))[1]);
+      ($outplot,$outfooter) = plot (${$col}[$i],[$min,$minVal],[$max,$maxVal],$minColor,$maxColor,$dec,$func,$steps,$x_prop,$chart_dim, $i ? $noColor:-1,$lmm,$ln,$lr,$plot,$bwidth,$noFooter eq "1" ? 0:84+$i*10,undef,-2.5,"end",(split(",",${$unit_a}[$i]))[1],(split(",",${$unit_a}[$i]))[0]);
       $out.=$outplot;
       push (@outfooter,$outfooter);
     }
   } else {
-    my ($outplot,$outfooter) = plot ($collect,$min,$max,$minColor,$maxColor,$dec,$func,$steps,$x_prop,$chart_dim,$noColor,$lmm,$ln,$lr,$plot,$bwidth,$noFooter eq "1" ? 0:84,undef,-2.5,"end");
+    my ($outplot,$outfooter) = plot ($collect,$min,$max,$minColor,$maxColor,$dec,$func,$steps,$x_prop,$chart_dim,$noColor,$lmm,$ln,$lr,$plot,$bwidth,$noFooter eq "1" ? 0:84,undef,-2.5,"end",undef,$unit);
     $out.=$outplot;
     push (@outfooter,$outfooter);
   }
   if (defined $collect2) {
-    ($outplot,$outfooter) = plot ($collect2,$min2,$max2,$minColor2,$maxColor2,$dec2,$func2,$steps,$x_prop,$chart_dim,$noColor,$lmm,$ln,$lr,$plot,$bwidth,$noFooter eq "1" ? 0:84+@outfooter*10,undef,$chart_dim+3,"start");
+    ($outplot,$outfooter) = plot ($collect2,$min2,$max2,$minColor2,$maxColor2,$dec2,$func2,$steps,$x_prop,$chart_dim,$noColor,$lmm,$ln,$lr,$plot,$bwidth,$noFooter eq "1" ? 0:84+@outfooter*10,undef,$chart_dim+3,"start",undef,$unit2);
     $out.=$outplot;
     push (@outfooter,$outfooter)
   }
   $out.= '</g>';
   $out.= '</svg>';
 
-  if (!$hring) {
+  if ($hring eq "") {
     $out.=sprintf('<g transform="translate(%s,6)">',$bwidth-49);
     if (!defined $collect2) {
       if (ref($col) eq "ARRAY" and scalar (@{$col}) >= 2 ) {
@@ -6049,9 +6076,9 @@ sub dec
 
 sub y_h
 {
-  my ($value,$min,$max,$height,$mode) = @_;
-  my $offset=4.5;
-  $offset=0 if (defined $mode);
+  my ($value,$min,$max,$height,$val_sum,$mode) = @_;
+  my $offset=4;
+  $offset=0 if ($mode == 0);
   if ($value > $max) {
     $value=$max;
   } elsif ($value < $min) {
@@ -6075,9 +6102,17 @@ sub y_h
  
   $null=$max/($max-$min)*$height;
   if ($value <= 0) {
-    $y=$null;
+    if ($mode==2){
+      $y=int($null-$val_sum);
+    } else {
+      $y=$null;
+    }
   } else {
+  if ($mode==2){
+    $y=int($null+$offset-$val_sum-$h);
+   } else {
     $y=int($null+$offset-$h);
+   }
   }
   $null=undef if ($max == 0 or $min == 0);
   return ($y,$h,$null);
@@ -6098,13 +6133,18 @@ sub hsl_color
   
 sub cylinder_bars { 
   my ($header,$min,$max,$unit,$bwidth,$height,$size,$dec,@values) = @_;
-  return(cylinder_mode ($header,$min,$max,$unit,$bwidth,$height,$size,$dec,1,@values));
+  return(cylinder_mode ($header,$min,$max,$unit,$bwidth,$height,$size,$dec,0,@values));
 }  
 
 sub cylinder {  
   my ($header,$min,$max,$unit,$bwidth,$height,$size,$dec,@values) = @_;
-  return(cylinder_mode ($header,$min,$max,$unit,$bwidth,$height,$size,$dec,undef,@values));
+  return(cylinder_mode ($header,$min,$max,$unit,$bwidth,$height,$size,$dec,1,@values));
 }  
+
+sub cylinder_s {  
+  my ($header,$min,$max,$unit,$bwidth,$height,$size,$dec,@values) = @_;
+  return(cylinder_mode ($header,$min,$max,$unit,$bwidth,$height,$size,$dec,2,@values));
+}
 
 sub cylinder_mode
 {
@@ -6145,7 +6185,7 @@ sub cylinder_mode
   my $width=30;
   my $heightoffset=4;
   
-  if (defined $mode) {
+  if ($mode == 0) {
     $width=7;
   }
   
@@ -6155,7 +6195,7 @@ sub cylinder_mode
       $values[$i+2]="" if (!defined $values[$i+2]);
       $lenmax=length($values[$i+2]) if (length($values[$i+2]) > $lenmax);
     }
-    if (defined $mode) {
+    if ($mode == 0) {
       $bwidth=@values/3*($width+2)+60+$lenmax*4.3;
     } else {
       $bwidth=90+$lenmax*4.3;
@@ -6176,7 +6216,7 @@ sub cylinder_mode
   $out.= '<linearGradient id="grad3" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:grey;stop-opacity:0.2"/><stop offset="1" style="stop-color:rgb(0, 0, 0);stop-opacity:0.2"/></linearGradient>';
   for (my $i=0;$i<@values;$i+=3){  
     my $color=$values[$i+1];
-    $out.= sprintf('<linearGradient id="grad1_%s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:%s;stop-opacity:1"/><stop offset="1" style="stop-color:%s;stop-opacity:0.3"/></linearGradient>',$color,hsl_color($color),hsl_color($color));
+    $out.= sprintf('<linearGradient id="grad1_%s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:%s;stop-opacity:0.9"/><stop offset="1" style="stop-color:%s;stop-opacity:0.3"/></linearGradient>',$color,hsl_color($color),hsl_color($color));
   }
   $out.= '<linearGradient id="gradbackcyl" x1="0" y1="1" x2="0" y2="0"><stop offset="0" style="stop-color:rgb(32,32,32);stop-opacity:0.9"/><stop offset="1" style="stop-color:rgb(64, 64, 64);stop-opacity:0.9"/></linearGradient>';
   $out.= '<linearGradient id="gradbackbars" x1="0" y1="1" x2="0" y2="0"><stop offset="0" style="stop-color:rgb(64,64,64);stop-opacity:0.9"/><stop offset="1" style="stop-color:rgb(48, 48, 48);stop-opacity:0.9"/></linearGradient>';
@@ -6187,33 +6227,36 @@ sub cylinder_mode
   $out.= sprintf('<text text-anchor="middle" x="%d" y="13" style="fill:white; font-size:14px">%s</text>',$bwidth/2+11,$header) if ($header ne "");  
   
   $out.= sprintf('<g transform="translate(0,%d)">',$trans);
-  if (defined $mode) {
-	  $out.= sprintf('<rect x="15" y="0"  width="%d" height="%d" rx="3" ry="3" fill="url(#gradbackbars)"/>',!defined $mode ? $width:@values/3*($width+2)+2,$height+$heightoffset+2);
+  if ($mode == 0) {
+	  $out.= sprintf('<rect x="15" y="0"  width="%d" height="%d" rx="3" ry="3" fill="url(#gradbackbars)"/>',@values/3*($width+2)+2,$height+$heightoffset+2);
 	} else {
-    $out.= sprintf('<rect x="15" y="0"  width="%d" height="%d" rx="20" ry="2" fill="url(#grad3)"/>',!defined $mode ? $width:@values/3*($width+2)+2,$height+$heightoffset);
+    $out.= sprintf('<rect x="15" y="0"  width="%d" height="%d" rx="20" ry="2" fill="url(#grad3)"/>',$width,$height+$heightoffset);
     $out.= sprintf('<rect x="15" y="%d" width="%d" height="4" rx="20" ry="2" fill="url(#grad0)"/>',$height,$width);
     $out.= sprintf('<rect x="15" y="0"  width="%d" height="4" rx="20" ry="2" fill="url(#grad0)"/>',$width);
   }
 
-  ($y,$val1,$null)=y_h(0,$min,$max,$height);
+  ($y,$val1,$null)=y_h(0,$min,$max,$height,0,$mode);
   my $xLeft=15;
   my $xBegin=$xLeft+33;
-  $xBegin=@values/3*($width+2)+20 if(defined $mode);
+  $xBegin=@values/3*($width+2)+20 if($mode == 0);
   
   $out.= sprintf('<text x="%d" y="%d" style="fill:white; font-size:10px">%s</text>',$xBegin,$height+$heightoffset+1,$min);
   $out.= sprintf('<text x="%d" y="%d" style="fill:white; font-size:10px">%s</text>',$xBegin,$null+$heightoffset+2,0) if (defined $null);
   $out.= sprintf('<text x="%d" y="%d" style="fill:white; font-size:10px">%s</text>',$xBegin,+$heightoffset,$max);  
 
-  my $yBegin=13+($height-@values*$heightval)/2;
+  my $yBegin=14+($height-@values*$heightval)/2;
   my $xValue=$xLeft;
+  my $yValue=$yBegin+$heightval-1;
+  my $val_sum_pos=0;
+  my $val_sum_neg=0;
   
   for (my $i=0;$i<@values;$i+=3){
-    my $yValue=$yBegin+$heightval-1;
+ 
     my $value=$values[$i];
     my $val=$value;
-    if (defined $mode) {
-      $xValue=$xLeft+$i/3*($width+2)+2 if (defined $mode);
-    }
+    
+    $xValue=$xLeft+$i/3*($width+2)+2 if ($mode == 0);
+
     if (!defined $value or $value eq "") {
       $val="N/A";
       $value=0;
@@ -6221,24 +6264,34 @@ sub cylinder_mode
     my $color=$values[$i+1];
     my $text=$values[$i+2];
     
-    ($y,$val1,$null)=y_h($value,$min,$max,$height,$mode);
-    if (!defined $mode) {
+    ($y,$val1,$null)=y_h($value,$min,$max,$height,($value > 0 ? $val_sum_pos: $val_sum_neg),$mode);
+
+    if ($mode) {
+      $out.= sprintf('<rect x="%d" y="%d" width="%d" height="4" rx="20" ry="2" fill="none" stroke="#999999" stroke-width="0.3"/>',$xValue,$y,$width);
       $out.= sprintf('<rect x="%d" y="%d" width="%d" height="%d" rx="20" ry="2" fill="url(#grad1_%s)"/>',$xValue,$y,$width,$val1,$color);
-      $out.= sprintf('<rect x="%d" y="%d" width="%d" height="4" rx="20" ry="2" fill="none" stroke="url(#grad1_%s)" stroke-width="0.5"/>',$xValue,$y,$width,$color);#,hsl_color($color,0));
     ##  $out.= sprintf('<rect x="%d" y="%d" width="%d" height="%d" rx="20" ry="2" fill="url(#grad1_%s)"/>',$xValue,$y,$width,$val1,$color);
     } else {
       $out.= sprintf('<rect x="%d" y="%d" width="%d" height="%d" rx="1" ry="1" fill="url(#grad1_%s)"/>',$xValue,$y+2,$width,$val1+2,$color);
     }
-
+    my $yText;
     if (defined $text and $text ne "") {
       $out.= sprintf('<text x="%d" y="%d" style="fill:%s; font-size:12px">%s</text>',$xBegin+10,$yBegin+$i*$heightval,hsl_color($color),$text.":");
       if ($heightval == 10) {
-        $yValue+=7;
+        $yText=$yValue+7;
       } else {
-        $yValue-=4;
+        $yText=$yValue-4;
+      }
+    } else {
+      $yText=$yValue-4;
+    }
+    $out.= sprintf('<text text-anchor="end" x="%d" y="%d" style="fill:%s";><tspan style="font-size:14px;font-weight:bold;">%s</tspan><tspan dx="2" style="font-size:10px">%s</tspan></text>',$bwidth+5, $yText+$i*$heightval,hsl_color ($color),($val eq "N/A" ? $val:sprintf($format,$val)),$unit);
+    if ($mode == 2) {
+      if ($value> 0) {
+        $val_sum_pos+=($val1-4);
+      } else {
+        $val_sum_neg-=($val1-4);
       }
     }
-    $out.= sprintf('<text text-anchor="end" x="%d" y="%d" style="fill:%s";><tspan style="font-size:14px;font-weight:bold;">%s</tspan><tspan dx="2" style="font-size:10px">%s</tspan></text>',$bwidth+5, $yValue+$i*$heightval,hsl_color ($color),($val eq "N/A" ? $val:sprintf($format,$val)),$unit);
   }  
 
   $out.= '</g>';
@@ -6516,7 +6569,7 @@ weil z. B. Garage nicht nur über die Fernbedienung geschaltet wird, dann muss m
 <br>
 Bei der Angabe von zyklisch sendenden Sensoren (Temperatur, Feuchtigkeit, Helligkeit usw.) wie z. B.:<br>
 <br>
-<code>define di_heating DOIF ([sens:temperature] < 20) (set heating on)</code><br>
+<code>define di_heating DOIF ([sens:temperature] &lt 20) (set heating on)</code><br>
 <br>
 ist die Nutzung des Attributes <code>do always</code> nicht sinnvoll, da das entsprechende Kommando hier: "set heating on" jedes mal ausgeführt wird,
 wenn der Temperatursensor in regelmäßigen Abständen eine Temperatur unter 20 Grad sendet.
@@ -6530,7 +6583,7 @@ Soll bei Nicht-Erfüllung aller Bedingungen ein Zustandswechsel erfolgen, so mus
 Im Perl-Modus arbeitet das DOIF-Modul im Gegensatz zum FHEM-Modus ohne den eigenen Status auszuwerten. Es kommt immer zur Auswertung des definierten Block, wenn er getriggert wird.
 Diese Verhalten entspricht dem Verhalten mit dem Attribut do always im FHEM-Modus. Damit bei zyklisch sendenden Sensoren nicht zum ständigen Schalten kommt, muss das Schalten unterbunden werden. Das obige Beispiel lässt sich, wie folgt definieren:<br>
 <br>
-<code>define di_heating DOIF {if ([sens:temperature] < 20) {if (Value("heating") ne "on") {fhem_set"heating on"}}}</code><br>
+<code>define di_heating DOIF {if ([sens:temperature] &lt 20) {if (Value("heating") ne "on") {fhem_set"heating on"}}}</code><br>
 <br> 
 <a name="DOIF_Teilausdruecke_abfragen"></a><br>
 <b>Teilausdrücke abfragen</b>&nbsp;&nbsp;&nbsp;<a href="#DOIF_Inhaltsuebersicht">back</a><br>
@@ -6607,11 +6660,11 @@ Syntax:<br>
 <br>
 Anwendungsbeispiel:<br>
 <br>
-<code>define di_warning DOIF ([":^temperature",0]< 0) (set pushmsg danger of frost $DEVICE)</code><br>
+<code>define di_warning DOIF ([":^temperature",0] &lt 0) (set pushmsg danger of frost $DEVICE)</code><br>
 <code>attr di_warning do always</code><br>
 <br>
 <a href="#DOIF_Perl_Modus"><b>Perl-Modus</b>:</a><br>
-<code>define di_warning DOIF {if ([":^temperature",0]< 0) {fhem_set"pushmsg danger of frost $DEVICE}}</code><br>
+<code>define di_warning DOIF {if ([":^temperature",0] &lt 0) {fhem_set"pushmsg danger of frost $DEVICE}}</code><br>
 <br>
 Damit wird auf alle Devices getriggert, die mit "temperature" im Event beginnen. Zurückgeliefert wird der Wert, der im Event hinter "temperature: " steht.
 Wenn kein Event stattfindet, wird der Defaultwert, hier 0,  zurückgeliefert.
@@ -6843,11 +6896,11 @@ In der Aggregationsbedingung <condition> können alle in FHEM definierten Perlfu
 <br>
 Liste der Devices, die mit "rooms" enden und im Reading "temperature" einen Wert größer 20 haben:<br>
 <br>
-<code>[@"rooms$":temperature:$_ > 20]</code><br>
+<code>[@"rooms$":temperature:$_ &gt 20]</code><br>
 <br>
 Liste der Devices im Raum "livingroom", die mit "rooms" enden und im Reading "temperature" einen Wert größer 20 haben:<br>
 <br>
-<code>[@"rooms$":temperature:$_ > 20 and $room eq "livingroom"]</code><br>
+<code>[@"rooms$":temperature:$_ &gt 20 and $room eq "livingroom"]</code><br>
 <br>
 Liste der Devices in der Gruppe "windows", die mit "rooms" enden, deren Status (nicht state-Reading) "on" ist:<br>
 <br>
@@ -6896,13 +6949,13 @@ attr di_Fenster cmdState [$SELF:Device] zuletzt geöffnet|alle geschlossen</code
 <br>
 Raumtemperatur-Überwachung:<br>
 <br>
-<code>define di_temp DOIF (([08:00] or [20:00]) and [?#"^Rooms":temperature: $_ < 20] != 0)<br>
-  (push "In folgenden Zimmern ist zu kalt [@"^Rooms":temperature:$_ < 20,"keine"]")<br>
+<code>define di_temp DOIF (([08:00] or [20:00]) and [?#"^Rooms":temperature: $_ &lt 20] != 0)<br>
+  (push "In folgenden Zimmern ist zu kalt [@"^Rooms":temperature:$_ &lt 20,"keine"]")<br>
 DOELSE<br>
   (push "alle Zimmmer sind warm")<br>  
 <br>
 attr di_temp do always<br>
-attr di_Raumtemp state In folgenden Zimmern ist zu kalt: [@"^Rooms":temperature:$_ < 20,"keine"])</code><br>
+attr di_Raumtemp state In folgenden Zimmern ist zu kalt: [@"^Rooms":temperature:$_ &lt 20,"keine"])</code><br>
 <br>
 Es soll beim Öffnen eines Fensters eine Meldung über alle geöffneten Fenster erfolgen:<br>
 <br>
@@ -6923,7 +6976,7 @@ Für reine Perlangaben gibt es eine entsprechende Perlfunktion namens <code>Aggr
 <a href="#DOIF_Perl_Modus"><b>Perl-Modus</b>:</a><br>
 <code>define di_Fenster DOIF {if (["^Window:open"]) {foreach (AggrDoIf('@','^windows','state','"open"')) {Log3 "di_Fenster",3,"Das Fenster $_ ist noch offen"}}}</code><br>
 <br>
-<code>define di_Temperature DOIF {if (["^room:temperature"]) {foreach (AggrDoIf('@','^room','temperature','$_ < 15')) {Log3 "di_Temperatur",3,"im Zimmer $_ ist zu kalt"}}</code><br>
+<code>define di_Temperature DOIF {if (["^room:temperature"]) {foreach (AggrDoIf('@','^room','temperature','$_ &lt 15')) {Log3 "di_Temperatur",3,"im Zimmer $_ ist zu kalt"}}</code><br>
 <br>
 <a name="DOIF_Zeitsteuerung"></a><br>
 <b>Zeitsteuerung</b>&nbsp;&nbsp;&nbsp;<a href="#DOIF_Inhaltsuebersicht">back</a><br>
@@ -7487,7 +7540,7 @@ In der angegebenen Zeitspanne wird ein Kommando nicht ausgeführt, auch wenn die
 <br>
 <u>Anwendungsbeispiel</u>: Meldung über Frostgefahr alle 60 Minuten<br>
 <br>
-<code>define di_frost DOIF ([outdoor:temperature] < 0) (set pushmsg "danger of frost")<br>
+<code>define di_frost DOIF ([outdoor:temperature] &lt 0) (set pushmsg "danger of frost")<br>
 attr di_frost cmdpause 3600<br>
 attr di_frost do always</code><br>
 <br>
@@ -7740,7 +7793,7 @@ Beispiel<br>
 <br>
 <a href="#DOIF_Perl_Modus"><b>Perl-Modus</b>:</a><br>
 <code>define heating DOIF {if ([switch] eq "on" and [$SELF:frost]) {fhem_set"heating on"} else {fhem_set"heating off"}}<br>
-attr heating DOIF_Readings frost:([outdoor:temperature] < 0)</code><br>
+attr heating DOIF_Readings frost:([outdoor:temperature] &lt 0)</code><br>
 <br>
 Das Reading frost triggert nur dann die definierte Abfrage, wenn sich sein Zustand ändert. Dadurch wird sichergestellt, dass ein wiederholtes Schalten der Heizung vermieden wird, obwohl der Sensor outdoor zyklisch sendet.<br>
 <br>
@@ -7898,7 +7951,7 @@ Zusätzlich führt die Definition von <code>setList</code> zur Ausführung von <
 <br>
 Zweipunktregler a la THRESHOLD<br>
 <br>
-<code>define di_threshold DOIF ([sensor:temperature] <  [$SELF:desired]-1)<br>
+<code>define di_threshold DOIF ([sensor:temperature] &lt [$SELF:desired]-1)<br>
   (set heating on)<br>
 DOELSEIF ([sensor:temperature]>[$SELF:desired])<br>
   (set heating off)<br>

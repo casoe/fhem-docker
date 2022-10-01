@@ -1,5 +1,5 @@
 #########################################################################
-# $Id: TestUtils.pm 23944 2021-03-13 10:17:53Z StefanStrobel $
+# $Id: TestUtils.pm 26104 2022-05-31 18:23:01Z StefanStrobel $
 # Utility functions for testing Modbus that can be uses by other Fhem modules
 #   
 #     This file is part of fhem.

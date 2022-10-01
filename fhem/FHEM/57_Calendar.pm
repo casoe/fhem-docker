@@ -1,4 +1,4 @@
-# $Id: 57_Calendar.pm 25643 2022-02-06 16:53:20Z neubert $
+# $Id: 57_Calendar.pm 26344 2022-08-22 15:06:57Z neubert $
 ##############################################################################
 #
 #     57_Calendar.pm
@@ -533,7 +533,7 @@ sub td {
   push @r, sprintf("%dd", $d) if $d> 0;
   if($m>0 || $s>0) {
     my $t= sprintf("%d:%02d", $h, $m);
-    $t+= sprintf("\'%02d", $s) if $s> 0;
+    $t.= sprintf("\'%02d", $s) if $s> 0;
     push @r, $t;
   } else {
     push @r, sprintf("%dh", $h) if $h> 0;

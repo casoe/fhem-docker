@@ -1,4 +1,4 @@
-# $Id: 98_configdb.pm 25765 2022-03-03 12:22:51Z betateilchen $
+# $Id: 98_configdb.pm 26446 2022-09-26 08:03:12Z betateilchen $
 #
 
 package main;
@@ -178,7 +178,7 @@ sub CommandConfigdb {
 
 		when ('info') {
 			Log3('configdb', 4, "info requested.");
-			$ret = _cfgDB_Info('$Id: 98_configdb.pm 25765 2022-03-03 12:22:51Z betateilchen $');
+			$ret = _cfgDB_Info('$Id: 98_configdb.pm 26446 2022-09-26 08:03:12Z betateilchen $');
 		}
 
 		when ('list') {
@@ -313,6 +313,8 @@ sub _cfgDB_readConfig() {
 		Starting with version 5079, fhem can be used with a configuration database instead of a plain text file (e.g. fhem.cfg).<br/>
 		This offers the possibility to completely waive all cfg-files, "include"-problems and so on.<br/>
 		Furthermore, configDB offers a versioning of several configuration together with the possibility to restore a former configuration.<br/>
+		Detailed information about the available recovery and rescue modes can be found in this forum thread:<br/>
+		<a href=https://forum.fhem.de/index.php/topic,86225.0.html>https://forum.fhem.de/index.php/topic,86225.0.html</a> </br> 
 		Access to database is provided via perl's database interface DBI.<br/>
 		<br/>
 
@@ -321,6 +323,8 @@ sub _cfgDB_readConfig() {
 			Currently the fhem modules<br/>
 			<br/>
 			<li>02_RSS.pm</li>
+			<li>10_RHASSPY.pm</li>
+			<li>31_Lightscene.pm</li>
 			<li>55_InfoPanel.pm</li>
 			<li>91_eventTypes</li>
 			<li>93_DbLog.pm</li>

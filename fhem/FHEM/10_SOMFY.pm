@@ -19,7 +19,7 @@
 #
 ##############################################################################
 #
-# $Id: 10_SOMFY.pm 22865 2020-09-27 15:55:14Z viegener $
+# $Id: 10_SOMFY.pm 26135 2022-06-07 22:07:34Z viegener $
 #  
 # SOMFY RTS / Simu Hz protocol module for FHEM
 # (c) Thomas Dankert <post@thomyd.de>
@@ -90,7 +90,11 @@
 # - no update of DEF anymore with rolling code (roll code and enc key will be removed)
 # - FIX: corrected autostore rolling code (esp. restart)
 # - FIX: DEBUG commands removed
-#
+
+# - BO code used for "lamellen" of blinds - considered stop fro remotes
+# - Correct match for long commands according to #msg1224029
+
+# - fix manual command also for timed blinds
 #
 ###############################################################################
 #
@@ -100,6 +104,8 @@
 # Somfy Modul - OPEN
 ###############################################################################
 # 
+# - B0 command? - new rolling code? - reaction on status - ?
+# - 
 # - Doc rework on model, set commands, rawDevice, coupling remotes
 # - 
 # - test parseFn / Remotes
@@ -136,6 +142,7 @@ my %somfy_codes = (
 	"80" => "prog",     # finish pairing
 	"90" => "wind_sun_9",     # wind and sun (sun + flag)
 	"A0" => "wind_only_a",     # wind only (flag)
+	"B0" => "blind",     # blind command through wheel - also stops movement
 	"100" => "on-for-timer",
 	"101" => "off-for-timer",
 	"XX" => "z_custom",	# custom control code
@@ -246,7 +253,11 @@ sub SOMFY_Initialize($) {
 
 	#                       YsKKC0RRRRAAAAAA
 #	$hash->{Match}	= "^Ys...0..........\$";
-	$hash->{Match}	= "^Ys..............\$";
+#	$hash->{Match}	= "^Ys..............\$";
+
+# allow also matches for longer commands of newer devices -->   
+	$hash->{Match}	= "^Ys..............";    #msg1224029
+
 	$hash->{SetFn}		= "SOMFY_Set";
 	#$hash->{StateFn} 	= "SOMFY_SetState";
 	$hash->{DefFn}   	= "SOMFY_Define";
@@ -491,6 +502,10 @@ sub SOMFY_DispatchRemoteCmd($$) {
   
 	if ($cmd eq "10") {
 		$cmd = "11"; # use "stop" instead of "go-my"
+  }
+
+	if ($cmd eq "B0") {
+		$cmd = "11"; # use "stop" instead of "blind"
   }
 
 	my $txtcmd = $somfy_codes{ $cmd };
@@ -957,7 +972,8 @@ sub SOMFY_InternalSet($@) {
 			}
 
 		} elsif($cmd =~m/manual/) { 
-			$newState = $arg1;
+#      $updateState = $arg1;
+      $newState = $arg1;
 
 		}			
 
@@ -966,7 +982,8 @@ sub SOMFY_InternalSet($@) {
 			if ( defined( $updateState )) {
 				$updateState = minNum( 100, $updateState );
 			}
-			$newState = minNum( 100, $posRounded );
+# not sure why posrounded was used here			$newState = minNum( 100, $posRounded );
+			$newState = minNum( 100, $newState );
 		}
 	}
 

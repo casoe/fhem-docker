@@ -2,7 +2,7 @@
 #
 #  88_HMCCUCHN.pm
 #
-#  $Id: 88_HMCCUCHN.pm 25675 2022-02-13 15:00:07Z zap $
+#  $Id: 88_HMCCUCHN.pm 26434 2022-09-20 19:41:02Z zap $
 #
 #  Version 5.0
 #
@@ -30,7 +30,7 @@ sub HMCCUCHN_Set ($@);
 sub HMCCUCHN_Get ($@);
 sub HMCCUCHN_Attr ($@);
 
-my $HMCCUCHN_VERSION = '5.0 220431743';
+my $HMCCUCHN_VERSION = '5.0 222632130';
 
 ######################################################################
 # Initialize module
