@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2021-06-24 12:57:12
+# Created by FHEM/98_SVG.pm, 2022-10-11 15:49:37
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -13,6 +13,6 @@ set y2label ""
 set yrange [0:500]
 set y2range [0:500]
 
-#dblog MQTT2_DVES_14C6B8:ENERGY_Power
+#dblog MQTT2_DVES_14C6B8:power
 
 plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch in Watt' ls l0 lw 1 with steps
