@@ -1,5 +1,5 @@
 ##########################################################################
-# $Id: 98_monitoring.pm 26048 2022-05-16 05:31:56Z Beta-User $
+# $Id: 98_monitoring.pm 26531 2022-10-12 16:54:21Z Beta-User $
 #
 # copyright ###################################################################
 #
@@ -53,6 +53,7 @@ BEGIN {
     InternalVal
     ReadingsVal
     ReadingsNum
+    ReadingsAge
     devspec2array
     AnalyzeCommandChain
     AnalyzeCommand

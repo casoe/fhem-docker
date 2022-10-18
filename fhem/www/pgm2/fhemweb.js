@@ -1,6 +1,6 @@
 "use strict";
 var FW_version={};
-FW_version["fhemweb.js"] = "$Id: fhemweb.js 26334 2022-08-18 15:42:05Z rudolfkoenig $";
+FW_version["fhemweb.js"] = "$Id: fhemweb.js 26526 2022-10-12 07:10:23Z rudolfkoenig $";
 
 var FW_serverGenerated;
 var FW_jsLog;
@@ -1321,7 +1321,7 @@ FW_longpoll()
   if(FW_serverGenerated)
     since = FW_serverLastMsg + (FW_serverGenerated-FW_serverFirstMsg);
 
-  let inform = encodeURIComponent("type=status;filter="+filter+
+  var inform = encodeURIComponent("type=status;filter="+filter+
                                   ";since="+since+";fmt=JSON"); // 128651
   var query = "?XHR=1"+
               "&inform="+inform+
@@ -2237,6 +2237,56 @@ FW_checkNotifydev(reName)
       });
 
     });
+}
+
+function
+FW_rescueClient(pid, key)
+{
+  var html='<div id="rescueDialog" style="display:none">';
+  if(!pid || pid == "0") {
+    html += '<b>Key (send it to the rescuer):</b><br>'+
+            (key ? '<code>'+key+'</code>' : 'Not found, generate one first');
+    html += '<br><br>';
+  }
+
+  var buttons = [];
+
+  if(key) {
+    if(pid && pid != "0") {
+      html += "<div>There is a connection with pid "+pid+"</div><br>";
+      buttons.push({
+        text:"Terminate connection",
+        click:function(){
+          FW_cmd(FW_root+
+            "?cmd=set "+$("body").attr("data-webname")+
+            " rescueTerminate&XHR=1");
+          setTimeout(function(){ location.reload() }, 1000);
+        }});
+
+    } else {
+      html += "Address (rescuer will tell you host and port)<br>";
+      html += "<input type='text' size='20' placeholder='host port' >";
+
+      buttons.push({
+        text:"Start connection",
+        click:function(){
+          FW_cmd(FW_root+
+            "?cmd=set "+$("body").attr("data-webname")+" rescueStart "+
+            $("#rescueDialog input").val()+"&XHR=1");
+          setTimeout(function(){ location.reload() }, 1000);
+        }});
+    }
+  }
+
+  buttons.push({ text:"Cancel", click:function(){ $(this).dialog('close')} });
+
+  $('body').append(html);
+
+  $('#rescueDialog').dialog({
+    modal:true, closeOnEscape:true, width:"auto",
+    close:function(){ $('#rescueDialog').remove(); },
+    buttons:buttons
+  });
 }
 
 /*

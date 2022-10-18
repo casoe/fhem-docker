@@ -1,4 +1,4 @@
-# $Id: configDB.pm 26446 2022-09-26 08:03:12Z betateilchen $
+# $Id: configDB.pm 26522 2022-10-11 13:45:39Z betateilchen $
 
 =for comment (License)
 
@@ -341,7 +341,7 @@ sub cfgDB_Init {
 #		insert default entries to get fhem running
 		$fhem_dbh->commit();
 		my $uuid = createUniqueId();
-		$fhem_dbh->do("INSERT INTO fhemversions values (0, '$uuid')");
+		$fhem_dbh->do("INSERT INTO fhemversions values (0, '$uuid',NULL)");
 		_cfgDB_InsertLine($fhem_dbh, $uuid, '#created by cfgDB_Init',0);
 		_cfgDB_InsertLine($fhem_dbh, $uuid, 'attr global logdir ./log',1);
 		_cfgDB_InsertLine($fhem_dbh, $uuid, 'attr global logfile %L/fhem-%Y-%m-%d.log',2);
@@ -545,6 +545,9 @@ sub cfgDB_SaveCfg { ## prototype used in fhem.pl
 sub cfgDB_SaveState {
 	my ($out,$val,$r,$rd,$t,@rowList);
 
+    # don't write statefile in rescue mode
+    return if ($configDB{attr}{rescue} == 1);
+
     _cfgDB_deleteRF;
 
 	$t = localtime;
@@ -640,41 +643,17 @@ sub cfgDB_MigrationImport {
 		push @files, $fn;
 	}
 
-# find RSS layouts
+# find RSS and Infopanel layouts
 	@def = '';
-	@def = _cfgDB_findDef('TYPE=RSS','LAYOUTFILE');
+	@def = _cfgDB_findDef('TYPE=(RSS|InfoPanel)','LAYOUTFILE');
 	foreach my $fn (@def) {
 		next unless $fn;
 		push @files, $fn;
 	}
 
-# find InfoPanel layouts
+# find weekprofile/LightScene/RHASSPY configurations
 	@def = '';
-	@def = _cfgDB_findDef('TYPE=InfoPanel','LAYOUTFILE');
-	foreach my $fn (@def) {
-		next unless $fn;
-		push @files, $fn;
-	}
-
-# find weekprofile configurations
-	@def = '';
-	@def = _cfgDB_findDef('TYPE=weekprofile','CONFIGFILE');
-	foreach my $fn (@def) {
-		next unless $fn;
-		push @files, $fn;
-	}
-
-# find LightScene configurations
-	@def = '';
-	@def = _cfgDB_findDef('TYPE=LightScene','CONFIGFILE');
-	foreach my $fn (@def) {
-		next unless $fn;
-		push @files, $fn;
-	}
-
-# find RHASSPY configurations
-	@def = '';
-	@def = _cfgDB_findDef('TYPE=RHASSPY','CONFIGFILE');
+	@def = _cfgDB_findDef('TYPE=(weekprofile|LightScene|RHASSPY)','CONFIGFILE');
 	foreach my $fn (@def) {
 		next unless $fn;
 		push @files, $fn;
@@ -696,7 +675,6 @@ sub cfgDB_MigrationImport {
 	$filename = "$modpath/FHEM/FhemUtils/uniqueID";
 	push @files,$filename if (-e $filename);   
 
-
 # do the import
 	foreach my $fn (@files) {
 		if ( -r $fn ) {
@@ -711,7 +689,7 @@ sub cfgDB_MigrationImport {
 
 # return SVN Id, called by fhem's CommandVersion
 sub cfgDB_svnId { 
-	return "# ".'$Id: configDB.pm 26446 2022-09-26 08:03:12Z betateilchen $' 
+	return "# ".'$Id: configDB.pm 26522 2022-10-11 13:45:39Z betateilchen $' 
 }
 
 # return filelist depending on directory and regexp
