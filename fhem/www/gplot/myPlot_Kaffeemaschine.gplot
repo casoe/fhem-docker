@@ -1,0 +1,16 @@
+# Created by FHEM/98_SVG.pm, 2022-10-18 22:51:35
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Kaffeemaschine'
+set ytics 
+set y2tics 
+set grid ytics
+set ylabel "Watt"
+set y2label ""
+
+#dblog MQTT2_shellyplug_s_896928:power
+
+plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch ' ls l0 lw 1 with steps
