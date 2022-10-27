@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2022-10-12 14:27:32
+# Created by FHEM/98_SVG.pm, 2022-10-27 21:27:53
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -14,4 +14,4 @@ set yrange [-0.4:1.4]
 
 #dblog presence_iPhoneTina:anwesend
 
-plot "<IN>" using 1:2 axes x1y1 title 'Anwesenheit' ls l0 lw 1 with lines
+plot "<IN>" using 1:2 axes x1y1 title 'Anwesenheit' ls l0 lw 1 with steps
