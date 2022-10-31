@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 98_SVG.pm 26456 2022-09-30 09:48:42Z rudolfkoenig $
+# $Id: 98_SVG.pm 26539 2022-10-15 10:44:44Z rudolfkoenig $
 package main;
 
 use strict;
@@ -2526,6 +2526,7 @@ plotAsPng(@)
 
   # Forum #32791,#116138: some lib versions cannot parse complex CSS selectors
   $svgdata =~ s/\.SVGplot\./\./g if(AttrVal($svgName, "plotAsPngFix", 0));
+  $svgdata = Encode::decode("UTF-8", $svgdata) if(!$unicodeEncoding); #129693
 
   eval {
     require Image::LibRSVG;

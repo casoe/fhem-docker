@@ -4,7 +4,7 @@
 #
 # Connects as a client to a server implementing the uBus command line / JSON-RPC interface.
 #
-# $Id: 72_UBUS_CLIENT.pm 25792 2022-03-07 15:16:09Z xenos1984 $
+# $Id: 72_UBUS_CLIENT.pm 26517 2022-10-09 20:49:01Z xenos1984 $
 #
 ################################################################################
 
@@ -489,6 +489,8 @@ sub Decode
 	my $hash = shift // return;
 	my $buf = shift // return;
 	my $name = $hash->{NAME};
+
+	$buf =~ s/{"unknown"}/{}/g;
 
 	my $data;
 	eval { $data = decode_json($buf); };

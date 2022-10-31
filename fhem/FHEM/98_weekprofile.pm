@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 98_weekprofile.pm 25318 2021-12-07 20:01:44Z Risiko $
+# $Id: 98_weekprofile.pm 26594 2022-10-26 20:01:40Z Risiko $
 #
 # Usage
 #
@@ -1172,7 +1172,13 @@ sub weekprofile_Set($$@)
     my $prfDest = undef;
     foreach my $prf (@{$hash->{PROFILES}}){
       $prfSrc = $prf if ( ($prf->{NAME} eq $srcName) && ($prf->{TOPIC} eq $srcTopic) );
+      my ($prf2,undef) = weekprofile_findPRF($hash,$srcName,$srcTopic,0);
+      if ( $prf2 && defined $prf2->{REF} ) {
+          ($srcTopic, $srcName) = weekprofile_splitName($me, $prf2->{REF});
+          $prfSrc = $prf2;
+      }
       $prfDest = $prf if ( ($prf->{NAME} eq $destName) && ($prf->{TOPIC} eq $destTopic) );
+      last if defined $prfSrc && defined $prfDest;
     }
     return "Error unknown profile $srcName" unless($prfSrc);
     Log3($me, 4, "$me(Set): override profile $destName") if ($prfDest);

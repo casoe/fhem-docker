@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 01_FHEMWEB.pm 26494 2022-10-07 15:48:42Z rudolfkoenig $
+# $Id: 01_FHEMWEB.pm 26618 2022-10-29 11:35:23Z rudolfkoenig $
 package main;
 
 use strict;
@@ -166,6 +166,7 @@ FHEMWEB_Initialize($)
     confirmDelete:0,1
     confirmJSError:0,1
     defaultRoom
+    detailLinks
     deviceOverview:always,iconOnly,onClick,never
     editConfig:1,0
     editFileList:textField-long
@@ -1246,6 +1247,7 @@ FW_dataAttr()
     addParam($FW_wname, "confirmJSError", 1).
     addParam($FW_wname, "addHtmlTitle", 1).
     addParam($FW_wname, "styleData", "").
+    addParam($FW_wname, "hiddenroom", "").
     addParam("global",  "language", "EN").
     "data-availableJs='$FW_fhemwebjs' ".
     "data-webName='$FW_wname' ";
@@ -1608,18 +1610,34 @@ FW_doDetail($)
 
   my ($link, $txt, $td, $class, $doRet,$nonl) = @_;
 
-  FW_pH "cmd=style iconFor $d", "Select icon",         undef, "detLink iconFor";
-  FW_pH "cmd=style showDSI $d", "Extend devStateIcon", undef, "detLink showDSI";
-  FW_pH "cmd=rawDef $d", "Raw definition", undef, "detLink rawDef";
-  FW_pH "cmd=delete $d", "Delete this device ($d)",    undef, "detLink delDev"
-         if($d ne "global");
-  my $sfx = AttrVal("global", "language", "EN");
-  $sfx = ($sfx eq "EN" ? "" : "_$sfx");
-  FW_pH "$FW_ME/docs/commandref${sfx}.html#${t}", "Device specific help",
-         undef, "detLink devSpecHelp";
+  FW_pO "<div id='detLink'>";
+  my @detCmd = (
+    'devSpecHelp',   "Help for $t",
+    'forumCopy',     'Copy for forum.fhem.de',
+    'rawDef',        'Raw definition',
+    'style iconFor', 'Select icon',
+    'style showDSI', 'Extend devStateIcon',
+    'delete',        "Delete $d"
+  );
+  my $lNum = AttrVal($FW_wname, "detailLinks", 2);
+  my $li = 0;
+  while($li < $lNum && $li < @detCmd / 2) {
+    FW_pH "cmd=$detCmd[2*$li] $d", $detCmd[2*$li+1], undef, "detLink"
+      if(!$FW_hiddenroom{$detCmd[2*$li]});
+    $li++;
+  }
+  if($li < @detCmd/2) {
+    FW_pO   "<select id='moreCmds'>";
+    FW_pO     "<option >...</option>";
+    while($li < @detCmd / 2) {
+      FW_pO "<option data-cmd='$detCmd[2*$li] $d'>$detCmd[2*$li+1]</option>"
+        if(!$FW_hiddenroom{$detCmd[2*$li]});
+      $li++;
+    }
+    FW_pO   "</select>"
+  }
   FW_pO "<br><br>";
   FW_pO "</div>";
-
 }
 
 ##############################
@@ -3463,7 +3481,10 @@ sub
 FW_Set($@)
 {
   my ($hash, @a) = @_;
-  my %cmd = ("rereadicons" => ":noArg", "clearSvgCache" => ":noArg");
+  my %cmd = ("clearSvgCache" => ":noArg",
+             "reopen" => ":noArg",
+             "rereadicons" => ":noArg");
+
   if(AttrVal($hash->{NAME}, "rescueDialog", "")) {
     $cmd{"rescueStart"} = "";
     $cmd{"rescueTerminate"} = ":noArg";
@@ -3492,6 +3513,16 @@ FW_Set($@)
     }
   }
 
+  if($a[1] eq "reopen") {
+    TcpServer_Close($hash);
+    delete($hash->{stacktrace});
+    my ($port, $global) = split("[ \t]+", $hash->{DEF});
+    my $ret = TcpServer_Open($hash, $port, $global);
+    return $ret if($ret);
+    TcpServer_SetSSL($hash) if(AttrVal($hash->{NAME}, "SSL", 0));
+    return undef;
+  }
+
   if($a[1] eq "rescueStart") {
     return "error: rescueStart needs two arguments: host and port"
       if(!$a[2] || !$a[3] || $a[3] !~ m/[0-9]{1,5}/ || $a[3] > 65536);
@@ -3503,10 +3534,13 @@ FW_Set($@)
     return "error: cannot fork rescue pid\n"
       if($hash->{rescuePID} == -1);
     return undef if($hash->{rescuePID}); # Parent
-    my $cmd = "exec ssh -N -R0.0.0.0:18083:localhost:$hash->{PORT} ".
-                        "-i certs/fhemrescue -p$a[3] fhemrescue\@$a[2]";
-    Log 1, "Starting $cmd";
-    exec($cmd);
+    my $cmd = "ssh ".
+              "-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null ".
+              "-N -R0.0.0.0:18083:localhost:$hash->{PORT} -i certs/fhemrescue ".
+              "-p$a[3] fhemrescue\@$a[2]";
+
+    Log3 $hash, 2, "Starting $cmd";
+    exec("exec $cmd");
   }
 
   if($a[1] eq "rescueTerminate") {
@@ -3702,13 +3736,20 @@ FW_log($$)
   <a id="FHEMWEB-set"></a>
   <b>Set</b>
   <ul>
+    <a id="FHEMWEB-set-rereadicons"></a>
     <li>rereadicons<br>
       reads the names of the icons from the icon path.  Use after adding or
       deleting icons.
       </li>
+    <a id="FHEMWEB-set-clearSvgCache"></a>
     <li>clearSvgCache<br>
       delete all files found in the www/SVGcache directory, which is used to
       cache SVG data, if the SVGcache attribute is set.
+      </li>
+    <a id="FHEMWEB-set-reopen"></a>
+    <li>reopen<br>
+      reopen the server port. This is an alternative to restart FHEM when
+      the SSL certificate is replaced.
       </li>
   </ul>
   <br>
@@ -3862,6 +3903,13 @@ FW_log($$)
         show the specified room if no room selected, e.g. on execution of some
         commands.  If set hides the <a href="#motd">motd</a>. Example:<br>
         attr WEB defaultRoom Zentrale
+        </li>
+        <br>
+
+    <a id="FHEMWEB-attr-detailLinks"></a>
+    <li>detailLinks<br>
+        number of links to show on the bottom of the device detail page.
+        The rest of the commands is shown in a dropdown menu. Default is 2.
         </li>
         <br>
 
@@ -4019,7 +4067,8 @@ FW_log($$)
         to the detailed views or save button are hidden (although each aspect
         still can be addressed through URL manipulation).<br>
         The list can also contain values from the additional "Howto/Wiki/FAQ"
-        block.
+        block, and from the bottom of the detail page: devSpecHelp, forumCopy,
+        rawDef, style iconFor, style showDSI, delete.
         </li>
         <br>
 
@@ -4511,14 +4560,21 @@ FW_log($$)
   <a id="FHEMWEB-set"></a>
   <b>Set</b>
   <ul>
+    <a id="FHEMWEB-set-rereadicons"></a>
     <li>rereadicons<br>
       Damit wird die Liste der Icons neu eingelesen, f&uuml;r den Fall, dass
       Sie Icons l&ouml;schen oder hinzuf&uuml;gen.
       </li>
+    <a id="FHEMWEB-set-clearSvgCache"></a>
     <li>clearSvgCache<br>
       Im Verzeichnis www/SVGcache werden SVG Daten zwischengespeichert, wenn
       das Attribut SVGcache gesetzt ist.  Mit diesem Befehl leeren Sie diesen
       Zwischenspeicher.
+      </li>
+    <a id="FHEMWEB-set-reopen"></a>
+    <li>reopen<br>
+      Schlie&szlig;t und &ouml;ffnet der Serverport. Das kann eine Alternative
+      zu FHEM-Neustart sein, wenn das SSL-Zertifikat sich ge&auml;ndert hat.
       </li>
   </ul>
   <br>
@@ -4683,6 +4739,14 @@ FW_log($$)
         attr WEB defaultRoom Zentrale
         </li><br>
 
+    <a id="FHEMWEB-attr-detailLinks"></a>
+    <li>detailLinks<br>
+        Anzahl der Links, die auf der Detailseite unten angezeigt werden. Die
+        weiteren Befehle werden in einem Auswahlmen&%uuml; angezeigt.
+        Voreinstellung ist 2.
+        </li>
+        <br>
+
     <a id="FHEMWEB-attr-devStateIcon"></a>
     <li>devStateIcon<br>
         Erste Variante:<br>
@@ -4839,7 +4903,9 @@ FW_log($$)
        Fall werden diverse Eingabefelder ausgeblendent. Durch direktes Aufrufen
        der URL sind diese R&auml;ume weiterhin erreichbar!<br>
        Ebenso k&ouml;nnen Eintr&auml;ge in den Logfile/Commandref/etc Block
-       versteckt werden.  </li><br>
+       versteckt werden, oder die Links unten auf der Detailseite: devSpecHelp,
+       forumCopy, rawDef, style iconFor, style showDSI, delete.
+       </li><br>
 
     <a id="FHEMWEB-attr-hiddenroomRegexp"></a>
     <li>hiddenroomRegexp<br>

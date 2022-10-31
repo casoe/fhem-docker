@@ -1,4 +1,4 @@
-# $Id: 98_version.pm 15140 2017-09-26 09:20:09Z markusbloch $
+# $Id: 98_version.pm 26611 2022-10-28 16:32:29Z betateilchen $
 
 package main;
 use strict;
@@ -69,8 +69,8 @@ CommandVersion($$)
   return "no loaded modules found that match: $param" if($param ne "" && $param ne "revision" && !@ret);
   return (((!$param && !$noheader) || $param eq "revision") ? $fhem_revision : "").
          ($noheader || !@ret ? "" : sprintf("%-".$max."s %s","File","Rev   Last Change\n\n")).
-         trim(join("\n",  grep (($_ =~ /^fhem.pl|\d\d_/), @ret))."\n\n".
-              join("\n",  grep (($_ !~ /^fhem.pl|\d\d_/), @ret))
+         trim(join("\n",  grep (($_ =~ /^fhem.pl|configDB.pm|\d\d_/), @ret))."\n\n".
+              join("\n",  grep (($_ !~ /^fhem.pl|configDB.pm|\d\d_/), @ret))
              );
 }
 
@@ -89,6 +89,12 @@ sub version_sortModules($$)
     return -1 if($a_vals[0] eq "fhem.pl");
     return  1 if($b_vals[0] eq "fhem.pl");
 
+    # configDB.pm next if used
+    if (configDBUsed()) {
+      return -1 if($a_vals[0] eq "configDB.pm");
+      return  1 if($b_vals[0] eq "configDB.pm");
+    }
+    
     $a_vals[0] =~ s/^\d\d_//;
     $b_vals[0] =~ s/^\d\d_//;
 

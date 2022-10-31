@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 26379 2022-09-03 15:40:42Z rudolfkoenig $
+# $Id: fhem.pl 26608 2022-10-28 12:09:44Z rudolfkoenig $
 
 
 use strict;
@@ -277,7 +277,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 26379 2022-09-03 15:40:42Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 26608 2022-10-28 12:09:44Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -2589,12 +2589,14 @@ PrintHash($$)
       } elsif(ref($h->{$c}) eq "ARRAY") {
          $sstr .= sprintf("%*s %s:\n", $lev, " ", $c);
          foreach my $v (@{$h->{$c}}) {
-           $sstr .= sprintf("%*s %s\n", $lev+2, " ", defined($v) ? $v:"undef");
+           $sstr .= sprintf("%*s %s\n",
+                        $lev+2, " ", defined($v) ? $v:"undef");
          }
       }
     } else {
       my $v = $h->{$c};
-      $str .= sprintf("%*s %-10s %s\n", $lev," ",$c, defined($v) ? $v : "");
+      $str .= sprintf("%*s %-10s %s\n",
+                        $lev," ",$c, defined($v) ? $v : "");
     }
   }
   delete $h->{".visited"};
@@ -2607,22 +2609,29 @@ CommandList($$)
 {
   my ($cl, $param) = @_;
   my $str = "";
+  my %opt;
+  my $optRegexp = '-r|-R|-i';
+  $param = cmd_parseOpts($param, $optRegexp, \%opt);
 
-  if($param =~ m/^-r *(.*)$/i) {
+  if($opt{r} || $opt{R}) {
     my @list;
-    my $arg = $1;
-    if($param =~ m/^-R/) {
-      return "-R needs a valid device as argument" if(!$arg);
-      push @list, $arg;
-      push @list, getPawList($arg);
+    if($opt{R}) {
+      return "-R needs a valid device as argument" if(!$param);
+      push @list, $param;
+      push @list, getPawList($param);
     } else {
-      @list = devspec2array($arg ? $arg : ".*", $cl);
+      @list = devspec2array($param ? $param : ".*", $cl);
     }
     foreach my $d (@list) {
       return "No device named $d found" if(!defined($defs{$d}));
       $str .= "\n" if($str);
       my @a = GetDefAndAttr($d);
       $str .= join("\n", @a)."\n" if(@a);
+      if($opt{i}) {
+        my $intHash = PrintHash($defs{$d}, 2);
+        $intHash =~ s/\n/\n#/g;
+        $str .= "#".$intHash;
+      }
     }
     foreach my $d (sort @list) {
       $str .= "\n" if($str);
