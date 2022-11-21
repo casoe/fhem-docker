@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 14_CUL_WS.pm 20918 2020-01-08 19:20:38Z rudolfkoenig $
+# $Id: 14_CUL_WS.pm 26674 2022-11-08 17:23:41Z rudolfkoenig $
 package main;
 
 use strict;
@@ -151,7 +151,7 @@ CUL_WS_Parse($$)
     if($std) {
       my $ot = ReadingsVal($name, 'temperature', 0);
       if($ot && abs($ot-$t) > $std) {
-        readingsBulkUpdate($def, 'strangeTemp', $t, 0);
+        readingsSingleUpdate($def, 'strangeTemp', $t, 0);
         $t = $ot;
       }
     }

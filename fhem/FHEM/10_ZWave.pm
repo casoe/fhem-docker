@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_ZWave.pm 25913 2022-04-02 12:14:17Z rudolfkoenig $
+# $Id: 10_ZWave.pm 26721 2022-11-19 09:59:03Z rudolfkoenig $
 # See ZWDongle.pm for inspiration
 package main;
 
@@ -1246,7 +1246,7 @@ ZWave_SCmd($$@)
   if($hash->{secInProgress} && !(@a < 2 || $a[1] eq "?")) {
     my %h = ( T => $type, A => \@a, CL => $hash->{CL} );
     push @{$hash->{secStack}}, \%h;
-    return ($type eq "get" ?
+    return ($type eq "get" && $hash->{CL} ?
             "Secure operation in progress, executing in background" : "");
   }
   return ZWave_Cmd($type, $hash, @a);

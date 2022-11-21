@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 01_FHEMWEB.pm 26631 2022-10-31 11:17:44Z rudolfkoenig $
+# $Id: 01_FHEMWEB.pm 26705 2022-11-15 09:00:25Z rudolfkoenig $
 package main;
 
 use strict;
@@ -157,10 +157,7 @@ FHEMWEB_Initialize($)
     csrfTokenHTTPHeader:0,1
     alarmTimeout
     allowedHttpMethods
-    allowedCommands
     allowfrom
-    basicAuth
-    basicAuthMsg
     closeConn:1,0
     column
     confirmDelete:0,1
@@ -1620,6 +1617,11 @@ FW_doDetail($)
     'delete',        "Delete $d"
   );
   my $lNum = AttrVal($FW_wname, "detailLinks", 2);
+  if($lNum =~ m/^(\d),(.+)$/) {
+    $lNum = $1;
+    my %dc = @detCmd;
+    @detCmd = map { ($_, $dc{$_}) if($dc{$_}) } split(",", $2);
+  }
   my $li = 0;
   while($li < $lNum && $li < @detCmd / 2) {
     FW_pH "cmd=$detCmd[2*$li] $d", $detCmd[2*$li+1], undef, "detLink"
@@ -2877,19 +2879,6 @@ FW_Attr(@)
     }
   }
 
-  if(($attrName eq "allowedCommands" ||
-      $attrName eq "basicAuth" ||
-      $attrName eq "basicAuthMsg")
-      && $type eq "set") {
-    my $aName = "allowed_$devName";
-    my $exists = ($defs{$aName} ? 1 : 0);
-    AnalyzeCommand(undef, "defmod $aName allowed");
-    AnalyzeCommand(undef, "attr $aName validFor $devName");
-    AnalyzeCommand(undef, "attr $aName $attrName ".join(" ",@param));
-    return "$devName: ".($exists ? "modifying":"creating").
-                " device $aName for attribute $attrName";
-  }
-
   if($attrName eq "iconPath" && $type eq "set") {
     foreach my $pe (split(":", $param[0])) {
       $pe =~ s+\.\.++g;
@@ -3767,7 +3756,7 @@ FW_log($$)
         </li>
     <li>pathlist<br>
         return FHEMWEB specific directories, where files for given types are
-        located
+        located</li>
     <br><br>
 
   </ul>
@@ -3781,10 +3770,6 @@ FW_log($$)
       widgets. This might be necessary for some screenreaders. Default is 1.
       </li><br>
 
-
-
-    <li><a href="#addStateEvent">addStateEvent</a></li><br>
-
     <li>alias_&lt;RoomName&gt;<br>
         If you define a userattr alias_&lt;RoomName&gt; and set this attribute
         for a device assgined to &lt;RoomName&gt;, then this value will be used
@@ -3794,14 +3779,19 @@ FW_log($$)
         alias_.* attributes.
         </li><br>
 
-    <li><a href="#allowfrom">allowfrom</a></li>
-    </li><br>
-
-    <li>allowedCommands, basicAuth, basicAuthMsg<br>
-        Please create these attributes for the corresponding <a
-        href="#allowed">allowed</a> device, they are deprecated for the FHEMWEB
-        instance from now on.
-    </li><br>
+    <a id="FHEMWEB-attr-allowfrom"></a>
+    <li>allowfrom<br>
+        Regexp of allowed ip-addresses or hostnames. If set, only connections
+        from these addresses are allowed.<br>
+        NOTE: if this attribute is not defined and there is no valid allowed
+        device defined for the telnet/FHEMWEB instance and the client tries to
+        connect from a non-local net, then the connection is refused. Following
+        is considered a local net:<br>
+        <ul>
+          IPV4: 127/8, 10/8, 192.168/16, 172.16/10, 169.254/16<br>
+          IPV6: ::1, fe80/10<br>
+        </ul>
+        </li><br>
 
     <a id="FHEMWEB-attr-allowedHttpMethods"></a>
     <li>allowedHttpMethods<br>
@@ -3818,7 +3808,6 @@ FW_log($$)
       If set, a TCP Connection will only serve one HTTP request. Seems to
       solve problems on iOS9 for WebApp startup.
       </li><br>
-
 
     <a id="FHEMWEB-attr-column"></a>
     <li>column<br>
@@ -3909,7 +3898,11 @@ FW_log($$)
     <a id="FHEMWEB-attr-detailLinks"></a>
     <li>detailLinks<br>
         number of links to show on the bottom of the device detail page.
-        The rest of the commands is shown in a dropdown menu. Default is 2.
+        The rest of the commands is shown in a dropdown menu. Default is 2.<br>
+        This can optionally followed by a comma separated list of ids to order
+        or filter the desired links, the ids being one of devSpecHelp,
+        forumCopy, rawDef, style iconFor, style showDSI, delete. Example:<br>
+        attr WEB detailLinks 2,devSpecHelp,forumCopy
         </li>
         <br>
 
@@ -4607,8 +4600,6 @@ FW_log($$)
       manchen Screenreadern erforderlich. Die Voreinstellung ist 1.
       </li><br>
 
-    <li><a href="#addStateEvent">addStateEvent</a></li><br>
-
     <li>alias_&lt;RoomName&gt;<br>
         Falls man das Attribut alias_&lt;RoomName&gt; definiert, und dieses
         Attribut f&uuml;r ein Ger&auml;t setzt, dann wird dieser Wert bei
@@ -4619,14 +4610,20 @@ FW_log($$)
         funktionieren.
         </li><br>
 
-    <li><a href="#allowfrom">allowfrom</a>
+    <a id="FHEMWEB-attr-allowfrom"></a>
+    <li>allowfrom<br>
+        Regexp der erlaubten IP-Adressen oder Hostnamen. Wenn dieses Attribut
+        gesetzt wurde, werden ausschlie&szlig;lich Verbindungen von diesen
+        Adressen akzeptiert.<br>
+        Achtung: falls allowfrom nicht gesetzt ist, und keine g&uuml;tige
+        allowed Instanz definiert ist, und die Gegenstelle eine nicht lokale
+        Adresse hat, dann wird die Verbindung abgewiesen. Folgende Adressen
+        werden als local betrachtet:
+        <ul>
+          IPV4: 127/8, 10/8, 192.168/16, 172.16/10, 169.254/16<br>
+          IPV6: ::1, fe80/10<br>
+        </ul>
         </li><br>
-
-    <li>allowedCommands, basicAuth, basicAuthMsg<br>
-        Diese Attribute m&uuml;ssen ab sofort bei dem passenden <a
-        href="#allowed">allowed</a> Ger&auml;t angelegt werden, und sind
-        f&uuml;r eine FHEMWEB Instanz unerw&uuml;nscht.
-    </li><br>
 
     <a id="FHEMWEB-attr-allowedHttpMethods"></a>
     <li>allowedHttpMethods</br>
@@ -4638,7 +4635,6 @@ FW_log($$)
       aktivieren, die Voreinstellung ist GET|POST. OPTIONS ist immer
       aktiviert.
       </li><br>
-
 
      <a id="FHEMWEB-attr-closeConn"></a>
      <li>closeConn<br>
@@ -4680,7 +4676,7 @@ FW_log($$)
 
     <a id="FHEMWEB-attr-confirmDelete"></a>
     <li>confirmDelete<br>
-        L&ouml;schaktionen weden mit einem Dialog best&auml;tigt.
+        L&ouml;schaktionen werden mit einem Dialog best&auml;tigt.
         Falls dieses Attribut auf 0 gesetzt ist, entf&auml;llt das.
         </li>
         <br>
@@ -4743,7 +4739,11 @@ FW_log($$)
     <li>detailLinks<br>
         Anzahl der Links, die auf der Detailseite unten angezeigt werden. Die
         weiteren Befehle werden in einem Auswahlmen&uuml; angezeigt.
-        Voreinstellung ist 2.
+        Voreinstellung ist 2.<br>
+        Das kann optional mit der Liste der anzuzeigenden IDs erweitert werden,
+        um die Links zu sortieren oder zu filtern. Die m&ouml;glichen IDs sind
+        devSpecHelp, forumCopy, rawDef, style iconFor, style showDSI, delete.
+        Beispiel:<br> attr WEB detailLinks 2,devSpecHelp,forumCopy
         </li>
         <br>
 

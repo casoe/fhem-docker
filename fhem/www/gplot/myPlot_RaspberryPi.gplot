@@ -1,16 +1,17 @@
-# Created by FHEM/98_SVG.pm, 2022-11-06 20:29:38
+# Created by FHEM/98_SVG.pm, 2022-11-18 14:23:56
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
 set timefmt "%Y-%m-%d_%H:%M:%S"
 set xlabel " "
-set title 'Kaffeemaschine'
+set title 'Raspberry Pi'
 set ytics 
 set y2tics 
 set grid ytics
 set ylabel "Watt"
 set y2label ""
+set yrange [0:10]
 
-#dblog MQTT2_DVES_02F335:power
+#dblog MQTT2_shellyplug_s_896928:power
 
 plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch ' ls l0 lw 1 with steps
