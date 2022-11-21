@@ -141,7 +141,7 @@ speedtest_DoSpeedtest($)
 
   } else {
     $cmd = AttrVal($name, "path", "/usr/local/speedtest-cli" );
-    $cmd .= "/speedtest-cli --simple";
+    $cmd .= "/speedtest-cli --simple --secure";
     $cmd .= " --server $server" if( $server );
 
   }
