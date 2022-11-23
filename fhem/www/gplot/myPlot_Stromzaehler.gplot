@@ -1,16 +1,16 @@
-# Created by FHEM/98_SVG.pm, 2022-11-23 22:03:22
+# Created by FHEM/98_SVG.pm, 2022-11-23 22:03:15
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
 set timefmt "%Y-%m-%d_%H:%M:%S"
 set xlabel " "
-set title 'Wasserzähler '
+set title 'Stromzähler '
 set ytics 
 set y2tics 
 set grid
 set ylabel ""
 set y2label ""
 
-#dblog MQTT2_watermeter:value
+#dblog Stromzaehler:total_consumption
 
 plot "<IN>" using 1:2 axes x1y1 title 'Zähler' ls l0 lw 1 with steps
