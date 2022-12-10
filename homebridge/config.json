@@ -20,7 +20,7 @@
             "name": "FHEM",
             "server": "127.0.0.1",
             "port": 8083,
-            "filter": "room=Homekit",
+            "filter": "room=System->Homekit",
             "neverTimeout": false,
             "platform": "FHEM"
         }

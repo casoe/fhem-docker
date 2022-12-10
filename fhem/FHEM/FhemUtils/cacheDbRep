@@ -9,4 +9,3 @@ dbrep_power_sqlCmdList:
 dbrep_sysstat_sqlCmdList:
 dbrep_zaehler_sqlCmdList:
 dbrep_zaehler_strom_sqlCmdList:
-dbrep_zaehler_wasser_sqlCmdList:
