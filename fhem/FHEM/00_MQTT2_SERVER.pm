@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 00_MQTT2_SERVER.pm 26581 2022-10-24 13:43:17Z rudolfkoenig $
+# $Id: 00_MQTT2_SERVER.pm 26751 2022-11-26 16:38:56Z rudolfkoenig $
 package main;
 
 use strict;
@@ -47,6 +47,7 @@ MQTT2_SERVER_Initialize($)
     keepaliveFactor
     rePublish:1,0
     rawEvents
+    respectRetain:1,0
     sslVersion
     sslCertPrefix
     topicConversion:0,1
@@ -539,12 +540,13 @@ MQTT2_SERVER_doPublish($$$$;$)
   my ($src, $server, $tp, $val, $retain) = @_;
   $val = "" if(!defined($val));
   $src = $server if(!defined($src));
+  my $now = gettimeofday();
+  my $serverName = $server->{NAME};
 
-  if($retain) {
+  if($retain && AttrVal($serverName, "respectRetain", $featurelevel <= 6.1)) {
     if(!defined($val) || $val eq "") {
       delete($server->{retain}{$tp});
     } else {
-      my $now = gettimeofday();
       my %h = ( ts=>$now, val=>$val );
       $server->{retain}{$tp} = \%h;
     }
@@ -554,14 +556,13 @@ MQTT2_SERVER_doPublish($$$$;$)
     my %nots = map { $_ => $server->{retain}{$_}{val} }
                keys %{$server->{retain}};
     my $rname = AttrVal($server->{NAME}, "hideRetain", 0) ? ".RETAIN":"RETAIN";
-    setReadingsVal($server, $rname, toJSON(\%nots),FmtDateTime(gettimeofday()));
+    setReadingsVal($server, $rname, toJSON(\%nots),FmtDateTime($now));
   }
 
   foreach my $clName (keys %{$server->{clients}}) {
     MQTT2_SERVER_sendto($server, $defs{$clName}, $tp, $val);
   }
 
-  my $serverName = $server->{NAME};
   my $ir = AttrVal($serverName, "ignoreRegexp", undef);
   return if(defined($ir) && "$tp:$val" =~ m/$ir/);
 
@@ -583,13 +584,14 @@ MQTT2_SERVER_doPublish($$$$;$)
 
   my $fl = $server->{".feedList"};
   if($fl) {
+    my $ts = sprintf("%s.%03d", FmtTime($now), 1000*($now-int($now)));
     foreach my $fwid (keys %{$fl}) {
       my $cl = $FW_id2inform{$fwid};
       if(!$cl || !$cl->{inform}{filter} || $cl->{inform}{filter} ne '^$') {
         delete($fl->{$fwid});
         next;
       }
-      FW_AsyncOutput($cl, "", toJSON([defined($cid)?$cid:"SENT", $tp, $val]));
+      FW_AsyncOutput($cl, "", toJSON([$ts,defined($cid)?$cid:"SENT",$tp,$val]));
     }
     delete($server->{".feedList"}) if(!keys %{$fl});
   }
@@ -900,6 +902,14 @@ MQTT2_SERVER_ReadDebug($$)
       republished. By setting this attribute the topic will also be dispatched
       to the FHEM internal clients.
       </li><br>
+
+    <a id="MQTT2_SERVER-attr-respectRetain"></a>
+    <li>respectRetain [1|0]<br>
+      As storing messages with the retain flag can take up considerable space
+      and it has no use in a FHEM only environment, it is by default disabled
+      for featurelevel > 6.1. Set this attribute to 1 if you have external
+      devices relying on this feature.
+      </li>
 
     <a id="MQTT2_SERVER-attr-SSL"></a>
     <li>SSL<br>

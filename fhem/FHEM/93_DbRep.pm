@@ -1,5 +1,5 @@
 ﻿##########################################################################################################
-# $Id: 93_DbRep.pm 26650 2022-11-04 22:02:44Z DS_Starter $
+# $Id: 93_DbRep.pm 26811 2022-12-07 20:17:20Z DS_Starter $
 ##########################################################################################################
 #       93_DbRep.pm
 #
@@ -57,6 +57,7 @@ no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 # Version History intern
 my %DbRep_vNotesIntern = (
+  "8.50.5"  => "05.12.2022  fix diffValue problem (DbRep_diffval) for newer MariaDB versions: https://forum.fhem.de/index.php/topic,130697.0.html ", 
   "8.50.4"  => "04.11.2022  fix daylight saving bug in aggregation eq 'month' (_DbRep_collaggstr) ",
   "8.50.3"  => "19.09.2022  reduce memory allocation of function DbRep_reduceLog ",
   "8.50.2"  => "17.09.2022  release setter 'index' for device model 'Agent' ",
@@ -4228,6 +4229,7 @@ return;
 ####################################################################################################
 sub DbRep_diffval {
   my $paref   = shift;
+  
   my $hash    = $paref->{hash};
   my $name    = $paref->{name};
   my $table   = $paref->{table};
@@ -4251,7 +4253,7 @@ sub DbRep_diffval {
   my @ts = split("\\|", $ts);                                                            # Timestampstring to Array
   Log3 ($name, 5, "DbRep $name - Timestamp-Array: \n@ts");  
  
-  if($dbmodel eq "MYSQL") {
+  if($dbmodel eq "OLDMYSQLVER") {                                                        # Forum: https://forum.fhem.de/index.php/topic,130697.0.html
       $selspec = "TIMESTAMP,VALUE, if(VALUE-\@V < 0 OR \@RB = 1 , \@diff:= 0, \@diff:= VALUE-\@V ) as DIFF, \@V:= VALUE as VALUEBEFORE, \@RB:= '0' as RBIT ";
   } 
   else {
@@ -4270,7 +4272,7 @@ sub DbRep_diffval {
       my $runtime_string_next   = $a[2];  
       $runtime_string           = encode_base64($runtime_string,""); 
      
-      if($dbmodel eq "MYSQL") {
+      if($dbmodel eq "OLDMYSQLVER") {                                                   # Forum: https://forum.fhem.de/index.php/topic,130697.0.html
           $err = DbRep_dbhDo ($name, $dbh, "set \@V:= 0, \@diff:= 0, \@diffTotal:= 0, \@RB:= 1;");      # @\RB = Resetbit wenn neues Selektionsintervall beginnt
           return "$name|$err" if ($err);
       }
@@ -4285,7 +4287,7 @@ sub DbRep_diffval {
       ($err, $sth) = DbRep_prepareExecuteQuery ($name, $dbh, $sql);
       return "$name|$err" if ($err);
 
-      if($dbmodel eq "MYSQL") {
+      if($dbmodel eq "OLDMYSQLVER") {                                                  # Forum: https://forum.fhem.de/index.php/topic,130697.0.html
           @array = map { $runtime_string." ".$_ -> [0]." ".$_ -> [1]." ".$_ -> [2]."\n" } @{ $sth->fetchall_arrayref() };
       } 
       else {
@@ -4361,12 +4363,12 @@ sub DbRep_diffval {
   Log3 ($name, 5, "DbRep $name - data of row_array result assigned to fields:\n");
     
   for my $row (@row_array) {
-      my @a              = split "[ \t][ \t]*", $row, 6;
+      my @a              = split /\s+/x, $row, 6;
       my $runtime_string = decode_base64($a[0]);
       $lastruntimestring = $runtime_string if ($i == 1);
-      my $timestamp      = $a[2] ? $a[1]."_".$a[2]       : $a[1];
-      my $value          = $a[3] ? $a[3]                 : 0;  
-      my $diff           = $a[4] ? sprintf("%.4f",$a[4]) : 0;
+      my $timestamp      = $a[2] ? $a[1]."_".$a[2] : $a[1];
+      my $value          = $a[3] ? $a[3]           : 0;  
+      my $diff           = $a[4] ? $a[4]           : 0;
       
       $timestamp         =~ s/\s+$//g;                                        # Leerzeichen am Ende $timestamp entfernen
       
@@ -4529,10 +4531,10 @@ sub DbRep_diffvalDone {
  
   my %rh = split("§", $rowlist);
  
-  Log3 ($name, 4, "DbRep $name - print result of diffValue calculation after decoding ...");
-  for my $key (sort(keys(%rh))) {
-      Log3 ($name, 4, "DbRep $name - runtimestring Key: $key, value: ".$rh{$key}); 
-  }
+  #Log3 ($name, 4, "DbRep $name - print result of diffValue calculation after decoding ...");
+  #for my $key (sort(keys(%rh))) {
+  #    Log3 ($name, 4, "DbRep $name - runtimestring Key: $key, value: ".$rh{$key}); 
+  #}
  
   readingsBeginUpdate($hash);
  
@@ -12360,7 +12362,7 @@ sub DbRep_calcount {
  my %ncp  = (); 
  
  Log3 ($name, 4, "DbRep $name - count of values used for calc:");
- foreach my $key (sort(keys%{$ch})) {
+ for my $key (sort(keys%{$ch})) {
      Log3 ($name, 4, "$key => ". $ch->{$key});
      
      if($ch->{$key} eq "1") {
@@ -13097,12 +13099,12 @@ sub DbRep_setVersionInfo {
   if($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {
       # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;              # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{SMAPortal}{META}}
-      if($modules{$type}{META}{x_version}) {                                                                             # {x_version} ( nur gesetzt wenn $Id: 93_DbRep.pm 26650 2022-11-04 22:02:44Z DS_Starter $ im Kopf komplett! vorhanden )
+      if($modules{$type}{META}{x_version}) {                                                                             # {x_version} ( nur gesetzt wenn $Id: 93_DbRep.pm 26811 2022-12-07 20:17:20Z DS_Starter $ im Kopf komplett! vorhanden )
           $modules{$type}{META}{x_version} =~ s/1.1.1/$v/g;
       } else {
           $modules{$type}{META}{x_version} = $v; 
       }
-      return $@ unless (FHEM::Meta::SetInternals($hash));                                                                # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbRep.pm 26650 2022-11-04 22:02:44Z DS_Starter $ im Kopf komplett! vorhanden )
+      return $@ unless (FHEM::Meta::SetInternals($hash));                                                                # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbRep.pm 26811 2022-12-07 20:17:20Z DS_Starter $ im Kopf komplett! vorhanden )
       if(__PACKAGE__ eq "FHEM::$type" || __PACKAGE__ eq $type) {
           # es wird mit Packages gearbeitet -> Perl übliche Modulversion setzen
           # mit {<Modul>->VERSION()} im FHEMWEB kann Modulversion abgefragt werden

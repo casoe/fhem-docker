@@ -1,6 +1,6 @@
 "use strict";
 var FW_version={};
-FW_version["fhemweb.js"] = "$Id: fhemweb.js 26631 2022-10-31 11:17:44Z rudolfkoenig $";
+FW_version["fhemweb.js"] = "$Id: fhemweb.js 26803 2022-12-06 18:18:56Z rudolfkoenig $";
 
 var FW_serverGenerated;
 var FW_jsLog;
@@ -372,6 +372,14 @@ FW_displayHelp(devName, sel, selType, val, group)
         $(sel).closest("div[cmd='"+selType+"']")
            .after('<div class="makeTable" id="devSpecHelp"></div>')
         $("#devSpecHelp").html($(liTag).html());
+        $("#devSpecHelp a").each(function(){ // #130694
+          var href = $(this).attr("href");
+          if(href && href.indexOf("#") == 0) {
+            $(this).attr("target", "_blank");
+            $(this).attr("href",
+                addcsrf(FW_root+"/docs/commandref.html"+$(this).attr("href")));
+          }
+        });
       }
     }
     wb.remove();
@@ -509,7 +517,8 @@ function
 FW_renameDevice(dev)
 {
   var div = $("<div>");
-  $(div).html('Rename '+dev+' to:<br><br><input type="text" size="30">');
+  $(div).html('Rename '+dev+
+        ' to:<br><br><input type="text" size="30" value="'+dev+'">');
   $("body").append(div);
 
   $(div).dialog({
@@ -993,12 +1002,17 @@ FW_detLink()
 
     } else if(cmd == "forumCopy") {
       FW_cmd(FW_root+"?cmd=list -r -i "+dev+"&XHR=1", function(data) {
-        var ta = document.createElement("textarea");
+        var ta = document.createElement("textarea"), at="";
+        if(data.length > 50*1000) {
+          data = data.substr(0,50*1000)+
+                  "\n# ... truncated to 50k, original length "+data.length;
+          at = "<br><br>Text truncated to 50k due to forum restrictions.";
+        }
         ta.value = '[code]'+data+'[/code]';
         document.body.appendChild(ta);
         ta.select();
         if(document.execCommand('copy'))
-          FW_okDialog('"forum ready" definition copied to the clipboard.');
+          FW_okDialog('"forum ready" definition copied to the clipboard.'+at);
          else
           FW_okDialog('Could not copy');
         document.body.removeChild(ta);

@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 01_FHEMWEB.pm 26705 2022-11-15 09:00:25Z rudolfkoenig $
+# $Id: 01_FHEMWEB.pm 26784 2022-12-05 12:56:49Z rudolfkoenig $
 package main;
 
 use strict;
@@ -1500,8 +1500,7 @@ FW_detailSelect(@)
   $ret .= FW_hidden("detail", $d);
   $ret .= FW_hidden("dev.$cmd$d", $d.($param ? " $param":""));
   $ret .= FW_submit("cmd.$cmd$d", $cmd, $cmd.($psc?" psc":""));
-  $ret .= "<div class=\"$cmd downText\">&nbsp;$d&nbsp;".
-                ($param ? "&nbsp;$param":"")."</div>";
+  $ret .= "<div class=\"$cmd downText\"> $d ".($param ? "$param":"")."</div>";
   $ret .= FW_select("sel_$cmd$d","arg.$cmd$d",\@al,$selEl,$cmd,undef,$typeHash);
   $ret .= FW_textfield("val.$cmd$d", 30, $cmd);
   $ret .= "</form></div>";

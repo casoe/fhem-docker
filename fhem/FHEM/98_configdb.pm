@@ -1,4 +1,4 @@
-# $Id: 98_configdb.pm 26446 2022-09-26 08:03:12Z betateilchen $
+# $Id: 98_configdb.pm 26802 2022-12-06 18:01:22Z betateilchen $
 #
 
 package main;
@@ -177,8 +177,9 @@ sub CommandConfigdb {
 		}
 
 		when ('info') {
+			my $raw = lc($param1) eq 'raw' ? 1 : 0;
 			Log3('configdb', 4, "info requested.");
-			$ret = _cfgDB_Info('$Id: 98_configdb.pm 26446 2022-09-26 08:03:12Z betateilchen $');
+			$ret = _cfgDB_Info('$Id: 98_configdb.pm 26802 2022-12-06 18:01:22Z betateilchen $',$raw);
 		}
 
 		when ('list') {
@@ -530,8 +531,9 @@ compare device: telnetPort in current version 0 (left) to version: 1 (right)
 			<br/>
 <br/>
 
-		<li><code>configdb info</code></li><br/>
+		<li><code>configdb info [raw]</code></li><br/>
 			Returns some database statistics<br/>
+			if optional "raw" selected, version infos will be returned as json"<br/>
 <pre>
 --------------------------------------------------------------------------------
  configDB Database Information
