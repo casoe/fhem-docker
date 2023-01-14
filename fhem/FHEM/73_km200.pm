@@ -1,4 +1,4 @@
-# $Id: 73_km200.pm 26822 2022-12-09 17:24:51Z Sailor $
+# $Id: 73_km200.pm 26850 2022-12-13 09:15:29Z Sailor $
 ########################################################################################################################
 #
 #     73_km200.pm
@@ -297,7 +297,7 @@ sub km200_Define($$) {
 
 ###START###### Initialize km200 after fhem Initialization is done #############################################START####
 sub km200_FirstInit($) {
-	my $hash = @_;
+	my ($hash) = @_;
 	my $name = "73_km200";
 	Log3 $name, 4, $name. " : km200_FirstInit -  hash                                  : " . Dumper($hash);
 

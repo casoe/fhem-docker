@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 00_MQTT2_CLIENT.pm 26742 2022-11-24 09:55:11Z rudolfkoenig $
+# $Id: 00_MQTT2_CLIENT.pm 26925 2022-12-29 14:37:54Z rudolfkoenig $
 package main;
 
 use strict;
@@ -872,12 +872,16 @@ MQTT2_CLIENT_feedTheList($$$)
     <li>disconnectAfter &lt;seconds&gt;<br>
       if set, the connection will be closed after &lt;seconds&gt; of
       inactivity, and will be automatically reopened when sending a command.
-      </li>
+      </li><br>
 
     <a id="MQTT2_CLIENT-attr-ignoreRegexp"></a>
     <li>ignoreRegexp<br>
       if $topic:$message matches ignoreRegexp, then it will be silently ignored.
-      </li>
+      For general purpose servers, it is a good idea to set it e.g. to
+      <ul>
+        homeassistant/[^:"]+/config|tasmota/discovery/[^/:]+/(config|sensors)
+      </ul> and also include the topics used to send commands towards your MQTT
+      clients.</li><br>
 
     <a id="MQTT2_CLIENT-attr-lwt"></a>
     <li>lwt &lt;topic&gt; &lt;message&gt; <br>

@@ -1,5 +1,5 @@
 #############################################
-# $Id: 98_DOIF.pm 26703 2022-11-14 16:43:41Z Damian $
+# $Id: 98_DOIF.pm 26938 2023-01-01 18:13:32Z Damian $
 #
 # This file is part of fhem.
 #
@@ -2824,6 +2824,20 @@ DOIF_Notify($$)
         DOIF_SetTimer ($hash,"DOIF_TimerTrigger",$j);
       }
     }
+     
+    for my $attr ("DOIF_Readings","event_Readings") {
+      my $defs=AttrVal($pn, $attr, 0);
+      if ($defs) {
+        my ($def,$err)=addDOIF_Readings($hash,$defs,$attr);
+        if ($err) {
+          Log3 ($pn,3,"$pn: error in $def, $err") ;
+        } else {
+          foreach my $reading (keys %{$hash->{$attr}}) {
+            setDOIF_Reading ($hash,$reading,"",$attr,"","","");
+          }
+        }
+      }
+    }
     
     if (AttrVal($pn,"initialize",0) and !AttrVal($pn,"disable",0)) {
       readingsBeginUpdate($hash);
@@ -2846,6 +2860,7 @@ DOIF_Notify($$)
       }
     }
 
+  
     my $startup=AttrVal($pn, "startup", 0);
     if ($startup  and !AttrVal($pn,"disable",0)) {
       $startup =~ s/\$SELF/$pn/g;
@@ -3847,12 +3862,12 @@ DOIF_Attr(@)
     delete ($defs{$hash->{NAME}}{READINGS}{waitsame});
     @{$hash->{attr}{waitsame}}=SplitDoIf(':',$a[3]);
   } elsif($a[0] eq "set" && ($a[2] eq "DOIF_Readings" or $a[2] eq "event_Readings")) {
-    my ($def,$err)=addDOIF_Readings($hash,$a[3],$a[2]);
-    if ($err) {
-      $hs=$cur_hs;
-      return ("error in $a[2] $def, $err");
-    } else {
-      if ($init_done) {
+    if ($init_done) {
+      my ($def,$err)=addDOIF_Readings($hash,$a[3],$a[2]);
+      if ($err) {
+        $hs=$cur_hs;
+        return ("error in $a[2] $def, $err");
+      } else {
         foreach my $reading (keys %{$hash->{$a[2]}}) {
           setDOIF_Reading ($hash,$reading,"",$a[2],"","","");
         }
@@ -4570,8 +4585,6 @@ sub footer {
   
 }
 
-
-
 sub plot {
   
   my ($collect,$min_a,$max_a,$minColor,$maxColor,$dec,$func,$steps,$x_prop,$chart_dim,$noColor,$lmm,$ln,$lr,$plot,$bwidth,$footerPos,$fill,$pos,$anchor,$unitColor,$unit)=@_;
@@ -4660,16 +4673,17 @@ sub plot {
   
   $minVal=$value if (!defined $minVal);
   $maxVal=$value if (!defined $maxVal);
-  my $opacity=0.5;
+  my $opacity=0.4;
+  my $minopacity=0.05;
   if ($minPlot < 0 and $maxPlot > 0) {
     $xpos=50-int($n*10)/10;
     $topVal=($maxVal > 0 ? $maxVal : 0);
     $bottomVal=($minVal < 0 ? $minVal : 0);
     ($nullColor)=get_color(0,$min,$max,$minColor,$maxColor,$func);
     $nullProp=int ($topVal/($topVal-$bottomVal)*100)/100 if ($bottomVal<0 and $topVal>0);
-    $topOpacity=($topVal==0 ? 0 : $opacity);
-    $bottomOpacity=($bottomVal==0 ? 0: $opacity);
-    $nullOpacity=0.0;
+    $topOpacity=($topVal==0 ? $minopacity : $opacity);
+    $bottomOpacity=($bottomVal==0 ? $minopacity: $opacity);
+    $nullOpacity=$minopacity;
   } elsif ($maxPlot <= 0) {
     $xpos=0;
     $topVal=$maxPlot;
@@ -4680,7 +4694,7 @@ sub plot {
     $xpos=50;
     $topVal=$maxVal;
     $topOpacity=$opacity;
-    $bottomOpacity=0;
+    $bottomOpacity=$minopacity;
     $bottomVal=$minPlot;
   }
   
@@ -4754,14 +4768,14 @@ sub plot {
     if (!defined $unitColor) {
       $out.=sprintf('<path d="M%s,%s L',$chart_dim,$xpos);
       $out.= $points;
-      $out.= sprintf('" style="fill:url(#gradplotLight_%s_%s_%s);stroke:url(#gradplot_%s_%s_%s);stroke-width:0.4" />',$topValColor,$bottomValColor,(defined $lr ? $lr:0),$topValColor,$bottomValColor,(defined $lr ? $lr:0));
+      $out.= sprintf('" style="fill:url(#gradplotLight_%s_%s_%s);stroke:url(#gradplot_%s_%s_%s);stroke-width:0.4;stroke-opacity:1" />',$topValColor,$bottomValColor,(defined $lr ? $lr:0),$topValColor,$bottomValColor,(defined $lr ? $lr:0));
     } else {
       $out.=sprintf('<path d="M%s,%s L',$chart_dim,$xpos);
       $out.= $points;
-      $out.= sprintf('" style="fill:url(#gradplotLight_%s);stroke:%s;stroke-width:0.5" />',$unitColor,$unitColor);
+      $out.= sprintf('" style="fill:url(#gradplotLight_%s);stroke:%s;stroke-width:0.4;stroke-opacity:1" />',$unitColor,$unitColor);
     }
   }
-  $out.=sprintf('<polyline points="0,%s %s,%s"  style="stroke:gray; stroke-width:0.2; stroke-opacity:1" />',$xpos,$chart_dim,$xpos);
+  $out.=sprintf('<polyline points="0,%s %s,%s"  style="stroke:gray; stroke-width:0.3; stroke-opacity:1" />',$xpos,$chart_dim,$xpos);
 
   ##$out.=sprintf('<circle cx="%s" cy="%s" r="2" fill="%s"  opacity="0.7" />',$maxValSlot*$x_prop,(50-int((${$a}[$maxValSlot]*$m+$n)*10)/10),defined $unitColor ? $unitColor:color($maxValColor,$ln)) if (defined $maxValSlot);
   my ($x1,$y1)=($maxValSlot*$x_prop,(50-int((${$a}[$maxValSlot]*$m+$n)*10)/10)-2.3);
@@ -4854,7 +4868,11 @@ sub card
       $unit1[$i]=${$unit_a}[$i];
     }
   } else {
-    $unit1[0]=$unit_a;
+    if (!defined $unit_a) {
+      $unit1[0]="";
+    } else {
+      $unit1[0]=$unit_a;
+    }
   }
   if (defined $col2) {
     if (ref($col2) eq "ARRAY") {
@@ -4890,7 +4908,11 @@ sub card
       $unit2[$i]=${$unit_b}[$i];
     }
   } else {
-    $unit2[0]=$unit_b;
+    if (!defined $unit_b) {
+      $unit2[0]="";
+    } else {
+      $unit2[0]=$unit_b;
+    }
   }
 
   
@@ -4911,11 +4933,36 @@ sub card
 
   my ($size,$plot,$steps,$noFooter,$noColor,$hring,$bwidth);
   ($size,$plot,$steps,$noFooter,$noColor,$hring,$bwidth)=split (/,/,$prop) if (defined $prop);
-  $plot = "" if (!defined $plot);
-  $steps = "" if (!defined $steps);
-  $noFooter = "" if (!defined $noFooter);
-  $noColor = "" if (!defined $noColor);
-  $hring = "" if (!defined $hring);
+  
+  if (!defined $plot or $plot eq "autoscaling") {
+    $plot = "";
+  } elsif ($plot eq "fixedscaling") {
+    $plot=1;
+  }
+  if (!defined $steps or $steps eq "nosteps") {
+    $steps = "";
+  } elsif ($steps eq "steps") {
+    $steps = 1;
+  }
+  if (!defined $noFooter or $noFooter eq "footer") {
+    $noFooter = "" 
+  } elsif ($noFooter eq "nofooter") {
+    $noFooter = 1;
+  }
+  if (!defined $noColor or $noColor eq "ycolor") {
+    $noColor = "";
+  } elsif ($noColor eq "noycolor") {
+    $noColor = 1;
+  }
+  
+  if (!defined $hring or $hring eq "ring") {
+    $hring = "";
+  } elsif ($hring  eq "noring") {
+    $hring = 0;
+  }  elsif ($hring eq "halfring") {
+    $hring = 1
+  }
+    
   
   if (!defined $bwidth or $bwidth eq "") {
     $bwidth=180;
@@ -5077,34 +5124,30 @@ sub card
   
   my $scale;
   my $scale_strokes;
-  my $description;
-  my $strokes;
+  my $description=4;
+  my $strokes=12;
   
   my $div = $hours > 168 ? ($hours % 168 == 0 ? 168 : ($hours % 24 == 0 ? 24 : 1)):1;
   
   if ($div==168 and $hours/$div/2 == 1) {  #2w
-    $scale=$hours/7;
     $description=7;
     $strokes=$description;
-    $scale_strokes=$scale;
   } elsif ($hours <= 168*7) {
     for (my $i=7;$i>=3;$i--) {
       if  ($hours/$div % $i == 0) {
-        $scale=$hours/$i;
-        $scale_strokes=$scale;
         $description=$i;
-        $strokes=$description;
         if ($div == 168 and $chart_dim > 130) {
           $strokes=$description*7;
-          $scale_strokes=$scale/7;
-        }        
+        } else {
+          $strokes=$description;
+        }
         last;
       }
     }
   }
-    
-
-  if (defined $scale) {
+  $scale=$hours/$description;
+  $scale_strokes=$hours/$strokes;
+  if ($hours > 2) {
     my ($sec,$minutes,$hour,$mday,$month,$year,$wday,$yday,$isdst) = localtime($timebeginn);
     my $beginhour=int($hour/$scale)*$scale;
     my $diffsec=($hour-$beginhour)*3600+$minutes*60+$sec;
@@ -5115,39 +5158,34 @@ sub card
      my $x=int((($i)*($chart_dim/$strokes)+$pos_strokes)*10)/10;
      $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0 and $x <= $chart_dim);
     }
-    
     for (my $i=0;$i<$description;$i++) {
       my $h=$beginhour+($i+1)*$scale;
       $hour=($h >= 24 ? $h % 24:$h);
       my $x=int((($i*($chart_dim/$description)+$pos))*10)/10;
-      if ($hour == 0) {
-        if ($hours <= 168) {
-          $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,substr(::strftime("%a",localtime($timebeginn+$h*3600)),0,2));
+      if ($hours <= 2) {
+   #     $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%H:%M",localtime($time-$hours*3600*(1-$i/3))));
+      } elsif ($hours <= 168) {
+        if ($hour != 0) {
+          $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%02d:</text>',$x,$hour);
         } else {
-          $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%d.",localtime($timebeginn+$h*3600)));
+          $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,substr(::strftime("%a",localtime($timebeginn+$h*3600)),0,2));
         }
+      } elsif ($hours <= 168*7) {
+         $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%d.",localtime($timebeginn+$h*3600)));
       } else {
-        $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%02d:</text>',$x,$hour);
-      }
+         $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%d.%m",localtime($timebeginn+$h*3600)));
+      }  
     }
   } else {
     for (my $i=0;$i<=12;$i++) {
-      my $x=int((($i)*($chart_dim/12)+1)*10)/10;
+      my $x=int((($i)*($chart_dim/12)+1)*10)/10;      
       $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0 and $x <= $chart_dim);
-    }
-   
-    for (my $i=0;$i<=3;$i++) {
-      my $x=int(($i*($chart_dim/3)-1)*10)/10;
-      if  ($hours <=168) {
+      for (my $i=0;$i<=3;$i++) {
+        my $x=int(($i*($chart_dim/3)-1)*10)/10;
         $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x+2,::strftime("%H:%M",localtime($time-$hours*3600*(1-$i/3))));
-      } elsif ($hours <=168*7 and $hours % 24 == 0) {
-        $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%d.%H:",localtime($time-$hours*3600*(1-$i/3))));
-      } else {
-        $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x+2,::strftime("%d.%m",localtime($time-$hours*3600*(1-$i/3))));
       }
     }
   }
-  
   my ($outplot,$outfooter);
   my @outfooter;
   
@@ -5198,15 +5236,20 @@ sub card
   if ($hring eq "") {
     $out.=sprintf('<g transform="translate(%s,6)">',$bwidth-49);
     if (@value1 >= 2 ) {
+      my $unit_1=(split(",",$unit1[0]))[0];
+      my $unit_2=(split(",",$unit1[1]))[0];
       my $unitColor=(split(",",$unit1[0]))[1];
       my $unitColor2=(split(",",$unit1[1]))[1];
       $decfont="" if (!defined $decfont);
-      $out.= ui_Table::ring2($value1[0]{value},$min,$max,$minColor,$maxColor,(split(",",$unit1[0]))[0],92,$func,defined $unitColor ? $decfont.",,fill:".$unitColor:$decfont,
-             $value1[1]{value},$min,$max,$minColor,$maxColor,(split(",",$unit1[1]))[0],$func,defined $unitColor2 ? $decfont.",,fill:".$unitColor2:$decfont,$lightness,(defined $head or !defined $icon) ? undef: $icon,$model);
+      $out.= ui_Table::ring2($value1[0]{value},$min,$max,$minColor,$maxColor,$unit_1,92,$func,defined $unitColor ? $decfont.",,fill:".$unitColor:$decfont,
+             $value1[1]{value},$min,$max,$minColor,$maxColor,$unit_2,$func,defined $unitColor2 ? $decfont.",,fill:".$unitColor2:$decfont,$lightness,(defined $head or !defined $icon) ? undef: $icon,$model);
     } elsif (@value1 == 1 and @value2 >= 1) {
-        $out.= ui_Table::ring2($value1[0]{value},$min,$max,$minColor,$maxColor,(split(",",$unit1[0]))[0],92,$func,$decfont,$value2[0]{value},$min2,$max2,$minColor2,$maxColor2,(split(",",$unit2[0]))[0],$func2,$decfont2,$lightness,((defined $head or !defined $icon) ? undef: $icon),$model);
+        my $unit_1=(split(",",$unit1[0]))[0];
+        my $unit_2=(split(",",$unit2[0]))[0];
+        $out.= ui_Table::ring2($value1[0]{value},$min,$max,$minColor,$maxColor,$unit_1,92,$func,$decfont,$value2[0]{value},$min2,$max2,$minColor2,$maxColor2,$unit_2,$func2,$decfont2,$lightness,((defined $head or !defined $icon) ? undef: $icon),$model);
     } else {
-        $out.= ui_Table::ring($value1[0]{value},$min,$max,$minColor,$maxColor,(split(",",$unit1[0]))[0],92,$func,$decfont,$model,$lightness,(defined $head or !defined $icon) ? undef: $icon);
+        my $unit_1=(split(",",$unit1[0]))[0];
+        $out.= ui_Table::ring($value1[0]{value},$min,$max,$minColor,$maxColor,$unit_1,92,$func,$decfont,$model,$lightness,(defined $head or !defined $icon) ? undef: $icon);
     }
     $out.='</g>';
     $out.=sprintf('<text text-anchor="middle" x="%s" y="68" style="fill:#CCCCCC;font-size:8px">%s</text>',$bwidth-21,::strftime("%H:%M:%S",localtime($time)));
@@ -5720,11 +5763,33 @@ sub ring_param {
 
   my ($monochrom,$minMax,$innerRing,$pointer,$mode);
   ($monochrom,$minMax,$innerRing,$pointer,$mode)=split (/,/,$model) if (defined $model);
-  $monochrom="" if (!defined $monochrom);
-  $minMax="" if (!defined $minMax);
-  $innerRing="" if (!defined $innerRing);
-  $pointer="" if (!defined $pointer);
-  $mode="" if (!defined $mode);
+  if (!defined $monochrom or $monochrom eq "gradient") {
+    $monochrom="";
+  } elsif ($monochrom eq "nogradient") {
+    $monochrom=1;
+  }
+  if (!defined $minMax or $minMax eq "nominmaxvalue") {
+    $minMax="";
+  } elsif ($minMax eq "minmaxvalue") {
+    $minMax=1;
+  }
+  
+  
+  if (!defined $innerRing or $innerRing eq "noinnerring") {
+    $innerRing=""; 
+  } elsif ($innerRing eq "innerring") {
+      $innerRing=1;
+  }      
+  
+  $pointer="" if (!defined $pointer or $pointer eq "nopointer");
+
+  if (!defined $mode or $mode eq "minmax") {
+    $mode="";
+  } elsif ($mode eq "negzeropos") {
+    $mode=1;
+  } elsif ($mode eq "zeronegpos") {
+    $mode=2;
+  }
  
   my ($dec,$fontformat,$unitformat);
   ($dec,$fontformat,$unitformat)=split (/,/,$decfont,3) if (defined $decfont);
@@ -5819,7 +5884,7 @@ sub ring_param {
       $arcEnd=$minArc if ($arcEnd < $minArc);
     } elsif ($mode eq "2") {
       $arcBegin = $minArc;
-      $arcEnd = $value < 0 ? int(-$value*$m*10)/10:int($value*$m*10)/10;
+      $arcEnd = $value < 0 ? int((-$value*$m+$n)*10)/10:int(($value*$m+$n)*10)/10;
       $beginColor = $nullColor;
       if ($value < 0) {
         $maxCol=$minCol;

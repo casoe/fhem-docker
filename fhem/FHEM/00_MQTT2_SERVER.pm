@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 00_MQTT2_SERVER.pm 26751 2022-11-26 16:38:56Z rudolfkoenig $
+# $Id: 00_MQTT2_SERVER.pm 26924 2022-12-29 14:35:15Z rudolfkoenig $
 package main;
 
 use strict;
@@ -236,8 +236,8 @@ MQTT2_SERVER_Set($@)
     MQTT2_SERVER_doPublish($hash->{CL}, $hash, $tp, $val, $retain);
 
   } elsif($a[0] eq "clearRetain") {
-    my $rname = AttrVal($hash->{NAME}, "hideRetain", 0) ? ".RETAIN" : "RETAIN";
-    delete($hash->{READINGS}{$rname});
+    delete($hash->{READINGS}{RETAIN});
+    delete($hash->{READINGS}{".RETAIN"});
     delete($hash->{retain});
     return undef;
   
@@ -875,7 +875,11 @@ MQTT2_SERVER_ReadDebug($$)
     <a id="MQTT2_SERVER-attr-ignoreRegexp"></a>
     <li>ignoreRegexp<br>
       if $topic:$message matches ignoreRegexp, then it will be silently ignored.
-      </li>
+      For general purpose servers, it is a good idea to set it e.g. to
+      <ul>
+        homeassistant/[^:"]+/config|tasmota/discovery/[^/:]+/(config|sensors)
+      </ul> and also include the topics used to send commands towards your MQTT
+      clients.</li>
 
     <a id="MQTT2_SERVER-attr-keepaliveFactor"></a>
     <li>keepaliveFactor<br>

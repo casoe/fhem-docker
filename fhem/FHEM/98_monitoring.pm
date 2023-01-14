@@ -1,5 +1,5 @@
 ##########################################################################
-# $Id: 98_monitoring.pm 26531 2022-10-12 16:54:21Z Beta-User $
+# $Id: 98_monitoring.pm 26892 2022-12-24 08:27:11Z Beta-User $
 #
 # copyright ###################################################################
 #
@@ -322,14 +322,14 @@ sub Notify {
   push @blacklist, devspec2array($_)
     for (split m{[\s]+}x, AttrVal($SELF, 'blacklist', ''));
 
-  return if @blacklist && grep { m{$name}x } @blacklist;
+  return if @blacklist && grep { m{\A${name}\z}x } @blacklist;
 
   my @whitelist;
 
   push @whitelist, devspec2array($_)
     for (split m{[\s]+}x, AttrVal($SELF, 'whitelist', ''));
 
-  return if @whitelist && !grep { m{$name}x } @whitelist;
+  return if @whitelist && !grep { m{\A$name\z}x } @whitelist;
 
   for my $event (@{$events}){
     next if !$event;

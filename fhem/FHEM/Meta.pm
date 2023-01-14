@@ -1,4 +1,4 @@
-# $Id: Meta.pm 21008 2020-01-18 10:22:10Z loredo $
+# $Id: Meta.pm 26889 2022-12-23 15:04:11Z CoolTux $
 
 package main;
 use strict;
@@ -1076,6 +1076,14 @@ sub ModuleIsPerlCore {
             )
         );
     }
+}
+
+# Extract metadata from FHEM module file, public function - CoolTux
+sub getMetadata {
+    my $filePath = shift;
+    my $modMeta  = shift;
+
+    return __GetMetadata($filePath,$modMeta);
 }
 
 ##########

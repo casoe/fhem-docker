@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 26775 2022-12-04 10:04:50Z rudolfkoenig $
+# $Id: fhem.pl 26868 2022-12-18 10:35:06Z rudolfkoenig $
 
 
 use strict;
@@ -279,7 +279,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 26775 2022-12-04 10:04:50Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 26868 2022-12-18 10:35:06Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -4192,7 +4192,8 @@ Dispatch($$;$$)
     if(defined($h)) {
       foreach my $m (sort keys %{$h}) {
         my ($order, $mname) = split(":", $m);
-        next if($modules{$mname}{LOADED}); # checked in the loop above, #125292
+        next if(!$modules{$mname} ||       # #130952 / FS20V
+                $modules{$mname}{LOADED}); # checked in the loop above, #125292
         if($dmsg =~ m/$h->{$m}/s) {
           if(AttrVal("global", "autoload_undefined_devices", 1)) {
             my $newm = LoadModule($mname);
