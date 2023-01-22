@@ -1,4 +1,4 @@
-# $Id: 73_GasCalculator.pm 25907 2022-04-01 07:40:25Z Sailor $
+# $Id: 73_GasCalculator.pm 26692 2022-11-13 19:24:39Z Sailor $
 ########################################################################################################################
 #
 #     73_GasCalculator.pm
@@ -152,7 +152,10 @@ sub GasCalculator_Define($$$)
 
 	### Start timer for execution around midnight
 	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
-	my $EpochNextMidnight = timelocal(1, 0, 0, $mday, $mon, $year+1900) + 86400;
+	my $EpochThisMidnight 			= Time::Local::timelocal_nocheck(0,0,0,$mday  ,$mon,$year);
+	my $EpochNextMidnight 			= Time::Local::timelocal_nocheck(0,0,0,$mday+1,$mon,$year);
+	my $SecondsToday 				= $EpochNextMidnight - $EpochThisMidnight;
+	$hash->{system}{SecondsToday} 	= $SecondsToday;
 	InternalTimer($EpochNextMidnight, "GasCalculator_MidnightTimer", $hash, 0);
 
 	### For debugging purpose only
@@ -160,8 +163,8 @@ sub GasCalculator_Define($$$)
 	Log3 $name, 5, $name. " : GasCalculator_MidnightTimer - year              : " . $year;
 	Log3 $name, 5, $name. " : GasCalculator_MidnightTimer - mon               : " . $mon;
 	Log3 $name, 5, $name. " : GasCalculator_MidnightTimer - day               : " . $mday;
-	Log3 $name, 5, $name. " : GasCalculator_MidnightTimer - timelocal         : " . timelocal(1, 0, 0, $mday, $mon, $year+1900);
 	Log3 $name, 5, $name. " : GasCalculator_MidnightTimer - nextMidnight      : " . $EpochNextMidnight;
+	Log3 $name, 5, $name. " : GasCalculator_MidnightTimer - SecondsToday      : " . $SecondsToday;
 
 	return undef;
 }
@@ -535,8 +538,8 @@ sub GasCalculator_MidnightTimer($)
 			next;
 		}
 		
-		my $GasCounterReadingValue 				= ReadingsVal($GasCountName,                              $GasCountReadingName                              , "error");
-		my $LastUpdateTimestampUnix             = ReadingsVal($GasCalcReadingDestinationDeviceName, "." . $GasCalcReadingPrefix . "_LastUpdateTimestampUnix", 0      );
+		my $GasCounterReadingValue 					= ReadingsVal($GasCountName,                              $GasCountReadingName                              , "error");
+		my $LastUpdateTimestampUnix         	    = ReadingsVal($GasCalcReadingDestinationDeviceName, "." . $GasCalcReadingPrefix . "_LastUpdateTimestampUnix", 0      );
 	
 		### Calculate time difference since last update
 		my $DeltaTimeSinceLastUpdate = time() - $LastUpdateTimestampUnix ;
@@ -554,25 +557,25 @@ sub GasCalculator_MidnightTimer($)
 		if (($GasCalcReadingPrefix ne "error") && ($GasCalcReadingDestinationDeviceName ne "error") && ($LastUpdateTimestampUnix > 0)){
 			
 			### If there was no update in the last 24h
-			if ( $DeltaTimeSinceLastUpdate >= 86400) {
+			if ( $DeltaTimeSinceLastUpdate >= $GasCalcDev->{system}{SecondsToday}) {
 				### Create Log entries for debugging purpose
-				Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Last Update       : No Update in the last 24h!";
+				Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Last Update       : No Update in the last day!";
 
 			}
 			else {
 				### Create Log entries for debugging purpose
-				Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Last Update       : There was an Update in the last 24h!";
+				Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Last Update       : There was an Update in the last day!";
 			}
 			
 			### Create Log entries for debugging purpose	
 			#Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - GasCalcRDD      : \n" . Dumper($GasCalcReadingDestinationDevice);
 			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - GasCounter        : " . $GasCounterReadingValue;
-			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre WFRDaySum     : " . ReadingsVal($GasCalcReadingDestinationDeviceName, "."  . 	$GasCalcReadingPrefix . "_PowerDaySum",     	"error");
-			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre WFRDayCount   : " . ReadingsVal($GasCalcReadingDestinationDeviceName, "."  . 	$GasCalcReadingPrefix . "_PowerDayCount",     	"error");
-			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre WFRDayCurrent : " . ReadingsVal($GasCalcReadingDestinationDeviceName, 		$GasCalcReadingPrefix . "_PowerCurrent",     	"error");
-			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre WFRDayAver    : " . ReadingsVal($GasCalcReadingDestinationDeviceName, 		$GasCalcReadingPrefix . "_PowerDayAver",     	"error");
-			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre WFRDayMax     : " . ReadingsVal($GasCalcReadingDestinationDeviceName, 		$GasCalcReadingPrefix . "_PowerDayMax",    		"error");
-			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre WFRDayMin     : " . ReadingsVal($GasCalcReadingDestinationDeviceName, 		$GasCalcReadingPrefix . "_PowerDayMin",     	"error");
+			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre PowerDaySum   : " . ReadingsVal($GasCalcReadingDestinationDeviceName, "."  . 	$GasCalcReadingPrefix . "_PowerDaySum",     	"error");
+			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre PowerDayCount : " . ReadingsVal($GasCalcReadingDestinationDeviceName, "."  . 	$GasCalcReadingPrefix . "_PowerDayCount",     	"error");
+			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre PowerCurrent  : " . ReadingsVal($GasCalcReadingDestinationDeviceName, 		$GasCalcReadingPrefix . "_PowerCurrent",     	"error");
+			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre PowerDayAver  : " . ReadingsVal($GasCalcReadingDestinationDeviceName, 		$GasCalcReadingPrefix . "_PowerDayAver",     	"error");
+			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre PowerDayMax   : " . ReadingsVal($GasCalcReadingDestinationDeviceName, 		$GasCalcReadingPrefix . "_PowerDayMax",    		"error");
+			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre PowerDayMin   : " . ReadingsVal($GasCalcReadingDestinationDeviceName, 		$GasCalcReadingPrefix . "_PowerDayMin",     	"error");
 			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre ConsumDay     : " . ReadingsVal($GasCalcReadingDestinationDeviceName, 		$GasCalcReadingPrefix . "_EnergyDay",     		"error");
 			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre ConsumDayLast : " . ReadingsVal($GasCalcReadingDestinationDeviceName, 		$GasCalcReadingPrefix . "_EnergyDayLast",		"error");
 			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - Pre ConsumCstDay  : " . ReadingsVal($GasCalcReadingDestinationDeviceName, 		$GasCalcReadingPrefix . "_EnergyCostDay",		"error");
@@ -601,14 +604,15 @@ sub GasCalculator_MidnightTimer($)
 	}
 
 	### Start timer for execution around midnight
-	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
-	my $EpochNextMidnight = timelocal(1, 0, 0, $mday, $mon, $year+1900) + 86400;
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) 	= localtime(time);
+	my $EpochThisMidnight 										= Time::Local::timelocal_nocheck(0,0,0,$mday  ,$mon,$year);
+	my $EpochNextMidnight 										= Time::Local::timelocal_nocheck(0,0,0,$mday+1,$mon,$year);
+	my $SecondsToday 											= $EpochNextMidnight - $EpochThisMidnight;
+	$GasCalcDev->{system}{SecondsToday} 						= $SecondsToday;
 	InternalTimer($EpochNextMidnight, "GasCalculator_MidnightTimer", $GasCalcDev, 0);
 	
 	### For debugging purpose only
 	Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer _______Looping finished___________";
-	Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - time              : " . time();
-	Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - timelocal         : " . timelocal(1, 0, 0, $mday, $mon, $year+1900);
 	Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator_MidnightTimer - nextMidnight      : " . $EpochNextMidnight;
 }
 ####END####### Midnight Routine ################################################################################END#####
@@ -881,10 +885,10 @@ sub GasCalculator_Notify($$)
 			readingsSingleUpdate( $GasCalcReadingDestinationDevice,       $GasCalcReadingPrefix . "_CounterMeterLast",     sprintf($GasCalcDev->{system}{DecimalPlace}, ($GasCountReadingValueCurrent)),1);
 			readingsSingleUpdate( $GasCalcReadingDestinationDevice,       $GasCalcReadingPrefix . "_CounterYear1st",       sprintf($GasCalcDev->{system}{DecimalPlace}, ($GasCountReadingValueCurrent)),1);
 			readingsSingleUpdate( $GasCalcReadingDestinationDevice,       $GasCalcReadingPrefix . "_CounterYearLast",      sprintf($GasCalcDev->{system}{DecimalPlace}, ($GasCountReadingValueCurrent)),1);
-			readingsSingleUpdate( $GasCalcReadingDestinationDevice, "." . $GasCalcReadingPrefix . "_WFRDaySum",            0, 1);
-			readingsSingleUpdate( $GasCalcReadingDestinationDevice, "." . $GasCalcReadingPrefix . "_WFRDayCount",          0, 1);
-			readingsSingleUpdate( $GasCalcReadingDestinationDevice,       $GasCalcReadingPrefix . "_WFRDayMin",            0, 1);
-			readingsSingleUpdate( $GasCalcReadingDestinationDevice,       $GasCalcReadingPrefix . "_WFRDayMax",            0, 1);
+			readingsSingleUpdate( $GasCalcReadingDestinationDevice, "." . $GasCalcReadingPrefix . "_PowerDaySum",          0, 1);
+			readingsSingleUpdate( $GasCalcReadingDestinationDevice, "." . $GasCalcReadingPrefix . "_PowerDayCount",        0, 1);
+			readingsSingleUpdate( $GasCalcReadingDestinationDevice,       $GasCalcReadingPrefix . "_PowerDayMin",          0, 1);
+			readingsSingleUpdate( $GasCalcReadingDestinationDevice,       $GasCalcReadingPrefix . "_PowerDayMax",          0, 1);
 			readingsSingleUpdate( $GasCalcReadingDestinationDevice, "." . $GasCalcReadingPrefix . "_LastUpdateTimestampUnix", time(), 0);
 
 			### Create Log entries for debugging
@@ -966,11 +970,18 @@ sub GasCalculator_Notify($$)
 		Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator - LastUpdateTimestampUnix                  : " . ReadingsVal($GasCalcReadingDestinationDeviceName,  "." . $GasCalcReadingPrefix . "_LastUpdateTimestampUnix", undef);
 		Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator - GasCountReadTimeRelDelta                 : " . $GasCountReadingLastChangeDelta;
 
-		if (($GasCountReadingTimestampCurrentHour < $GasCountReadingTimestampPreviousHour) || ($GasCountReadingLastChangeDelta > 86400))
+		if (($GasCountReadingTimestampCurrentHour < $GasCountReadingTimestampPreviousHour) || ($GasCountReadingLastChangeDelta > $GasCalcDev->{system}{SecondsToday}))
 		{
 			### Create Log entries for debugging
-			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator - First reading of day detected OR last reading is older than 24h!";
+			Log3 $GasCalcName, 5, $GasCalcName. " : GasCalculator - First reading of day detected OR last reading is older than 1 day!";
 
+			### Recalculate new dayspan in seconds
+			my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) 	= localtime(time);
+			my $EpochThisMidnight 										= Time::Local::timelocal_nocheck(0,0,0,$mday  ,$mon,$year);
+			my $EpochNextMidnight 										= Time::Local::timelocal_nocheck(0,0,0,$mday+1,$mon,$year);
+			my $SecondsToday 											= $EpochNextMidnight - $EpochThisMidnight;
+			$GasCalcDev->{system}{SecondsToday} 						= $SecondsToday;
+			
 			### Calculate gas energy of previous day € = (Vprevious[cubic] - V1stDay[cubic]) * GaszValue * GasNominalHeatingValue[kWh/cubic] 
 			my $GasCalcEnergyDayLast      = ($GasCountReadingValuePrevious - ReadingsVal($GasCalcReadingDestinationDeviceName, $GasCalcReadingPrefix . "_Vol1stDay", "0")) * $attr{$GasCalcName}{GaszValue} * $attr{$GasCalcName}{GasNominalHeatingValue};
 			### Calculate pure gas cost of previous day GasCalcEnergyLastDay * Price per kWh
@@ -1065,8 +1076,8 @@ sub GasCalculator_Notify($$)
 				readingsSingleUpdate($GasCalcReadingDestinationDevice, "." . $GasCalcReadingPrefix . "_LastUpdateTimestampUnix", $GasCountReadingTimestampCurrentRelative, 0);
 			}
 
-			### Calculate Current Power P = DV/Dt[cubic/s] * GaszValue * GasNominalHeatingValue[kWh/cubic] * 3600[s/h] / SiPrefixPowerFactor
-			my $GasCalcPowerCurrent    = ($GasCountReadingValueDelta / $GasCountReadingTimestampDelta) * $attr{$GasCalcName}{GaszValue} * $attr{$GasCalcName}{GasNominalHeatingValue} * 3600 / $GasCalcDev->{system}{SiPrefixPowerFactor};
+			### Calculate Current Power P = DV/Dt[cubic/s] * GaszValue * GasNominalHeatingValue[kWh/cubic] * 3600[s/h] * 1000[1/k]/ SiPrefixPowerFactor
+			my $GasCalcPowerCurrent    = ($GasCountReadingValueDelta / $GasCountReadingTimestampDelta) * $attr{$GasCalcName}{GaszValue} * $attr{$GasCalcName}{GasNominalHeatingValue} * 3600 * 1000 / $GasCalcDev->{system}{SiPrefixPowerFactor};
 			
 			### Calculate daily sum of power measurements "SP" and measurement counts "n" and then calculate average Power "Paverage = SP/n"
 			my $GasCalcPowerDaySum     = ReadingsVal($GasCalcReadingDestinationDeviceName,  "." . $GasCalcReadingPrefix . "_PowerDaySum",   "0") + $GasCalcPowerCurrent;

@@ -1,5 +1,5 @@
 #########################################################################
-# $Id: Utils.pm 24678 2021-06-24 19:45:06Z StefanStrobel $
+# $Id: Utils.pm 27034 2023-01-12 17:41:18Z StefanStrobel $
 # Utility functions of HTTPMOD that can be uses by other Fhem modules
 #   
 #     This file is part of fhem.
@@ -30,6 +30,7 @@ use warnings;
 
 use GPUtils         qw(:all);
 use Time::HiRes     qw(gettimeofday);    
+use POSIX;
 use Encode          qw(decode encode);
 use Scalar::Util    qw(looks_like_number);
 use DevIo;
@@ -52,6 +53,10 @@ our @EXPORT_OK = qw(UpdateTimer FhemCaller
                     BodyDecode
                     IsOpen
                     FmtTimeMs
+                    FmtDate
+                    FmtDateTimeNice
+                    DateDiff
+                    date_str2num
                     ReadableArray
                     Statistics Profiler
                     );
@@ -278,11 +283,14 @@ sub EvalExpr {
     my $inCheckEval = ($checkOnly ? 0 : 1);
 
     my $assign = 'package main; ';
+    KEYLOOP:
     foreach my $key (keys %{$oRef}) {
+        next KEYLOOP if($key =~ /(checkOnly|nullIfNoExp|expr|action)/);
         my $type  = ref $oRef->{$key};
         my $vName = substr($key,1);
         my $vType = substr($key,0,1);
         
+        #Log3 $name, 3, "$name: EvalExpr: $action check key $key type $type and vType $vType";
         if ($type eq 'SCALAR') {
             $assign .= "my \$$vName = \${\$oRef->{'$key'}};";   # assign ref to scalar as scalar
         } 
@@ -332,7 +340,12 @@ sub FhemCaller {
 #########################################
 # Try to convert a value with a map 
 # called from Set and FormatReading
-# todo: also pass map as named parameter
+# map example: 0:mittig, 1:über, 2:unterhalb
+
+# todo: potential extension: 0:mittig, 1:über, 2:unterhalb, *:undefined ??
+#           or for slave mode and the reverse map: 0:*??
+# or better pass new named parameters mapDefault / rmapDefault from new attrs?
+
 sub MapConvert {
     my $hash    = shift;
     my $oRef    = shift;                                        # hash ref for passing options and variables for use in expressions
@@ -344,7 +357,7 @@ sub MapConvert {
     my $inVal          = $oRef->{'val'};                        # input value
     my $name           = $hash->{NAME};
     
-    return $inVal if (!$map);                                   # don't change anyting if map is empty
+    return $inVal if (!$map);                                   # don't change anything if map is empty
 
     $map =~ s/\s+/ /g;                                          # substitute all \t \n etc. by one space only       
     if ($reverse) {
@@ -364,9 +377,13 @@ sub MapConvert {
     } 
     else {
         Log3 $name, 3, "$name: MapConvert called from " . FhemCaller() . " did not find $val ($inVal) in" . 
-        ($reverse ? " reversed" : "") . " map $map";
-        return if ($UndefIfNoMatch);
-        return $inVal;
+            ($reverse ? " reversed" : "") . " map $map";
+        if (defined($oRef->{'default'})) {
+            Log3 $name, 3, "$name: MapConvert returns defined default value $oRef->{'default'}";
+            return $oRef->{'default'};
+        }
+        return if ($UndefIfNoMatch);                            # no match -> return undef because of $UndefIfNoMatch
+        return $inVal;                                          # no match -> return original value 
     }
 }
 
@@ -618,7 +635,7 @@ sub ReadKeyValue {
 
 
 ###################################################
-# recoursive main part for HTTPMOD_FlattenJSON($$)
+# recoursive main part for FlattenJSON($$)
 # consumes a hash passed as parameter
 # and creates $hash->{ParserData}{JSON}{$prefix.$key}
 sub JsonFlatter {
@@ -719,6 +736,7 @@ sub BodyDecode {
     my $header     = shift // '';
     my $name       = $hash->{NAME};        # Fhem device name
     my $bodyDecode = AttrVal($name, 'bodyDecode', 'default');
+    my $bodyEncode = AttrVal($name, 'bodyEncode', '');
     my $bodyCharset;
     my $decoding;
 
@@ -763,6 +781,7 @@ sub BodyDecode {
         $hash->{'.bodyCharset'} = 'internal';
         #Log3 $name, 5, "$name: BodyDecode " . ($body ? "new body as utf-8 is: \n" . encode ('utf-8', $body) : "body empty");
     }
+    $body = encode($bodyEncode, $body) if ($bodyEncode && $bodyEncode !~ m{\A [Nn]one \z}xms );
     return $body;
 }
 
@@ -773,6 +792,7 @@ sub BodyDecode {
 # tcpserver
 sub IsOpen {
     my $hash = shift;
+    return 0 if (!$hash->{DeviceName});
     return 1 if ($hash->{DeviceName} eq 'none');
     return 1 if ($hash->{TCPServer} && $hash->{FD});
     return 1 if ($hash->{TCPChild}  && defined($hash->{CD}));
@@ -802,6 +822,47 @@ sub FmtTimeMs {
     my $tim = sprintf("%02d:%02d:%02d", $t[2],$t[1],$t[0]);
     $tim .= sprintf(".%03d", $mseconds * 1000);
     return $tim;
+}
+
+
+####################################################
+# format time as date string only 
+sub FmtDate {
+  my @t = localtime(shift);
+  return sprintf("%04d-%02d-%02d", $t[5]+1900, $t[4]+1, $t[3]);
+}
+
+
+####################################################
+# format date and time as nicer string
+sub FmtDateTimeNice {
+    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(shift);
+    my @months = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
+    my @days   = qw(So Mo Di Mi Do Fr Sa);
+    return sprintf("%s %d.%s %04d %02d:%02d", $days[$wday], $mday, $months[$mon], $year+1900, $hour, $min);
+}
+
+
+##################################################################
+# get number of days between first and seccond (later) date string
+sub DateDiff {
+    my $d1 = shift;                                 # earlier date
+    my $d2 = shift // FmtDate(gettimeofday());      # later date
+    my $d1d = (split (/ /, $d1))[0];        # split time and date part of string
+    my $d2d = (split (/ /, $d2))[0];        # split time and date part of string
+    # subtract lastdate as number from todays date as number and divide
+    my $days = (date_str2num($d2d) - date_str2num($d1d)) / 86400;
+    return $days;
+}
+
+
+####################################################
+# convert date to num 
+sub date_str2num($) {
+  my ($str) = @_;
+  my @a;
+  @a = split("[T: -]", $str);
+  return mktime(0,0,0,$a[2],$a[1]-1,$a[0]-1900,0,0,-1);
 }
 
 

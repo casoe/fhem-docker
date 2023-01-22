@@ -1,5 +1,5 @@
 ##########################################################################
-# $Id: 98_ComfoAir.pm 24283 2021-04-19 17:29:06Z StefanStrobel $
+# $Id: 98_ComfoAir.pm 27035 2023-01-12 17:42:26Z StefanStrobel $
 #
 # fhem Modul für ComfoAir Lüftungsanlagen von Zehnder mit 
 # serieller Schnittstelle (RS232) sowie dazu kompatible Anlagen wie 
@@ -368,7 +368,7 @@ sub Initialize {
         'queueDelay ' .
         'timeout ' .
         'queueMax ' . 
-        'alignTime' .
+        'alignTime ' .
         join (" ", @pollList) . " " .                               # Def der zyklisch abzufragenden Nachrichten
         $main::readingFnAttributes;
     return;

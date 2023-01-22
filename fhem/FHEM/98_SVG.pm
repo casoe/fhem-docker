@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 98_SVG.pm 25876 2022-03-23 11:28:24Z rudolfkoenig $
+# $Id: 98_SVG.pm 26539 2022-10-15 10:44:44Z rudolfkoenig $
 package main;
 
 use strict;
@@ -71,8 +71,9 @@ SVG_Initialize($)
   my @attrList = qw(
     captionLeft:1,0"
     captionPos:right,left,auto
-    endPlotNow
-    endPlotToday
+    endPlotNow:1,0
+    endPlotNowByHour:1,0
+    endPlotToday:1,0
     fixedoffset
     fixedrange
     label
@@ -83,6 +84,7 @@ SVG_Initialize($)
     plotsize
     plotReplace:textField-long
     plotAsPngFix:1,0
+    plotAsPngPort
     startDate
     title
   );
@@ -540,7 +542,7 @@ SVG_PEdit($$$$)
 
   my $sl = "$FW_ME/SVG_WriteGplot?detail=$d&showFileLogData=1";
   if(defined($FW_pos{zoom}) && defined($FW_pos{off})) {
-    $sl .= "&pos=zoom=$FW_pos{zoom};off=$FW_pos{off}";
+    $sl .= "&pos=zoom%3D$FW_pos{zoom}%3Boff%3D$FW_pos{off}";
   }
   my $ro="";
   if(exists($conf{readonly})) {
@@ -628,7 +630,7 @@ SVG_zoomLink($$$)
     } elsif($val eq "20years") {
       $w_off =                         int($w_off/240);
     }
-    $cmd .= "zoom=$val;off=$w_off";
+    $cmd .= "zoom%3D$val%3Boff%3D$w_off";
 
   } else {
 
@@ -636,7 +638,7 @@ SVG_zoomLink($$$)
     $off=($val ? $val+$off : $off);
     my $zoom=$FW_pos{zoom};
     $zoom = 0 if(!$zoom);
-    $cmd .= "zoom=$zoom;off=$off";
+    $cmd .= "zoom%3D$zoom%3Boff%3D$off";
 
   }
 
@@ -785,7 +787,11 @@ SVG_readgplotfile($$$)
   }
 
   ($err1, @svgplotfile) = FileRead($gplot_pgm);
-  ($err2, @svgplotfile) = FileRead("$FW_gplotdir/template.gplot") if($err1);
+  if($err1) {
+    ($err2, @svgplotfile) = FileRead("$FW_gplotdir/template.gplot");
+    @svgplotfile = grep { $_ !~ m/set readonly/ } @svgplotfile;
+    
+  }
   return ($err1, undef) if($err2);
   my ($plotfnCnt, $srcNum) = (0,0);
   my @empty;
@@ -1650,7 +1656,7 @@ SVG_render($$$$$$$$$$)
   # Compute & draw vertical tics, grid and labels
   my $ddur = ($tosec-$fromsec)/86400;
   my ($first_tag, $tag, $step, $tstep, $aligntext,  $aligntics);
-  $aligntext = $aligntics = 0;
+  $aligntext = $aligntics = "none";
 
   if($ddur <= 0.05) {
     $first_tag=". 2 1"; $tag=": 3 4"; $step = 300; $tstep = 60;
@@ -1663,17 +1669,19 @@ SVG_render($$$$$$$$$$)
 
   } elsif($ddur <= 1.1) {       # +0.1 -> DST
     $first_tag=". 2 1"; $tag=": 3 4"; $step = 4*3600; $tstep = 3600;
+    $aligntext = $aligntics = "hour"
+        if(SVG_Attr($parent_name, $name, "endPlotNowByHour", undef));
 
   } elsif ($ddur <= 7.1) {
     $first_tag=". 6";   $tag=". 2 1"; $step = 24*3600; $tstep = 6*3600;
 
   } elsif ($ddur <= 31.1) {
     $first_tag=". 6";   $tag=". 2 1"; $step = 7*24*3600; $tstep = 24*3600;
-    $aligntext = 1;
+    $aligntext = "week";
 
   } elsif ($ddur <= 732.1) {
     $first_tag=". 6";   $tag=". 1";   $step = 28*24*3600; $tstep = 28*24*3600;
-    $aligntext = 2; $aligntics = 2;
+    $aligntext = $aligntics = "month";
 
   } else {
     $step = (($ddur / 365.2425) / 20) * 365 * 86400;
@@ -1682,7 +1690,7 @@ SVG_render($$$$$$$$$$)
     }
     $tstep = $step;
     $first_tag="";   $tag=". 6";
-    $aligntext = 3; $aligntics = 3;
+    $aligntext = $aligntics = "year";
   }
 
   my $barwidth = $tstep;
@@ -1765,13 +1773,13 @@ SVG_render($$$$$$$$$$)
   } else { # times
     for(my $i = $fromsec; $i < $tosec; $i += $step) {
       $i = SVG_time_align($i,$aligntext);
-      if($aligntext >= 2) { # center month and year
+      if($aligntext eq "month" || $aligntext eq "year") { # center
         $off1 = int($x+($i-$fromsec+$step/2)*$tmul);
       } else {
         $off1 = int($x+($i-$fromsec)*$tmul);
       }
       $t = SVG_fmtTime($tag, $i);
-      if($off1 == $x) {
+      if($off1 < $x+10) { # first text, too close to the date field
         SVG_pO "<text x=\"$off1\" y=\"$off2\" class=\"ylabel\" " .
                   "text-anchor=\"left\">$t</text>";
       } elsif ($off1 < $x+$w-8) {
@@ -2411,29 +2419,36 @@ sub
 SVG_time_align($$)
 {
   my ($v,$align) = @_;
-  my $wl = $FW_webArgs{detail};
-  return $v if(!$align);
-  if($align == 1) {             # Look for the beginning of the week
+  return $v if($align eq "none");
+
+  # Look for the beginning of the next ...
+  if($align eq "hour") {
+    return int(($v+(3600-60))/3600)*3600;
+
+  } elsif($align eq "week") {
+    my $wl = $FW_webArgs{detail};
     for(;;) {
       my @a = localtime($v);
       return $v if($a[6] == SVG_Attr($FW_wname, $wl, "plotWeekStartDay", 0));
       $v += 86400;
     }
-  }
-  if($align == 2) {             # Look for the beginning of the month
+
+  } elsif($align eq "month") {
     for(;;) {
       my @a = localtime($v);
       return $v if($a[3] == 1);
       $v += 86400;
     }
-  }
-  if($align == 3) {             # Look for the beginning of the year
+
+  } elsif($align eq "year") {
     for(;;) {
       my @a = localtime($v);
       return $v if($a[7] == 0);
       $v += 86400;
     }
   }
+
+  return $v;
 }
 
 sub
@@ -2471,9 +2486,23 @@ sub
 plotAsPng(@)
 {
   my (@plotName) = @_;
-  my (@webs, $mimetype, $svgdata, $rsvg, $pngImg);
+  my ($mimetype, $svgdata, $rsvg, $pngImg);
 
-  @webs=devspec2array("TYPE=FHEMWEB");
+  my $svgName = $plotName[0];
+  if(!defined($defs{$svgName})) {
+    Log 1, "$svgName not found for plotAsPng()";
+    return;
+  }
+
+  my $devspec = "TYPE=FHEMWEB";
+  my $port    = AttrVal($svgName,'plotAsPngPort',undef);
+  $devspec   .= ":FILTER=i:PORT=$port" if(defined($port));
+
+  my @webs=devspec2array($devspec);
+  if(defined($port) and @webs == 0) {
+    Log 1, "No FHEMWEB device using port $port found for plotAsPng($svgName)";
+    return;
+  }
   foreach(@webs) {
     if(!InternalVal($_,'TEMPORARY',undef)) {
       $FW_wname = InternalVal($_,'NAME','');
@@ -2482,7 +2511,6 @@ plotAsPng(@)
     }
   }
 
-  my $svgName = $plotName[0];
   $FW_RET                 = undef;
   $FW_webArgs{dev}        = $svgName;
   $FW_webArgs{logdev}     = InternalVal($svgName, "LOGDEVICE", "");
@@ -2498,6 +2526,7 @@ plotAsPng(@)
 
   # Forum #32791,#116138: some lib versions cannot parse complex CSS selectors
   $svgdata =~ s/\.SVGplot\./\./g if(AttrVal($svgName, "plotAsPngFix", 0));
+  $svgdata = Encode::decode("UTF-8", $svgdata) if(!$unicodeEncoding); #129693
 
   eval {
     require Image::LibRSVG;
@@ -2581,6 +2610,13 @@ plotAsPng(@)
         end at current time. Else the whole day, the 6 hour period starting at
         0, 6, 12 or 18 hour or the whole hour will be shown. This attribute
         is not used if the SVG has the attribute startDate defined.
+        </li><br>
+
+    <a id="SVG-attr-endPlotNowByHour"></a>
+    <li>endPlotNowByHour<br>
+        If endPlotNow and this attribute are set to 1 and the zoom-level is
+        "day", then the displayed hour ticks will be rounded to the complete
+        hour.
         </li><br>
 
     <a id="SVG-attr-endPlotToday"></a>
@@ -2677,6 +2713,11 @@ plotAsPng(@)
         with complex CSS selectors, so the resulting PNG is black and white
         only. If this attribute is set to 1, the CSS selector complexity will
         be reduced.
+        </li><br>
+
+    <a id="SVG-attr-plotAsPngPort"></a>
+    <li>plotAsPngPort &lt;portNum&gt;<br>
+        Affects only the plotAsPng function: Use a specific FHEMWEB instance.
         </li><br>
 
     <a id="SVG-attr-plotfunction"></a>
@@ -2874,6 +2915,13 @@ plotAsPng(@)
         Attribut startDate benutzt wird.<br>
         </li><br>
 
+    <a id="SVG-attr-endPlotNowByHour"></a>
+    <li>endPlotNowByHour<br>
+        Falls endPlotNow und dieses Attribut auf 1 gesetzt sind, und Zoom-Level
+        ein Tag ist, dann werden die angezeigten Zeitmarker auf die volle
+        Stunde gerundet.
+        </li><br>
+
     <a id="SVG-id-endPlotToday"></a>
     <li>endPlotToday<br>
         Wird dieses Attribut gesetzt, so enden Wochen- bzw. Monatsplots
@@ -2963,6 +3011,11 @@ plotAsPng(@)
         k&ouml;nnen nicht mit komplexen CSS Selektoren umgehen, und das
         Ergebnis ist ein schwarz/wei&szlig; Bild. Falls dieses Attribut auf 1
         gesetzt wird, werden die CSS Anweisungen vereinfacht.
+        </li><br>
+
+    <a id="SVG-attr-plotAsPngPort"></a>
+    <li>plotAsPngPort &lt;portNum&gt;<br>
+        Betrifft nur die plotAsPng Funktion: Verwendet eine bestimmte FHEMWEB Instanz.
         </li><br>
 
     <a id="SVG-attr-plotfunction"></a>

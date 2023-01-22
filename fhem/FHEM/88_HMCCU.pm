@@ -2,7 +2,7 @@
 #
 #  88_HMCCU.pm
 #
-#  $Id: 88_HMCCU.pm 25675 2022-02-13 15:00:07Z zap $
+#  $Id: 88_HMCCU.pm 26565 2022-10-20 12:24:12Z zap $
 #
 #  Version 5.0
 #
@@ -57,7 +57,7 @@ my %HMCCU_CUST_CHN_DEFAULTS;
 my %HMCCU_CUST_DEV_DEFAULTS;
 
 # HMCCU version
-my $HMCCU_VERSION = '5.0 220431743';
+my $HMCCU_VERSION = '5.0 222930908';
 
 # Timeout for CCU requests (seconds)
 my $HMCCU_TIMEOUT_REQUEST = 4;
@@ -650,27 +650,29 @@ sub HMCCU_Attr ($@)
 		elsif ($attrname eq 'ccuflags') {
 			my $ccuflags = AttrVal ($name, 'ccuflags', 'null');
 			if ($attrval =~ /(intrpc|extrpc)/) {
-				HMCCU_Log ($hash, 1, "HMCCU: [$name] RPC server mode $1 no longer supported. Using procrpc instead");
+				HMCCU_Log ($hash, 1, "RPC server mode $1 no longer supported. Using procrpc instead");
 				$attrval =~ s/(extrpc|intrpc)/procrpc/;
 				$_[3] = $attrval;
 			}
 		}
 		elsif ($attrname eq 'ccuGetVars') {
 			my ($interval, $pattern) = split /:/, $attrval;
-			$pattern = '.*' if (!defined ($pattern));
+			$interval = 60 if (!defined($interval) || $interval eq '');
+			$pattern = '.*' if (!defined($pattern) || $pattern eq '');
+			return "HMCCU: [$name] Interval is not numeric for attribute ccuGetVars" if (!HMCCU_IsIntNum($interval));
 			$hash->{hmccu}{ccuvarspat} = $pattern;
 			$hash->{hmccu}{ccuvarsint} = $interval;
-			RemoveInternalTimer ($hash, "HMCCU_UpdateVariables");
+			RemoveInternalTimer ($hash, 'HMCCU_UpdateVariables');
 			if ($interval > 0) {
-				HMCCU_Log ($hash, 2, "HMCCU: [$name] Updating CCU system variables every $interval seconds");
-				InternalTimer (gettimeofday()+$interval, "HMCCU_UpdateVariables", $hash);
+				HMCCU_Log ($hash, 2, "Updating CCU system variables matching $pattern every $interval seconds");
+				InternalTimer (gettimeofday()+$interval, 'HMCCU_UpdateVariables', $hash);
 			}
 		}
 		elsif ($attrname eq 'eventMap') {
 			my @av = map { $_ =~ /^rpcserver (on|off):(on|off)$/ || $_ eq '' ? () : $_ } split (/\//, $attrval);
 			if (scalar(@av) > 0) {
 				$_[3] = '/'.join('/',@av).'/';
-				HMCCU_Log ($hash, 2, "HMCCU: [$name] Removed rpcserver entries from attribute eventMap");
+				HMCCU_Log ($hash, 2, "Removed rpcserver entries from attribute eventMap");
 			}
 			else {
 				# Workaround because FHEM is ignoring error values for attribute eventMap
@@ -7426,7 +7428,7 @@ sub HMCCU_ExecuteRoleCommand ($@)
 
 		# Align new value with min/max boundaries
 		if (exists($cmd->{min}) && exists($cmd->{max}) && HMCCU_IsFltNum($cmd->{min}) && HMCCU_IsFltNum($cmd->{max})) {
-			# Use mode = 0 in HMCCU_ScaleValue to get the min and max value allowed
+			# Use mode = 2 in HMCCU_ScaleValue to get the min and max value allowed
 			HMCCU_Trace ($clHash, 2, "MinMax: value=$value, min=$cmd->{min}, max=$cmd->{max}");
 			my $scMin = HMCCU_ScaleValue ($clHash, $channel, $cmd->{dpt}, $cmd->{min}, 2);
 			my $scMax = HMCCU_ScaleValue ($clHash, $channel, $cmd->{dpt}, $cmd->{max}, 2);
@@ -7813,8 +7815,8 @@ sub HMCCU_ExecuteGetDeviceInfoCommand ($@)
 				"<br/>Unique control roles: $detect->{uniqueControlRoleCount}<br/>";		
 		}
 	}
-	$devInfo .= "<br/>Current state datapoint = $sc.$sd<br/>";
-	$devInfo .= "<br/>Current control datapoint = $cc.$cd<br/>";
+	$devInfo .= "<br/>Current state datapoint = $sc.$sd<br/>" if ($sc ne '' && $sd ne '');
+	$devInfo .= "<br/>Current control datapoint = $cc.$cd<br/>" if ($cc ne '' && $cd ne '');
 	$devInfo .= '<br/><b>Device description</b><br/><br/><pre>';
 	$result = HMCCU_DeviceDescToStr ($ioHash, $clHash->{TYPE} eq 'HMCCU' ? $address : $clHash);
 	$devInfo .= '</pre>';
@@ -8224,6 +8226,7 @@ sub HMCCU_GetSCDatapoints ($)
 	my ($clHash) = @_;
 
 	my $type = $clHash->{TYPE};
+	return ('', '', '', '', 0, 0) if ($type ne 'HMCCUDEV' && $type ne 'HMCCUCHN');
 
 	my ($sc, $sd) = HMCCU_StateDatapoint ($clHash);
 	my ($cc, $cd) = HMCCU_ControlDatapoint ($clHash);
@@ -8232,10 +8235,6 @@ sub HMCCU_GetSCDatapoints ($)
 	my $rcdCnt = $cc ne '' && $cd ne '' ? 1 : 0;
 
 	return ($sc, $sd, $cc, $cd, $rsdCnt, $rcdCnt) if ($rsdCnt > 0 || $rcdCnt > 0);
-
-	# Detect by attributes
-	# ($sc, $sd, $cc, $cd, $rsdCnt, $rcdCnt) = HMCCU_DetectSCAttr ($clHash, $sc, $sd, $cc, $cd);
-	# return ($sc, $sd, $cc, $cd, $rsdCnt, $rcdCnt) if ($rsdCnt);
 
 	my $ioHash = HMCCU_GetHash ($clHash);
 	return HMCCU_SetDefaultSCDatapoints ($ioHash, $clHash);
@@ -8358,133 +8357,6 @@ sub HMCCU_DetectSCAttr ($$$$$)
 
 	my $rsdCnt = $sc ne '' && $sd ne '' ? 1 : 0;
 	my $rcdCnt = $cc ne '' && $cd ne '' ? 1 : 0;
-	
-	return ($sc, $sd, $cc, $cd, $rsdCnt, $rcdCnt);
-}
-
-sub HMCCU_DetectSCChn ($;$$)
-{
-	my ($clHash, $sd, $cd) = @_;
-	$sd //= '';
-	$cd //= '';
-
-	my $role = HMCCU_GetChannelRole ($clHash);
-	HMCCU_Trace ($clHash, 2, "role=$role");
-	
-	if ($role ne '' && exists($HMCCU_STATECONTROL->{$role}) && $HMCCU_STATECONTROL->{$role}{F} & 1) {
-		my $nsd = HMCCU_DetectSCDatapoint ($HMCCU_STATECONTROL->{$role}{S}, $clHash->{ccuif});
-		my $ncd = HMCCU_DetectSCDatapoint ($HMCCU_STATECONTROL->{$role}{C}, $clHash->{ccuif});
-		HMCCU_Log ($clHash, 2, "statedatapoint of role and attribute do not match")
-			if ($nsd ne '' && $sd ne '' && $nsd ne $sd);
-		HMCCU_Log ($clHash, 2, "controldatapoint of role and attribute do not match")
-			if ($ncd ne '' && $cd ne '' && $ncd ne $cd);
-			
-		$sd = $nsd if ($nsd ne '' && $sd eq '');
-		$cd = $ncd if ($ncd ne '' && $cd eq '');
-		$clHash->{ccurolestate} = $role if ($nsd ne '');
-		$clHash->{ccurolectrl}  = $role if ($ncd ne '');
-	}
-	
-	return ($sd, $cd, $sd ne '' ? 1 : 0, $cd ne '' ? 1 : 0);
-}
-
-sub HMCCU_DetectSCDev ($;$$$$)
-{
-	my ($clHash, $sc, $sd, $cc, $cd) = @_;
-	$sc //= '';
-	$sd //= '';
-	$cc //= '';
-	$cd //= '';
-
-	# Count matching roles to prevent ambiguous definitions 
-	my ($rsc, $rsd, $rcc, $rcd) = ('', '', '', '');
-	# Priorities
-	my ($ccp, $scp) = (0, 0);
-	# Number of matching roles
-	my $rsdCnt = $sc ne '' && $sd ne '' ? 1 : 0;
-	my $rcdCnt = $cc ne '' && $cd ne '' ? 1 : 0;
-	
-	my $defRole = $HMCCU_DEF_ROLE->{$clHash->{ccusubtype}};
-	my $resRole;
-	
-	foreach my $roleDef (split(',', $clHash->{hmccu}{role})) {
-		my ($rc, $role) = split(':', $roleDef);	
-		
-		next if (!defined($role) || (defined($defRole) && $role ne $defRole));		
-
-		if (defined($role) && exists($HMCCU_STATECONTROL->{$role}) && $HMCCU_STATECONTROL->{$role}{F} & 2) {
-			my $nsd = HMCCU_DetectSCDatapoint ($HMCCU_STATECONTROL->{$role}{S}, $clHash->{ccuif});
-			if ($sd eq '' && $nsd ne '') {
-				# If state datapoint is defined for this role
-				if ($sc ne '' && $rc eq $sc) {
-					# If channel of current role matches state channel, use datapoint specified
-					# in $HMCCU_STATECONTROL as state datapoint 
-					$rsc = $sc;
-					$rsd = $nsd;
-					$clHash->{ccurolestate} = $role;
-					$rsdCnt = 1;
-				}
-				else {
-					# If state channel is not defined or role channel doesn't match state channel,
-					# assign state channel and datapoint considering role priority
-					if ($HMCCU_STATECONTROL->{$role}{P} > $scp) {
-						# Priority of this role is higher than the previous priority
-						$scp = $HMCCU_STATECONTROL->{$role}{P};
-						$rsc = $rc;
-						$rsd = $nsd;
-						$rsdCnt = 1;
-						$clHash->{ccurolestate} = $role;
-					}
-					elsif ($HMCCU_STATECONTROL->{$role}{P} == $scp) {
-						# Priority of this role is equal to previous priority. We found more
-						# than 1 matching roles. We use the first matching role/channel, but count
-						# the number of matching roles.
-						if ($rsc eq '') {
-							$rsc = $rc;
-							$rsd = $nsd;
-							$clHash->{ccurolestate} = $role;
-						}
-						$rsdCnt++;
-					}
-				}
-			}
-			if ($cd eq '' && $HMCCU_STATECONTROL->{$role}{C} ne '') {
-				my $ncd = HMCCU_DetectSCDatapoint ($HMCCU_STATECONTROL->{$role}{C}, $clHash->{ccuif});
-				if ($cc ne '' && $rc eq $cc) {
-					$rcc = $cc;
-					$rcd = $ncd;
-					$clHash->{ccurolectrl} = $role;
-					$rcdCnt = 1;
-				}
-				else {
-					# If control channel is not defined or role channel doesn't match control channel,
-					# assign control channel and datapoint considering role priority
-					if ($HMCCU_STATECONTROL->{$role}{P} > $scp) {
-						# Priority of this role is higher than the previous priority
-						$scp = $HMCCU_STATECONTROL->{$role}{P};
-						$rcc = $rc;
-						$rcd = $ncd;
-						$rcdCnt = 1;
-						$clHash->{ccurolectrl} = $role;
-					}
-					elsif ($HMCCU_STATECONTROL->{$role}{P} == $scp) {
-						# Priority of this role is equal to previous priority. We found more
-						# than 1 matching roles. We use the first matching role/channel, but count
-						# the number of matching roles.
-						if ($rcc eq '') {
-							$rcc = $rc;
-							$rcd = $ncd;
-							$clHash->{ccurolectrl} = $role;
-						}
-						$rcdCnt++;
-					}
-				}
-			}
-		}
-	}
-
-	($sc, $sd) = ($rsc, $rsd) if ($rsdCnt > 0 && $sd eq '');
-	($cc, $cd) = ($rcc, $rcd) if ($rcdCnt > 0 && $cd eq '');
 	
 	return ($sc, $sd, $cc, $cd, $rsdCnt, $rcdCnt);
 }
@@ -9298,12 +9170,12 @@ sub HMCCU_SetMultipleParameters ($$$;$)
 	my ($clHash, $address, $params, $paramSet) = @_;
 	$paramSet //= 'VALUES';
 	$address =~ s/:d$//;
+	my $clName = $clHash->{NAME};
 
 	my ($add, $chn) = HMCCU_SplitChnAddr ($address, 'd');
 	return (-1, undef) if ($paramSet eq 'VALUES' && $chn eq 'd');
 	
 	foreach my $p (sort keys %$params) {
-		HMCCU_Trace ($clHash, 2, "Parameter=$address.$paramSet.$p chn=$chn Value=$params->{$p}");
 		return (-8, undef) if (
 			($paramSet eq 'VALUES' && !HMCCU_IsValidParameter ($clHash, $address, 'VALUES', $p, 2)) ||
 			($paramSet eq 'MASTER' && !HMCCU_IsValidParameter ($clHash, $address, 'MASTER', $p))
@@ -9311,7 +9183,10 @@ sub HMCCU_SetMultipleParameters ($$$;$)
 		if ($params->{$p} !~ /:(STRING|BOOL|INTEGER|FLOAT|DOUBLE)$/) {
 			$params->{$p} = HMCCU_ScaleValue ($clHash, $chn, $p, $params->{$p}, 1, $paramSet);
 		}
+		HMCCU_Trace ($clHash, 2, "set parameter=$address.$paramSet.$p chn=$chn value=$params->{$p}");
 	}
+
+	return 0 if (HMCCU_IsFlag ($clName, 'simulate'));
 
 	return HMCCU_RPCParamsetRequest ($clHash, 'putParamset', $address, $paramSet, $params);
 }
@@ -9364,8 +9239,6 @@ sub HMCCU_SetMultipleDatapoints ($$)
 		return -4 if (exists($clHash->{ccudevstate}) && $clHash->{ccudevstate} eq 'deleted');
 		return -21 if (IsDisabled ($clHash->{NAME}));
 	
-		HMCCU_Trace ($clHash, 2, "dpt=$p, value=$v");
-
 		# Check client device type and datapoint
 		my $clType = $clHash->{TYPE};
 		my $ccuType = $clHash->{ccutype};
@@ -9399,6 +9272,9 @@ sub HMCCU_SetMultipleDatapoints ($$)
 				$v = HMCCU_GetEnumValues ($ioHash, $paramDef, $dpt, $v);
 			}
 		}
+
+		HMCCU_Trace ($clHash, 2, "set dpt=$p, value=$v");
+
 #		my $dptType = HMCCU_GetDatapointAttr ($ioHash, $ccuType, $chn, $dpt, 'type');
 #		$v = "'".$v."'" if (defined($dptType) && $dptType == $HMCCU_TYPE_STRING);
 		my $c = '(datapoints.Get("'.$int.'.'.$add.':'.$chn.'.'.$dpt.'")).State('.$v.");\n";
@@ -9411,6 +9287,9 @@ sub HMCCU_SetMultipleDatapoints ($$)
 		}
 	}
 	
+	HMCCU_Trace ($clHash, 2, "cmd=$cmd");
+	return 0 if (HMCCU_IsFlag ($clName, 'simulate'));
+
 	if ($ccuFlags =~ /nonBlocking/) {
 		# Execute command (non blocking)
 		HMCCU_HMCommandNB ($clHash, $cmd, undef);
@@ -9425,7 +9304,10 @@ sub HMCCU_SetMultipleDatapoints ($$)
 
 ######################################################################
 # Scale, spread and/or shift datapoint value.
-# Mode: 0 = Get/Multiply, 1 = Set/Divide, 2 = Scale min/max value
+# Mode:
+#   0 = Get/Multiply/Scale up
+#   1 = Set/Divide/Scale down
+#   2 = Scale min/max value
 # Supports reversing of value if value range is specified. Syntax for
 # Rule is:
 #   [ChannelNo.]Datapoint:Factor
@@ -9442,7 +9324,11 @@ sub HMCCU_ScaleValue ($$$$$;$)
 	my $name = $hash->{NAME};
 	my $ioHash = HMCCU_GetHash ($hash);
 
-	my $boundsChecking = HMCCU_IsFlag ($name, 'noBoundsChecking') ? 0 : 1;
+	my $boundsChecking = (
+		$mode == 2 ||
+		($mode == 0 && $dpt =~ /^LEVEL/ && ($value == -0.005 || $value == 1.005 || $value == 1.01)) ||
+		($mode == 1 && $dpt =~ /^LEVEL/ && ($value == -0.5 || $value == 100.5 || $value == 101))
+	) ? 0 : 1;
 
 	# Get parameter definition and min/max values
 	my $min;
@@ -9543,12 +9429,11 @@ sub HMCCU_ScaleValue ($$$$$;$)
 		$value = HMCCU_ConvertTime ($value, $unit, $mode);
 	}
 	elsif (defined($unit) && $unit =~ /^([0-9]+)%$/) {
-		# percentage values
 		my $f = $1;
 		$min //= 0;
 		$max //= 1.0;
 		if ($mode == 0 || $mode == 2) {
-			$value = HMCCU_MinMax ($value, $min, $max)*$f;
+			$value = $boundsChecking ? HMCCU_MinMax ($value, $min, $max)*$f : $value*$f;
 		}
 		else {
 			$value = $boundsChecking ? HMCCU_MinMax($value, $min*$f, $max*$f)/$f : $value/$f;
@@ -10154,7 +10039,7 @@ sub HMCCU_BuildURL ($$)
 		$password = HMCCU_Decrypt ($encpass);
 	}
 	my $auth = ($username ne '' && $password ne '') ? "$username:$password".'@' : '';
-		
+
 	if ($backend eq 'rega') {
 		$url = $hash->{prot}."://$auth".$hash->{host}.':'.
 			$HMCCU_REGA_PORT{$hash->{prot}}.'/tclrega.exe';
@@ -10812,8 +10697,7 @@ sub HMCCU_MaxHashEntries ($$)
       	Acknowledge "device was unreachable" messages in CCU.
       </li><br/>
       <li><b>set &lt;name&gt; authentication [&lt;username&gt; &lt;password&gt;]</b><br/>
-      	Set credentials for CCU authentication. Authentication must be activated by setting flag
-      	'authenticate' in attribute 'ccuflags'.<br/>
+      	Set credentials for CCU authentication.<br/>
       	When executing this command without arguments, the credentials are deleted.
       </li><br/>
       <li><b>set &lt;name&gt; clear [&lt;reading-exp&gt;]</b><br/>
@@ -11088,7 +10972,8 @@ sub HMCCU_MaxHashEntries ($$)
       </li><br/>
       <li><b>ccuGetVars &lt;interval&gt;:[&lt;pattern&gt;]</b><br/>
       	Read CCU system variables periodically and update readings. If pattern is specified
-      	only variables matching this expression are stored as readings.
+      	only variables matching this expression are stored as readings. Delete attribute or set
+		<i>interval</i> to 0 to deactivate the polling of system variables.
       </li><br/>
       <li><b>ccuReqTimeout &lt;Seconds&gt;</b><br/>
       	Set timeout for CCU request. Default is 4 seconds. This timeout affects several

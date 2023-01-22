@@ -1,6 +1,6 @@
 "use strict";
 var FW_version={};
-FW_version["fhemweb.js"] = "$Id: fhemweb.js 25983 2022-04-19 17:26:44Z rudolfkoenig $";
+FW_version["fhemweb.js"] = "$Id: fhemweb.js 26803 2022-12-06 18:18:56Z rudolfkoenig $";
 
 var FW_serverGenerated;
 var FW_jsLog;
@@ -233,26 +233,6 @@ FW_jqueryReadyFn()
     });
   });
 
-  $("div.devSpecHelp a").each(function(){       // Help on detail window
-    var dev = FW_getLink(this).split("#").pop();
-    $(this).unbind("click");
-    $(this).attr("href", "#"); // Desktop: show underlined Text
-    $(this).removeAttr("onclick");
-
-    $(this).click(function(evt){
-      if($("#devSpecHelp").length) {
-        $("#devSpecHelp").remove();
-        return;
-      }
-      FW_getHelp(dev, function(data){
-        $("#content").append('<div id="devSpecHelp"></div>');
-        $("#devSpecHelp").html(data);
-        var off = $("#devSpecHelp").position().top-20;
-        $('body, html').animate({scrollTop:off}, 500);
-      });
-    });
-  });
-
   $("table.attributes tr div.dname")    // Click on attribute fills input value
     .each(function(){
       $(this)
@@ -298,7 +278,7 @@ FW_jqueryReadyFn()
   var sa = location.search.substring(1).split("&");
   for(var i = 0; i < sa.length; i++) {
     var kv = sa[i].split("=");
-    FW_urlParams[kv[0]] = kv[1];
+    FW_urlParams[kv[0]] = decodeURIComponent(kv[1]);
   }
 
   $("select[id^=sel_attr],select[id^=sel_set],select[id^=sel_get]")
@@ -315,7 +295,7 @@ FW_jqueryReadyFn()
 
   FW_smallScreenCommands();
   FW_inlineModify();
-  FW_rawDef();
+  FW_detLink();
   FW_treeMenu();
 
   $("body").attr("data-os", FW_os);
@@ -392,6 +372,14 @@ FW_displayHelp(devName, sel, selType, val, group)
         $(sel).closest("div[cmd='"+selType+"']")
            .after('<div class="makeTable" id="devSpecHelp"></div>')
         $("#devSpecHelp").html($(liTag).html());
+        $("#devSpecHelp a").each(function(){ // #130694
+          var href = $(this).attr("href");
+          if(href && href.indexOf("#") == 0) {
+            $(this).attr("target", "_blank");
+            $(this).attr("href",
+                addcsrf(FW_root+"/docs/commandref.html"+$(this).attr("href")));
+          }
+        });
       }
     }
     wb.remove();
@@ -464,6 +452,47 @@ FW_filterIcons()
   }
 }
 
+
+function
+FW_delete(cmd, fCmd)
+{
+  if($("body").attr("data-hiddenroom").match(/\binput\b/))
+    return FW_okDialog("Disabled");
+
+  if(!fCmd)
+    fCmd = addcsrf(FW_root+"?cmd="+cmd);
+
+  var cd = $("body").attr("data-confirmDelete");
+  if(!cd || cd == 0) {
+    location.href = fCmd;
+    return;
+  }
+
+  var div = $("<div>");
+  $(div).html("Do you really want to "+cmd+"?<br><br>"+
+    "<input type='checkbox' name='noconf'> Skip this dialog in the future");
+  $("body").append(div);
+
+  $(div).dialog({
+    dialogClass:"no-close", modal:true, width:"auto", closeOnEscape:true, 
+    maxWidth:$(window).width()*0.9, maxHeight:$(window).height()*0.9,
+    buttons: [
+      {text:"Yes", click:function(){ doClose(); location.href = fCmd; }},
+      {text:"No",  click:doClose} ],
+    close: doClose
+  });
+
+  function
+  doClose()
+  {
+    var wn = $("body").attr("data-webName");
+    if($(div).find("input:checked").length)
+      FW_cmd(FW_root+"?cmd=attr "+wn+" confirmDelete 0&XHR=1");
+    $(this).dialog("close"); $(div).remove();
+  }
+}
+
+// For all the links starting with delete (deleteattr, etc)
 function
 FW_confirmDelete()
 {
@@ -479,33 +508,38 @@ FW_confirmDelete()
     var ma = $(this).attr("href").match(/.*cmd[^=]*=(delete[^&]*).*$/);
     if(!ma || ma.length != 2)
       return;
-    $(this).attr("href", "#");
-    $(this).unbind("click");
-    $(this).click(function(e){
-      e.preventDefault();
-
-      var div = $("<div id='FW_okDialog'>");
-      $(div).html("Do you really want to "+ma[1]+"?<br><br>"+
-        "<input type='checkbox' name='noconf'> Skip this dialog in the future");
-      $("body").append(div);
-
-      function
-      doClose()
-      {
-          if($(div).find("input:checked").length)
-            FW_cmd(FW_root+"?cmd=attr "+wn+" confirmDelete 0&XHR=1");
-          $(this).dialog("close"); $(div).remove();
-      }
-
-      $(div).dialog({
-        dialogClass:"no-close", modal:true, width:"auto", closeOnEscape:true, 
-        maxWidth:$(window).width()*0.9, maxHeight:$(window).height()*0.9,
-        buttons: [
-          {text:"Yes", click:function(){ location.href = ma[0]; doClose(); }},
-          {text:"No",  click:function(){ doClose(); }}]
-      });
-    });
+    FW_removeLink(this);
+    $(this).click(function(e){ FW_delete(ma[1], ma[0]); return false; });
   });
+}
+
+function
+FW_renameDevice(dev)
+{
+  var div = $("<div>");
+  $(div).html('Rename '+dev+
+        ' to:<br><br><input type="text" size="30" value="'+dev+'">');
+  $("body").append(div);
+
+  $(div).dialog({
+    dialogClass:"no-close", modal:true, width:"auto", closeOnEscape:true, 
+    maxWidth:$(window).width()*0.9, maxHeight:$(window).height()*0.9,
+    buttons: [
+      {text:"Rename", click:function(){ 
+        var nn = $(div).find("input").val();
+        if(!nn.match(/^[a-z0-9._]*$/i))
+          return FW_okDialog("Illegal characters in the new name");
+        location.href=addcsrf(FW_root+"?cmd=rename "+dev+" "+nn+"&detail="+nn);
+      }},
+      {text:"Cancel", click:doClose} ],
+    close: doClose
+  });
+
+  function
+  doClose()
+  {
+    $(this).dialog("close"); $(div).remove();
+  }
 }
 
 // Show the webCmd list in a dialog if: smallScreen & hiddenroom=detail & room
@@ -844,6 +878,18 @@ FW_inlineModify()       // Do not generate a new HTML page upon pressing modify
       AddCodeMirror(s[0], function(pcm) {cm = pcm;});
     }
     });
+
+  var hr = $("body").attr("data-hiddenroom");
+  if(!hr || !hr.match(/\binput\b/)) {
+    $("table.internals div.dname").each(function(){
+      if($(this).text() == "NAME") {
+        var dev = $(this).attr("data-name");
+        var a=$("<a style='cursor:pointer'>NAME</a>");
+        $(this).html(a);
+        a.click(function(){ FW_renameDevice(dev) });
+      }
+    });
+  }
     
   // Set and attr 
   $("div input.psc[type=submit]:not(.get)").click(function(e){
@@ -902,27 +948,93 @@ FW_inlineModify()       // Do not generate a new HTML page upon pressing modify
   });
 }
 
-function
-FW_rawDef()
-{
-  $("div.rawDef a").each(function(){       // Help on detail window
-    var dev = FW_getLink(this).split(" ").pop().split("&")[0];
-    $(this).unbind("click");
-    $(this).attr("href", "#"); // Desktop: show underlined Text
-    $(this).removeAttr("onclick");
 
-    $(this).click(function(evt){
+function
+FW_removeLink(el)
+{
+  $(el).unbind("click");
+  $(el).attr("href", "#"); // Desktop: show underlined Text
+  $(el).removeAttr("onclick"); // smallscreen style
+}
+
+// Fill the "detLink" line with life
+function
+FW_detLink()
+{
+  if(FW_isiOS || FW_os == "osx") {      // our copy fails here
+    $("#detLink a[href*=forumCopy]").parent().remove();
+    $("#detLink option[data-cmd^=forumCopy]").remove();
+  }
+
+  $("#detLink a").each(function(){
+    var m = FW_getLink(this).match(/cmd=([^&]*)/);
+    if(!m)      // delete is already processed
+      return;
+    FW_removeLink(this);
+    $(this).click(function(){doDetCmd(m[1])});
+  });
+  $("#detLink select#moreCmds").change(function(){
+    doDetCmd($(this).find("option:selected").attr("data-cmd"));
+  });
+
+  function
+  doDetCmd(fCmd)
+  {
+    if(!fCmd)
+      return;
+    var m = fCmd.match(/^([^ ]+) (.*)$/);
+    if(!m)
+      return;
+
+    var cmd=m[1], dev=m[2];
+
+    if(cmd == "devSpecHelp") {
+      if($("#devSpecHelp").length) {
+        $("#devSpecHelp").remove();
+        return;
+      }
+      FW_getHelp(dev, function(data){
+        $("#content").append('<div id="devSpecHelp"></div>');
+        $("#devSpecHelp").html(data);
+        var off = $("#devSpecHelp").position().top-20;
+        $('body, html').animate({scrollTop:off}, 500);
+      });
+
+    } else if(cmd == "forumCopy") {
+      FW_cmd(FW_root+"?cmd=list -r -i "+dev+"&XHR=1", function(data) {
+        var ta = document.createElement("textarea"), at="";
+        if(data.length > 50*1000) {
+          data = data.substr(0,50*1000)+
+                  "\n# ... truncated to 50k, original length "+data.length;
+          at = "<br><br>Text truncated to 50k due to forum restrictions.";
+        }
+        ta.value = '[code]'+data+'[/code]';
+        document.body.appendChild(ta);
+        ta.select();
+        if(document.execCommand('copy'))
+          FW_okDialog('"forum ready" definition copied to the clipboard.'+at);
+         else
+          FW_okDialog('Could not copy');
+        document.body.removeChild(ta);
+      });
+
+    } else if(cmd == "delete") {
+      FW_delete("delete "+dev);
+
+    } else if(cmd == "rawDef") {
       if($("#rawDef").length) {
         $("#rawDef").remove();
         return;
       }
-      var textAreaStyle = typeof AddCodeMirror == 'function'?'opacity:0':'';
 
+      var textAreaStyle = typeof AddCodeMirror == 'function'?'opacity:0':'';
       $("#content").append('<div id="rawDef">'+
           '<textarea id="td_rawDef" rows="25" cols="60" style="width:99%; '+
                 textAreaStyle+'"/>'+
           '<button>Execute commands</button>'+
-          ' Dump "Probably associated with" too <input type="checkbox">'+
+          ' Dump "Probably associated with" too '+
+                '<input class="paw" type="checkbox">'+
+          ' With internals <input class="int" type="checkbox">'+
         '<br><br></div>');
 
       var cmVar;
@@ -943,7 +1055,8 @@ FW_rawDef()
 
           var propertychange = function() {
             var nData = $("#rawDef textarea").val();
-            if(nData != data)
+            if(nData != data &&
+               !$("body").attr("data-hiddenroom").match(/\binput\b/))
               $("#rawDef button").show();
             else
               $("#rawDef button").hide();
@@ -967,15 +1080,20 @@ FW_rawDef()
         });
       }
       fillData("-r");
-
-      $("#rawDef input").click(function(){fillData(this.checked ?"-R":"-r")});
-
+      $("#rawDef input").click(function(){
+        fillData(
+          ($("input.paw").is(":checked") ? "-R" : "-r")+
+          ($("input.int").is(":checked") ? " -i" : ""));
+      });
       $("#rawDef button").click(function(){
         FW_execRawDef($("#rawDef textarea").val());
       });
-    });
 
-  });
+    } else {
+      location.href = addcsrf(FW_root+"?cmd="+cmd+" "+dev);
+
+    }
+  }
 }
 
 function
@@ -1220,7 +1338,8 @@ FW_doUpdate(evt)
       try {
         eval(d[1]);
       } catch(e) {
-        FW_okDialog("#FHEMWEB notification:<br>"+d[1]+"<br>"+e);
+        if($("body").attr("data-confirmJSError") != 0)
+          FW_okDialog("#FHEMWEB notification:<br>"+d[1]+"<br>"+e);
       }
 
     } else {
@@ -1269,8 +1388,8 @@ FW_longpoll()
 
   // Build the notify filter for the backend
   var filter = $("body").attr("longpollfilter");
-  if(filter == null)
-    filter = "";
+  filter = filter ? decodeURIComponent(filter) : "";
+
   var retry;
   if(filter == "") {
     $("embed").each(function() {        // wait for all embeds to be there
@@ -1290,7 +1409,9 @@ FW_longpoll()
   }
 
   if(filter == "") {
-    if(FW_urlParams.room)   filter="room="+FW_urlParams.room;
+    if(FW_urlParams.room)
+        filter="room="+FW_urlParams.room
+                      .replace(/[[\]().+*?]/g, function(r){return '\\'+r});
     if(FW_urlParams.detail) filter=FW_urlParams.detail;
   }
 
@@ -1302,7 +1423,8 @@ FW_longpoll()
     if(content) {
       var room = content.getAttribute("room");
       if(room)
-        filter="room="+room;
+        filter="room="+room
+                      .replace(/[[\]().+*?]/g, function(r){return '\\'+r});
     }
   }
 
@@ -1318,8 +1440,10 @@ FW_longpoll()
   if(FW_serverGenerated)
     since = FW_serverLastMsg + (FW_serverGenerated-FW_serverFirstMsg);
 
+  var inform = encodeURIComponent("type=status;filter="+filter+
+                                  ";since="+since+";fmt=JSON"); // 128651
   var query = "?XHR=1"+
-              "&inform=type=status;filter="+filter+";since="+since+";fmt=JSON"+
+              "&inform="+inform+
               '&fw_id='+$("body").attr('fw_id')+
               "&timestamp="+new Date().getTime();
 
@@ -2232,6 +2356,56 @@ FW_checkNotifydev(reName)
       });
 
     });
+}
+
+function
+FW_rescueClient(pid, key)
+{
+  var html='<div id="rescueDialog" style="display:none">';
+  if(!pid || pid == "0") {
+    html += '<b>Key (send it to the rescuer):</b><br>'+
+            (key ? '<code>'+key+'</code>' : 'Not found, generate one first');
+    html += '<br><br>';
+  }
+
+  var buttons = [];
+
+  if(key) {
+    if(pid && pid != "0") {
+      html += "<div>There is a connection with pid "+pid+"</div><br>";
+      buttons.push({
+        text:"Terminate connection",
+        click:function(){
+          FW_cmd(FW_root+
+            "?cmd=set "+$("body").attr("data-webname")+
+            " rescueTerminate&XHR=1");
+          setTimeout(function(){ location.reload() }, 1000);
+        }});
+
+    } else {
+      html += "Address (rescuer will tell you host and port)<br>";
+      html += "<input type='text' size='20' placeholder='host port' >";
+
+      buttons.push({
+        text:"Start connection",
+        click:function(){
+          FW_cmd(FW_root+
+            "?cmd=set "+$("body").attr("data-webname")+" rescueStart "+
+            $("#rescueDialog input").val()+"&XHR=1");
+          setTimeout(function(){ location.reload() }, 1000);
+        }});
+    }
+  }
+
+  buttons.push({ text:"Cancel", click:function(){ $(this).dialog('close')} });
+
+  $('body').append(html);
+
+  $('#rescueDialog').dialog({
+    modal:true, closeOnEscape:true, width:"auto",
+    close:function(){ $('#rescueDialog').remove(); },
+    buttons:buttons
+  });
 }
 
 /*

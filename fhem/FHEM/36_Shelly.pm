@@ -5,7 +5,7 @@
 #  FHEM module to communicate with Shelly switch/roller actor devices
 #  Prof. Dr. Peter A. Henning, 2022
 # 
-#  $Id: 36_Shelly.pm 25989 2022-04-22 16:04:09Z phenning $
+#  $Id: 36_Shelly.pm 26017 2022-05-02 07:04:23Z phenning $
 #
 ########################################################################################
 #
@@ -39,7 +39,7 @@ use vars qw{%attr %defs};
 sub Log($$);
 
 #-- globals on start
-my $version = "4.0";
+my $version = "4.01";
 
 #-- these we may get on request
 my %gets = (
@@ -1115,7 +1115,7 @@ sub Shelly_proc1G {
   }
   #############################################################################################################################
   #-- 1st generation: we have a shelly1, shelly1pm, shellypro4, shelly2, shelly25, shellyplug or shellyem switch type device
-  if( ($model =~ /shelly1.*/) || ($model eq "shellyuni") || ($model eq "shellyplug") || ($model =~ /shelly(pro)?4/) || ($model =~ /shellyem.?/) || (($model =~ /shelly2.*/) && ($mode eq "relay")) ){
+  if( ($model =~ /shelly1.*/) || ($model eq "shellyuni") || ($model eq "shellyplug") || ($model =~ /shelly(pro)?4/) || ($model =~ /shelly.?em/) || (($model =~ /shelly2.*/) && ($mode eq "relay")) ){
     for( my $i=0;$i<$channels;$i++){
       $subs = (($channels == 1) ? "" : "_".$i);
       $ison       = $jhash->{'relays'}[$i]{'ison'};
@@ -1136,13 +1136,13 @@ sub Shelly_proc1G {
       readingsBulkUpdateIfChanged($hash,"voltage",$voltage);
     }
 
-    my $metern = ($model =~ /shellyem.?/)?"emeters":"meters";
+    my $metern = ($model =~ /shelly.?em/)?"emeters":"meters";
     for( my $i=0;$i<$meters;$i++){
       $subs  = ($meters == 1) ? "" : "_".$i;
       $power = $jhash->{$metern}[$i]{'power'};
       $energy = int($jhash->{$metern}[$i]{'total'}/6)/10;
       readingsBulkUpdateIfChanged($hash,"power".$subs,$power);
-      if ($model =~ /shellyem.?/) {
+      if ($model =~ /shelly.?em/) {
         my $voltage = $jhash->{$metern}[$i]{'voltage'};
         readingsBulkUpdateIfChanged($hash,'voltage'.$subs,$voltage);
         my $reactivePower = $jhash->{$metern}[$i]{'reactive'};

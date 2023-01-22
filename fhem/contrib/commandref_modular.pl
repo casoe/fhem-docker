@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# $Id: commandref_modular.pl 24801 2021-07-26 11:49:46Z rudolfkoenig $
+# $Id: commandref_modular.pl 26331 2022-08-17 20:12:34Z rudolfkoenig $
 
 use strict;
 use warnings;
@@ -86,7 +86,7 @@ for my $lang (@lang) {
         $modData{$mName}{type}=$1 if($l =~ m/^=item\s+(helper|command|device)/);
         $modData{$mName}{$1}  =$2 if($l =~ m/^=item\s+(summary[^ ]*)\s(.*)$/);
         $modData{$mName}{modLinks}{$2} = 1
-                 if($l =~ m/<a\s+(name|id)=['"]([^ '"]+)['"]>/);
+                 if($l =~ m/<a\s+(name|id)=['"]([^ '"]+)['"]/);
       }
       $modData{$mName}{modLangs} = join(",", @lang);
       close(FH);

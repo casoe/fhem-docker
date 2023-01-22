@@ -1,11 +1,12 @@
 ##############################################
-# $Id: HttpUtils.pm 25784 2022-03-06 09:20:24Z rudolfkoenig $
+# $Id: HttpUtils.pm 27022 2023-01-11 07:51:42Z rudolfkoenig $
 package main;
 
 use strict;
 use warnings;
 use MIME::Base64;
 use Digest::MD5 qw(md5_hex);
+use Digest::SHA qw(sha256_hex);
 use vars qw($SSL_ERROR);
 
 # Note: video does not work for every browser (Forum #73214)
@@ -147,12 +148,18 @@ HttpUtils_dumpDnsCache()
   my @ret;
   my $max = 0;
   map { my $l=length($_); $max=$l if($l>$max) } keys %HU_dnsCache;
-  for my $hn (sort keys %HU_dnsCache) {
-    push @ret, sprintf("%*s   TS: %s   TTL: %5s   ADDR: %s", -$max, $hn, 
-      FmtDateTime($HU_dnsCache{$hn}{TS}), $HU_dnsCache{$hn}{TTL},
-      join(".", unpack("C*", $HU_dnsCache{$hn}{addr})));
+  for my $key (sort keys %HU_dnsCache) {
+    push @ret, sprintf("%*s   TS: %s   TTL: %5s   ADDR: %s", -$max, $key, 
+      FmtDateTime($HU_dnsCache{$key}{TS}), $HU_dnsCache{$key}{TTL},
+      join(".", unpack("C*", $HU_dnsCache{$key}{addr})));
   }
   return join("\n", @ret);
+}
+
+sub
+HttpUtils_clearDnsCache()
+{
+  %HU_dnsCache = ();
 }
 
 sub
@@ -189,6 +196,14 @@ HttpUtils_dnsParse($$$)
   return "No A record found";
 }
 
+
+sub
+HttpUtils_wantInet6($)
+{
+  my ($hash) = @_;
+  return $haveInet6 && (!defined($hash->{try6}) || $hash->{try6} == 1);
+}
+
 # { HttpUtils_gethostbyname({timeout=>4}, "fhem.de", 1,
 #   sub(){my($h,$e,$a)=@_;; Log 1, $e ? "ERR:$e": ("IP:".ip2str($a)) }) }
 sub
@@ -205,7 +220,7 @@ HttpUtils_gethostbyname($$$$)
   my $dnsServer = AttrVal("global", "dnsServer", undef);
 
   if(!$dnsServer) { # use the blocking libc to get the IP
-    if($haveInet6) {
+    if(HttpUtils_wantInet6($hash)) {
       $host = $1 if($host =~ m/^\[([a-f0-9:]+)\]+$/); # remove [] from IPV6
       my $iaddr = Socket6::inet_pton(AF_INET6, $host);  # Try it as IPV6
       return $fn->($hash, undef, $iaddr) if($iaddr);
@@ -243,10 +258,10 @@ HttpUtils_gethostbyname($$$$)
     return;
   }
 
-  return $fn->($hash, undef, $HU_dnsCache{$host}{addr}) # check the cache
-        if($HU_dnsCache{$host} &&
-           $HU_dnsCache{$host}{TS}+$HU_dnsCache{$host}{TTL} > gettimeofday());
-
+  my $dnsKey = "$host/".($try6 ? "IPv6" : "IPv4");
+  return $fn->($hash, undef, $HU_dnsCache{$dnsKey}{addr}) # check the cache
+        if($HU_dnsCache{$dnsKey} &&
+           $HU_dnsCache{$dnsKey}{TS}+$HU_dnsCache{$dnsKey}{TTL}>gettimeofday());
   my $dh = AttrVal("global", "dnsHostsFile", "undef");
   if($dh) {
     my $fh;
@@ -293,9 +308,10 @@ HttpUtils_gethostbyname($$$$)
       if($err && $dh->{try6});
     return $dh->{callback}->($dh->{origHash}, "DNS: $err", undef) if($err);
     Log 4, "DNS result for $dh->{host}: ".ip2str($addr).", ttl:$ttl";
-    $HU_dnsCache{$dh->{host}}{TS} = gettimeofday();
-    $HU_dnsCache{$dh->{host}}{TTL} = $ttl;
-    $HU_dnsCache{$dh->{host}}{addr} = $addr;
+    my $dnsKey = $dh->{host}."/".($dh->{try6} ? "IPv6" : "IPv4");
+    $HU_dnsCache{$dnsKey}{TS} = gettimeofday();
+    $HU_dnsCache{$dnsKey}{TTL} = $ttl;
+    $HU_dnsCache{$dnsKey}{addr} = $addr;
     return $dh->{callback}->($dh->{origHash}, undef, $addr);
   }
   $dh{directReadFn} = \&directReadFn;
@@ -398,7 +414,8 @@ HttpUtils_Connect($)
   return HttpUtils_Connect2($hash) if($hash->{conn} && $hash->{keepalive});
 
   if($hash->{callback}) { # Nonblocking staff
-    HttpUtils_gethostbyname($hash, $host, $haveInet6, sub($$$) {
+    HttpUtils_gethostbyname($hash, $host, HttpUtils_wantInet6($hash),
+    sub($$$) {
       my ($hash, $err, $iaddr) = @_;
       $hash = $hash->{origHash} if($hash->{origHash});
       if($err) {
@@ -473,7 +490,7 @@ HttpUtils_Connect($)
     return;
 
   } else {
-    $hash->{conn} = $haveInet6 ?
+    $hash->{conn} = HttpUtils_wantInet6($hash) ?
       IO::Socket::INET6->new(PeerAddr=>"$host:$port",Timeout=>$hash->{timeout}):
       IO::Socket::INET ->new(PeerAddr=>"$host:$port",Timeout=>$hash->{timeout});
 
@@ -494,12 +511,21 @@ HttpUtils_Connect2NonblockingSSL($$)
 
   $hash->{conn}->blocking(0);
   $par->{SSL_startHandshake} = 0;
-  if(!IO::Socket::SSL->start_SSL($hash->{conn}, $par) ||
-     $hash->{conn}->connect_SSL() ||
-     $! != EWOULDBLOCK) {
+  eval {
+    if(!IO::Socket::SSL->start_SSL($hash->{conn}, $par) ||
+       $hash->{conn}->connect_SSL() ||
+       $! != EWOULDBLOCK) {
+      HttpUtils_Close($hash);
+      return $hash->{callback}($hash,
+                  "$! ".($SSL_ERROR ? $SSL_ERROR : IO::Socket::SSL::errstr()));
+    }
+  };
+  return if(!$hash->{conn}); # HttpClose was called in the EVAL
+  if($@) {
+    my $err = $@;
+    Log3 $hash, $hash->{loglevel}, $err;
     HttpUtils_Close($hash);
-    return $hash->{callback}($hash,
-                "$! ".($SSL_ERROR ? $SSL_ERROR : IO::Socket::SSL::errstr()));
+    return $hash->{callback}($hash, $err);
   }
 
   $hash->{FD} = $hash->{conn}->fileno();
@@ -663,6 +689,7 @@ HttpUtils_Connect2($)
               if($hash->{auth});
   $hdr .= $hash->{header}."\r\n" if($hash->{header});
   if(defined($data) && length($data) > 0) {
+    $data = Encode::encode("UTF-8", $data) if($unicodeEncoding);
     $ha->("Content-Length", length($data));
     $ha->("Content-Type", "application/x-www-form-urlencoded");
   }
@@ -711,6 +738,7 @@ HttpUtils_Connect2($)
       }
     };
 
+    $hdr = Encode::encode("UTF-8", $hdr) if($unicodeEncoding); #Tainting/131207
     $data = $hdr.(defined($data) ? $data:"");
     $hash->{directWriteFn} = sub($) { # Nonblocking write
       my $ret = syswrite $hash->{conn}, $data;
@@ -721,6 +749,10 @@ HttpUtils_Connect2($)
         HttpUtils_Close($hash);
         return $hash->{callback}($hash, "write error: $err", undef)
       }
+
+      Log 1, "Encoding problem in data/header (not UTF-8), check Forum #131207"
+        if(length($data) < $ret);
+
       $data = substr($data,$ret);
       if(length($data) == 0) {
         shutdown($hash->{conn}, 1) if($s);
@@ -820,7 +852,7 @@ HttpUtils_DataComplete($)
 sub
 HttpUtils_DigestHeader($$)
 {
-  my ($hash, $header) = @_;
+  my ($hash, $header) = @_; # header is $1 from WWW-Authenticate: Digest (.*)
   my %digdata;
  
   while($header =~ /(\w+)="?([^"]+?)"?(?:\s*,\s*|$)/gc) {
@@ -836,35 +868,50 @@ HttpUtils_DigestHeader($$)
   }
   $digdata{uri} = $hash->{path};
   $digdata{username} = $user;
+  $digdata{algorithm} = "MD5" if(!$digdata{algorithm} ||
+                   $digdata{algorithm} !~ m/MD5|MD5-sess|SHA-256|SHA-256-sess/);
 
-  if(exists($digdata{algorithm}) && $digdata{algorithm} eq "MD5-sess") {
+  if ($digdata{algorithm} eq "SHA-256") {
+    $ha1 = sha256_hex($user.":".$digdata{realm}.":".$passwd);
+
+  } elsif ($digdata{algorithm} eq "SHA-256-sess") {
+    $ha1 = sha256_hex(sha256_hex($user.":".$digdata{realm}.":".$passwd).
+                  ":".$digdata{nonce}.":".$digdata{cnonce});
+
+  } elsif($digdata{algorithm} eq "MD5-sess") {
     $ha1 = md5_hex(md5_hex($user.":".$digdata{realm}.":".$passwd).
                   ":".$digdata{nonce}.":".$digdata{cnonce});
+
   } else {
     $ha1 = md5_hex($user.":".$digdata{realm}.":".$passwd);
+
   }
  
-  # forcing qop=auth as qop=auth-int is not implemented
-  $digdata{qop} = "auth" if($digdata{qop});
   my $method = $hash->{method};
   $method = ($hash->{data} ? "POST" : "GET") if( !$method );
-  $ha2 = md5_hex($method.":".$hash->{path});
+  $ha2 = $digdata{algorithm} =~ m/SHA-256/ ? 
+              sha256_hex($method.":".$hash->{path}) :
+              md5_hex   ($method.":".$hash->{path});
 
-  if(exists($digdata{qop}) && $digdata{qop} =~ /(auth-int|auth)/) {
-    $digdata{response} =  md5_hex($ha1.":".
-                                  $digdata{nonce}.":".
-                                  $digdata{nc}.":".
-                                  $digdata{cnonce}.":".
-                                  $digdata{qop}.":".
-                                  $ha2);
+  if($digdata{qop}) {
+    # forcing qop=auth as qop=auth-int is not implemented
+    $digdata{qop} = "auth" if($digdata{qop});
+    $response = $ha1.":".
+                $digdata{nonce}.":".
+                $digdata{nc}.":".
+                $digdata{cnonce}.":".
+                $digdata{qop}.":".
+                $ha2;
   } else {
-    $digdata{response} = md5_hex($ha1.":".$digdata{nonce}.":".$ha2)
+    $response = $ha1.":".$digdata{nonce}.":".$ha2;
   }
+
+  $digdata{response} = $digdata{algorithm} =~ m/SHA-256/ ? 
+                   sha256_hex($response) : md5_hex($response);
  
   return "Authorization: Digest ".
          join(", ", map(($_.'='.($_ ne "nc" ? '"' :'').
                          $digdata{$_}.($_ ne "nc" ? '"' :'')), keys(%digdata)));
-
 }
 
 sub
@@ -999,12 +1046,27 @@ HttpUtils_ParseAnswer($)
 
 # Parameters in the hash:
 #  mandatory:
-#    url, callback
-#  optional(default):
-#    digest(0),hideurl(0),timeout(4),data(""),loglevel(4),header("" or HASH),
-#    noshutdown(1),shutdown(0),httpversion("1.0"),ignoreredirects(0)
-#    method($data?"POST":"GET"),keepalive(0),sslargs({}),user(),pwd()
-#    compress(1), incrementalTimeout(0), forceEncoding(undef)
+#    url,
+#    callback
+#  optional(default-value):
+#    compress(1)
+#    data("")             # sending data via POST
+#    forceEncoding(undef) # Encode received data with this charset
+#    header("" or {})
+#    hideurl(0)           # hide the url in the logs
+#    httpversion("1.0")
+#    ignoreredirects(0)
+#    incrementalTimeout(0)
+#    keepalive(0)         # leave connection open for repeated queries
+#    loglevel(4)
+#    method($data ? "POST" : "GET")
+#    noshutdown(1)        # 0: do not close write channel (see below: shutdown)
+#    pwd()                # basic auth password
+#    shutdown(0)          # close write channel after sending data / HTTP only
+#    sslargs({})
+#    timeout(4)
+#    try6()               # 0: prohibit IPV6, even if useInet6 is set
+#    user()               # basic auth uset
 # Example:
 #   { HttpUtils_NonblockingGet({ url=>"http://fhem.de/MAINTAINER.txt",
 #     callback=>sub($$$){ Log 1,"ERR:$_[1] DATA:".length($_[2]) } }) }

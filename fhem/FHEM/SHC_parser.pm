@@ -3,7 +3,7 @@
 ##########################################################################
 # This file is part of the smarthomatic module for FHEM.
 #
-# Copyright (c) 2014 Uwe Freese
+# Copyright (c) 2014, 2015, 2019 Uwe Freese
 #
 # You can find smarthomatic at www.smarthomatic.org.
 # You can find FHEM at www.fhem.de.
@@ -30,11 +30,12 @@
 # Receiving packets:
 # ------------------
 # 1.) Receive string from base station (over UART).
-# 2.) Parse received string:
-#     $parser->parse("Packet Data: SenderID=22;...");
-# 3.) Get MessageGroupName: my $grp = $parser->getMessageGroupName();
-# 4.) Get MessageName: my $msg = $parser->getMessageName();
-# 5.) Get data fields depending on MessageGroupName and MessageName, e.g.
+# 2.) Check CRC (last 8 characters, optional).
+# 3.) Parse received string:
+#     $parser->parse("PKT:SID=22;...");
+# 4.) Get MessageGroupName: my $grp = $parser->getMessageGroupName();
+# 5.) Get MessageName: my $msg = $parser->getMessageName();
+# 6.) Get data fields depending on MessageGroupName and MessageName, e.g.
 #     $val = $parser->getField("Temperature");
 #
 # Sending packets:
@@ -44,9 +45,10 @@
 # 2.) Set fields:
 #     $parser->setField("PowerSwitch", "SwitchState", "TimeoutSec", 8);
 # 3.) Get send string: $str = $parser->getSendString($receiverID);
+#     It includes a CRC32 as last 8 characters.
 # 4.) Send string to base station (over UART).
 ##########################################################################
-# $Id: SHC_parser.pm 8190 2015-03-10 21:23:03Z rr2000 $
+# $Id: SHC_parser.pm 26457 2022-09-30 19:32:11Z breaker27 $
 
 package SHC_parser;
 
@@ -54,6 +56,7 @@ use strict;
 use feature qw(switch);
 use XML::LibXML;
 use SHC_datafields;
+use Digest::CRC qw(crc32); # linux packet libdigest-crc-perl
 
 # Hash for data field definitions.
 my %dataFields = ();
@@ -98,61 +101,65 @@ sub init_datafield_positions_noarray($$$$$)
 {
   my ($messageGroupID, $messageID, $field, $arrayLength, $arrayElementBits) = @_;
 
-  given ($field->nodeName) {
-    when ('UIntValue') {
-      my $id   = ($field->findnodes("ID"))[0]->textContent;
-      my $bits = ($field->findnodes("Bits"))[0]->textContent;
+  if ($field->nodeName eq "UIntValue") {
+    my $id   = ($field->findnodes("ID"))[0]->textContent;
+    my $bits = ($field->findnodes("Bits"))[0]->textContent;
 
-      # print "Data field " . $id . " starts at " . $offset . " with " . $bits . " bits.\n";
+    # print "Data field " . $id . " starts at " . $offset . " with " . $bits . " bits.\n";
 
-      $dataFields{$messageGroupID . "-" . $messageID . "-" . $id} =
-        new UIntValue($id, $offset, $bits, $arrayLength, $arrayElementBits);
+    $dataFields{$messageGroupID . "-" . $messageID . "-" . $id} =
+      new UIntValue($id, $offset, $bits, $arrayLength, $arrayElementBits);
 
-      $offset += $bits;
+    $offset += $bits;
+  } elsif ($field->nodeName eq "IntValue") {
+    my $id   = ($field->findnodes("ID"))[0]->textContent;
+    my $bits = ($field->findnodes("Bits"))[0]->textContent;
+
+    # print "Data field " . $id . " starts at " . $offset . " with " . $bits . " bits.\n";
+
+    $dataFields{$messageGroupID . "-" . $messageID . "-" . $id} =
+      new IntValue($id, $offset, $bits, $arrayLength, $arrayElementBits);
+
+    $offset += $bits;
+  } elsif ($field->nodeName eq "FloatValue") {
+    my $id   = ($field->findnodes("ID"))[0]->textContent;
+    my $bits = 32;
+
+    # print "Data field " . $id . " starts at " . $offset . " with " . $bits . " bits.\n";
+
+    $dataFields{$messageGroupID . "-" . $messageID . "-" . $id} =
+      new FloatValue($id, $offset, $arrayLength, $arrayElementBits);
+
+    $offset += $bits;
+  } elsif ($field->nodeName eq "BoolValue") {
+    my $id   = ($field->findnodes("ID"))[0]->textContent;
+    my $bits = 1;
+
+    # print "Data field " . $id . " starts at " . $offset . " with " . $bits . " bits.\n";
+
+    $dataFields{$messageGroupID . "-" . $messageID . "-" . $id} =
+      new BoolValue($id, $offset, $arrayLength, $arrayElementBits);
+
+    $offset += $bits;
+  } elsif ($field->nodeName eq "EnumValue") {
+    my $id   = ($field->findnodes("ID"))[0]->textContent;
+    my $bits = ($field->findnodes("Bits"))[0]->textContent;
+
+    # print "Data field " . $id . " starts at " . $offset . " with " . $bits . " bits.\n";
+
+    my $object = new EnumValue($id, $offset, $bits, $arrayLength, $arrayElementBits);
+    $dataFields{$messageGroupID . "-" . $messageID . "-" . $id} = $object;
+
+    for my $element ($field->findnodes("Element")) {
+      my $value = ($element->findnodes("Value"))[0]->textContent;
+      my $name  = ($element->findnodes("Name"))[0]->textContent;
+
+      $object->addValue($name, $value);
+
+      # print "Enum value " . $value . " -> " . $name . "\n";
     }
 
-    when ('IntValue') {
-      my $id   = ($field->findnodes("ID"))[0]->textContent;
-      my $bits = ($field->findnodes("Bits"))[0]->textContent;
-
-      # print "Data field " . $id . " starts at " . $offset . " with " . $bits . " bits.\n";
-
-      $dataFields{$messageGroupID . "-" . $messageID . "-" . $id} =
-        new IntValue($id, $offset, $bits, $arrayLength, $arrayElementBits);
-
-      $offset += $bits;
-    }
-
-    when ('BoolValue') {
-      my $id   = ($field->findnodes("ID"))[0]->textContent;
-      my $bits = 1;
-
-      # print "Data field " . $id . " starts at " . $offset . " with " . $bits . " bits.\n";
-
-      $dataFields{$messageGroupID . "-" . $messageID . "-" . $id} =
-        new BoolValue($id, $offset, $arrayLength, $arrayElementBits);
-
-      $offset += $bits;
-    }
-
-    when ('EnumValue') {
-      my $id   = ($field->findnodes("ID"))[0]->textContent;
-      my $bits = ($field->findnodes("Bits"))[0]->textContent;
-
-      # print "Data field " . $id . " starts at " . $offset . " with " . $bits . " bits.\n";
-
-      my $object = new EnumValue($id, $offset, $bits, $arrayLength, $arrayElementBits);
-      $dataFields{$messageGroupID . "-" . $messageID . "-" . $id} = $object;
-
-      for my $element ($field->findnodes("Element")) {
-        my $value = ($element->findnodes("Value"))[0]->textContent;
-        my $name  = ($element->findnodes("Name"))[0]->textContent;
-
-        $object->addValue($name, $value);
-      }
-
-      $offset += $bits;
-    }
+    $offset += $bits;
   }
 }
 
@@ -167,7 +174,7 @@ sub init_datafield_positions_array($$$)
     calc_array_bits_ovr($field);    # number of bits for one struct ("set of sub-elements") in a structured array
    # print "Next field is an array with " . $arrayLength . " elements (" . $arrayElementBits . " ovr bits per array element)!\n";
 
-  for my $subfield ($field->findnodes("UIntValue|IntValue|BoolValue|EnumValue")) {
+  for my $subfield ($field->findnodes("UIntValue|IntValue|FloatValue|BoolValue|EnumValue")) {
     my $bits =
       init_datafield_positions_noarray($messageGroupID, $messageID, $subfield, $arrayLength, $arrayElementBits);
   }
@@ -187,6 +194,10 @@ sub calc_array_bits_ovr($)
 
   for my $subfield ($field->findnodes("UIntValue|IntValue|EnumValue")) {
     $bits += ($subfield->findnodes("Bits"))[0]->textContent;
+  }
+
+  for my $subfield ($field->findnodes("FloatValue")) {
+    $bits += 32;
   }
 
   return $bits;
@@ -223,7 +234,7 @@ sub init_datafield_positions()
 
       $offset = 0;
 
-      for my $field ($message->findnodes("Array|UIntValue|IntValue|BoolValue|EnumValue")) {
+      for my $field ($message->findnodes("Array|UIntValue|IntValue|FloatValue|BoolValue|EnumValue")) {
 
         # When an array is detected, remember the array length and change the current field node
         # to the inner node for further processing.
@@ -250,10 +261,10 @@ sub parse
   if (
     (
       $msg =~
-/^Packet Data: SenderID=(\d*);PacketCounter=(\d*);MessageType=(\d*);MessageGroupID=(\d*);MessageID=(\d*);MessageData=([^;]*);.*/
+/^PKT:SID=(\d+);PC=(\d+);MT=(\d+);MGID=(\d+);MID=(\d+);MD=([^;]+);.*/
     )
     || ($msg =~
-/^Packet Data: SenderID=(\d*);PacketCounter=(\d*);MessageType=(\d*);AckSenderID=\d*;AckPacketCounter=\d*;Error=\d*;MessageGroupID=(\d*);MessageID=(\d*);MessageData=([^;]*);.*/
+/^PKT:SID=(\d+);PC=(\d+);MT=(\d+);ASID=\d+;APC=\d+;E=\d+;MGID=(\d+);MID=(\d+);MD=([^;]+);.*/
     )
     )
   {
@@ -311,6 +322,9 @@ sub getMessageData
       $res .= sprintf("%02X", $_);
     }
 
+	# strip trailing zeros (pairwise)
+	$res =~ s/(00)+$//;
+
     return $res;
   } else {
     return $self->{_messageData};
@@ -326,7 +340,7 @@ sub getField
   }
 
   my $obj = $dataFields{$self->{_messageGroupID} . "-" . $self->{_messageID} . "-" . $fieldName};
-  
+
   # add 256 "empty" bytes to have enough data in the array because the message may be truncated
   my @tmpArray = map hex("0x$_"), ($self->{_messageData} . ("00" x 256)) =~ /(..)/g;
 
@@ -365,8 +379,8 @@ sub setField
   $obj->setValue(\@msgData, $value, $index);
 }
 
-# sKK01RRRRGGMMDD
-# s0001003D3C0164 = SET    Dimmer Switch Brightness 50%
+# cKK01RRRRGGMMDD{CRC32}
+# c0001003D3C0164 = SET    Dimmer Switch Brightness 50%
 sub getSendString
 {
   my ($self, $receiverID, $aesKeyNr) = @_;
@@ -382,13 +396,15 @@ sub getSendString
     $aesKeyNr = 0;
   }
 
-  my $s = "s"
+  my $s = "c"
     . sprintf("%02X", $aesKeyNr)
     . sprintf("%02X", $self->{_messageTypeID})
     . sprintf("%04X", $receiverID)
     . sprintf("%02X", $self->{_messageGroupID})
     . sprintf("%02X", $self->{_messageID})
     . getMessageData();
+
+  return $s . sprintf("%08x", crc32($s));
 }
 
 1;

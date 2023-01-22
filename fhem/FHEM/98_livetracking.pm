@@ -1,16 +1,16 @@
 ﻿##############################################
-# $Id: 98_livetracking.pm 20955 2020-01-12 14:29:42Z moises $$$ 2018-11-01
+# $Id: 98_livetracking.pm 26834 2022-12-10 23:57:20Z moises $$$ 2018-11-01
 #
 #  98_livetracking.pm
 #
 #  2019 Markus Moises < vorname at nachname . de >
 #
-#  This module provides livetracking data from OwnTracks, OpenPaths, Life360 and Swarm (FourSquare)
+#  This module provides livetracking data from OwnTracks, Life360 and Swarm (FourSquare)
 #
 #
 ##############################################################################
 #
-# define <name> livetracking <life360_user> <life360_pass> <openpaths_key> <openpaths_secret> <swarm_token>
+# define <name> livetracking <life360_user> <life360_pass> <swarm_token>
 #
 ##############################################################################
 
@@ -58,6 +58,7 @@ sub livetracking_Initialize($) {
                                 "interval ".
                                 "home ".
                                 "swarmHome ".
+                                "swarmHomeName ".
                                 "owntracksDevice ".
                                 "beacon_0 ".
                                 "beacon_1 ".
@@ -79,6 +80,7 @@ sub livetracking_Initialize($) {
                                 "zonename_7 ".
                                 "zonename_8 ".
                                 "zonename_9 ".
+                                "clearPlace:0,1 ".
                                 "batteryWarning:5,10,15,20,25,30,35,40 ".
                                 "addressLanguage:de,en,fr,es,it,nl ".
                                 "addressReading:0,1 ".
@@ -95,59 +97,26 @@ sub livetracking_Define($$$) {
   my ($hash, $def) = @_;
   my @a = split("[ \t][ \t]*", $def);
 
-  return "syntax: define <name> livetracking <life360_user> <life360_pass> <openpaths_key> <openpaths_secret> <swarm_token>" if(int(@a) < 2 || int(@a) > 7 );
+  return "syntax: define <name> livetracking <life360_user> <life360_pass> <swarm_token>" if(int(@a) < 2 || int(@a) > 7 );
   my $name = $hash->{NAME};
 
   #$hash->{OAuth_exists} = $libcheck_hasOAuth if($libcheck_hasOAuth);
 
   if(int(@a) == 4 ) {
-    if ($a[2] =~ /@/) {
       $hash->{helper}{life360_user} = $a[2];
       $hash->{helper}{life360_pass} = $a[3];
-    } else {
-      $hash->{helper}{openpaths_key} = $a[2];# if($hash->{OAuth_exists});
-      $hash->{helper}{openpaths_secret} = $a[3];# if($hash->{OAuth_exists});
-    }
   }
   elsif(int(@a) == 3 ) {
     $hash->{helper}{swarm_token} = $a[2];
   }
   elsif(int(@a) == 5 ) {
-    if ($a[2] =~ /@/) {
       $hash->{helper}{life360_user} = $a[2];
       $hash->{helper}{life360_pass} = $a[3];
-    } else {
-      $hash->{helper}{openpaths_key} = $a[2];# if($hash->{OAuth_exists});
-      $hash->{helper}{openpaths_secret} = $a[3];# if($hash->{OAuth_exists});
-    }
     $hash->{helper}{swarm_token} = $a[4];
   }
-  elsif(int(@a) == 7 ) {
-    $hash->{helper}{life360_user} = $a[2];
-    $hash->{helper}{life360_pass} = $a[3];
-    $hash->{helper}{openpaths_key} = $a[4];# if($hash->{OAuth_exists});
-    $hash->{helper}{openpaths_secret} = $a[5];# if($hash->{OAuth_exists});
-    $hash->{helper}{swarm_token} = $a[6];
-  }
 
 
-  my $req = eval
-  {
-    require XML::Simple;
-    XML::Simple->import();
-    1;
-  };
-
-  if($req)
-  {
-    $hash->{NOTIFYDEV} = AttrVal($name, "owntracksDevice" , "owntracks");
-  }
-  else
-  {
-    $hash->{STATE} = "XML::Simple is required!";
-    $attr{$name}{disable} = "1";
-    return undef;
-  }
+  $hash->{NOTIFYDEV} = AttrVal($name, "owntracksDevice" , undef);
 
 
   # my $resolve = inet_aton("api.foursquare.com");
@@ -159,16 +128,6 @@ sub livetracking_Define($$$) {
   # }
 
   InternalTimer( gettimeofday() + 60, "livetracking_GetSwarm", $hash, 0) if(defined($hash->{helper}{swarm_token}));
-
-  # $resolve = inet_aton("openpaths.cc");
-  # if(!defined($resolve) && defined($hash->{helper}{openpaths_key}))
-  # {
-  #   $hash->{STATE} = "DNS error";
-  #   InternalTimer( gettimeofday() + 1800, "livetracking_GetAll", $hash, 0);
-  #   return undef;
-  # }
-
-  InternalTimer( gettimeofday() + 90, "livetracking_GetOpenPaths", $hash, 0) if(defined($hash->{helper}{openpaths_key}));
 
 
   if (!defined($attr{$name}{stateFormat}))
@@ -236,7 +195,7 @@ sub livetracking_Set($$@) {
   elsif($command eq "BootstrapLife360")
   {
     $hash->{helper}{life360_script} = "";
-    $hash->{helper}{life360_secret} = "";
+    #$hash->{helper}{life360_secret} = "";
     $hash->{helper}{life360_token} = "";
     livetracking_BootstrapLife360($hash);
   }
@@ -252,7 +211,6 @@ sub livetracking_Get($@) {
 
 
   my $usage = "Unknown argument $command, choose one of All:noArg";
-  $usage .= " OpenPaths:noArg" if(defined($hash->{helper}{openpaths_key}));
   $usage .= " Swarm:noArg" if(defined($hash->{helper}{swarm_token}));
   $usage .= " owntracksLocation:noArg owntracksSteps:noArg" if(defined($attr{$name}{owntracksDevice}));
   $usage .= " address";
@@ -270,10 +228,6 @@ sub livetracking_Get($@) {
   if($command eq "All")
   {
     livetracking_GetAll($hash);
-  }
-  elsif($command eq "OpenPaths")
-  {
-    livetracking_GetOpenPaths($hash);
   }
   elsif($command eq "Swarm")
   {
@@ -423,16 +377,6 @@ sub livetracking_GetAll($) {
 
   InternalTimer( gettimeofday() + 5, "livetracking_GetSwarm", $hash, 0) if(defined($hash->{helper}{swarm_token}));
 
-  # $resolve = inet_aton("openpaths.cc");
-  # if(!defined($resolve) && defined($hash->{helper}{openpaths_key}))
-  # {
-  #   $hash->{STATE} = "DNS error";
-  #   InternalTimer( gettimeofday() + 3600, "livetracking_GetAll", $hash, 0);
-  #   return undef;
-  # }
-
-  InternalTimer( gettimeofday() + 10, "livetracking_GetOpenPaths", $hash, 0) if(defined($hash->{helper}{openpaths_key}));
-
 
   InternalTimer( gettimeofday() + 20, "livetracking_GetLife360", $hash, 0) if(defined($hash->{helper}{life360_user}));
 
@@ -470,7 +414,7 @@ sub livetracking_GetLife360($) {
   my $circle = $attr{$name}{life360_circle};
   my $userid = $attr{$name}{life360_userid};
 
-  my $url = "https://www.life360.com/v3/circles/".$circle."/members/".$userid."/history?time=".int($lastupdate);
+  my $url = "https://api-cloudfront.life360.com/v3/circles/".$circle."/members/history";
 
     HttpUtils_NonblockingGet({
       url => $url,
@@ -489,72 +433,6 @@ sub livetracking_GetLife360($) {
 
   return undef;
 }
-
-
-sub livetracking_GetOpenPaths($) {
-  my ($hash) = @_;
-  my $name = $hash->{NAME};
-
-  #RemoveInternalTimer($hash);
-  RemoveInternalTimer($hash, "livetracking_GetOpenPaths");
-
-  if(AttrVal($name, "disable", 0) eq 1)
-  {
-    Log3 ($name, 4, "livetracking $name is disabled, data update cancelled.");
-    return undef;
-  }
-
-  if(!defined($hash->{helper}{openpaths_key}))
-  {
-    return undef;
-  }
-
-
-  my $nonce = "";
-  for (my $i=0;$i<32;$i++) {
-    my $r = int(rand(62));
-    if ($r<10) { $r += 48; }
-    elsif ($r<36) { $r += 55; }
-    else { $r += 61; }
-    $nonce .= chr($r);
-  }
-
-  my $request = Net::OAuth->request("request token")->new(
-    consumer_key => $hash->{helper}{openpaths_key},
-    consumer_secret => $hash->{helper}{openpaths_secret},
-    request_url => 'https://openpaths.cc/api/1',
-    request_method => 'GET',
-    signature_method => 'HMAC-SHA1',
-    timestamp => livetracking_roundfunc(time()),
-    nonce => $nonce,
-  );
-  $request->sign;
-
-
-  my $lastupdate = livetracking_roundfunc(ReadingsVal($name,".lastOpenPaths",time()-3600));
-
-  my $url = $request->to_url."&start_time=".$lastupdate."&num_points=50"; # start_time/end_time/num_points
-  Log3 ($name, 4, "livetracking OpenPaths URL: ".$url);
-
-    HttpUtils_NonblockingGet({
-      url => $url,
-      timeout => 10,
-      noshutdown => 1,
-      hash => $hash,
-      type => 'openpathsdata',
-      callback => \&livetracking_dispatch,
-    });
-
-
-
-  my $interval = AttrVal($hash->{NAME}, "interval", 1800);
-  #RemoveInternalTimer($hash);
-  InternalTimer( gettimeofday() + $interval, "livetracking_GetOpenPaths", $hash, 0);
-  $hash->{UPDATED} = FmtDateTime(time());
-
-  return undef;
-}
-
 
 
 sub livetracking_GetSwarm($) {
@@ -615,6 +493,7 @@ sub livetracking_ParseLife360($$) {
 
   foreach my $dataset (reverse(@{$json->{locations}}))
   {
+    next if($dataset->{userId} ne $attr{$name}{life360_userid});
     next if(!defined($dataset->{latitude}));
 
     if(defined($dataset->{battery}) && defined($dataset->{endTimestamp}))
@@ -624,6 +503,7 @@ sub livetracking_ParseLife360($$) {
       $tst = $dataset->{endTimestamp};
     }
 
+    $lastreading = 0 if($dataset->{endTimestamp} && $lastreading < $dataset->{endTimestamp});
     next if($lastreading > $dataset->{startTimestamp});
 
     Log3 ($name, 6, "$name new l360 data: /n".Dumper($dataset));
@@ -691,6 +571,12 @@ sub livetracking_ParseLife360($$) {
       $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{endTimestamp});
     }
 
+    if(defined($dataset->{wifiState}))
+    {
+      readingsBulkUpdate($hash, "connection", (($dataset->{wifiState})?'wifi':'mobile'));
+      $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{endTimestamp});
+    }
+
     $updated = 1;
 
     readingsEndUpdate($hash, 1);
@@ -718,92 +604,6 @@ sub livetracking_ParseLife360($$) {
 
   return undef;
 }
-
-
-sub livetracking_ParseOpenPaths($$) {
-  my ($hash,$json) = @_;
-  my $name = $hash->{NAME};
-
-  my $updated = 0;
-
-  my $lastreading = ReadingsVal($name,".lastOpenPaths",time()-300);
-  my $device = ReadingsVal($name,"deviceOpenPaths","");
-  my $os = ReadingsVal($name,"osOpenPaths","");
-  my $version = ReadingsVal($name,"versionOpenPaths","");
-  my $altitude = ReadingsVal($name,"altitude","0");
-  my $altitudeRound = AttrVal($hash->{NAME}, "roundAltitude", 1);
-
-  Log3 ($name, 6, "$name OpenPaths data: /n".Dumper($json));
-
-
-  foreach my $dataset (@{$json})
-  {
-    Log3 ($name, 5, "$name OpenPaths: at ".FmtDateTime($dataset->{t})." / ".$dataset->{lat}.",".$dataset->{lon});
-
-    $lastreading = $dataset->{t}+1;
-
-    readingsBeginUpdate($hash); # Begin update readings
-    $hash->{".updateTimestamp"} = FmtDateTime($dataset->{t});
-    my $changeindex = 0;
-
-
-    readingsBulkUpdate($hash, "latitude", sprintf("%.5f", $dataset->{lat}));
-    $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{t});
-    readingsBulkUpdate($hash, "longitude", sprintf("%.5f", $dataset->{lon}));
-    $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{t});
-    readingsBulkUpdate($hash, "location", sprintf("%.5f", $dataset->{lat}).",".sprintf("%.5f", $dataset->{lon}));
-    $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{t});
-
-
-    if(defined($dataset->{alt}) && $dataset->{alt} ne '')
-    {
-      my $newaltitude = livetracking_roundfunc($dataset->{alt}/$altitudeRound)*$altitudeRound;
-      #Log3 ($name, 0, "$name SwarmRound: ".$dataset->{alt}."/".$altitudeRound." = ".livetracking_roundfunc($dataset->{alt}/$altitudeRound)." *".$altitudeRound);
-
-      if($altitude ne $newaltitude)
-      {
-        readingsBulkUpdate($hash, "altitude", int($newaltitude));
-        $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{t});
-        $altitude = $newaltitude;
-      }
-    }
-    if(defined($dataset->{device}) && $dataset->{device} ne $device)
-    {
-      readingsBulkUpdate($hash, "deviceOpenPaths", $dataset->{device});
-      $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{t});
-    }
-    if(defined($dataset->{os}) && $dataset->{os} ne $os)
-    {
-      readingsBulkUpdate($hash, "osOpenPaths", $dataset->{os});
-      $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{t});
-    }
-    if(defined($dataset->{version}) && $dataset->{version} ne $version)
-    {
-      readingsBulkUpdate($hash, "versionOpenPaths", $dataset->{version});
-      $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{t});
-    }
-    if(defined($attr{$name}{home}))
-    {
-      readingsBulkUpdate($hash, "distance", livetracking_distance($hash,$dataset->{lat}.",".$dataset->{lon},$attr{$name}{home}));
-      $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{t});
-    }
-    $updated = 1;
-
-    readingsEndUpdate($hash, 1); # End update readings
-  }
-
-
-
-  if($updated == 1)
-  {
-    readingsSingleUpdate($hash,".lastOpenPaths",$lastreading,1);
-    $hash->{helper}{lastOpenPaths} = $lastreading;
-  }
-
-  return undef;
-}
-
-
 
 
 sub livetracking_ParseSwarm($$) {
@@ -835,11 +635,12 @@ sub livetracking_ParseSwarm($$) {
 
     my $loc = sprintf("%.5f", $dataset->{venue}->{location}->{lat}).",".sprintf("%.5f", $dataset->{venue}->{location}->{lng});
 
-    if(defined($attr{$name}{swarmHome}) and defined($attr{$name}{home}))
-    {
-      my $shl = $attr{$name}{swarmHome};
-      my $home = $attr{$name}{home};
-      $loc =~ s/$shl/$home/g;
+    if(defined(AttrVal($name, "home", undef))){
+      if(defined(AttrVal($name, "swarmHomeName", undef)) or defined(AttrVal($name, "swarmHome", undef))){
+        if($place eq AttrVal($name, "swarmHomeName", "undef") or $loc eq AttrVal($name, "swarmHome", "-")){
+          $loc = $attr{$name}{home};
+        }
+    }
     }
 
     readingsBulkUpdate($hash, "latitude", sprintf("%.5f", $dataset->{venue}->{location}->{lat}));
@@ -1050,6 +851,16 @@ sub livetracking_ParseOwnTracks
     readingsBulkUpdate($hash, "connection", (($dataset->{conn} eq "m")?"mobile":($dataset->{conn} eq "w")?"wifi":($dataset->{conn} eq "o")?"offline":"unknown"));
     $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{tst});
   }
+  if(defined($dataset->{SSID}))
+  {
+    readingsBulkUpdate($hash, "connection_ssid", $dataset->{SSID});
+    $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{tst});
+  }
+  if(defined($dataset->{BSSID}))
+  {
+    readingsBulkUpdate($hash, "connection_bssid", $dataset->{BSSID});
+    $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{tst});
+  }
   if(defined($dataset->{p}) and $dataset->{p} > 0)
   {
     readingsBulkUpdate($hash, "pressure", sprintf("%.2f", $dataset->{p}*10));
@@ -1080,7 +891,14 @@ sub livetracking_ParseOwnTracks
     }
       else
     {
-      #fhem( "deletereading $name place" ) if(ReadingsVal($name,"place","undefined") eq $dataset->{desc});
+      #fhem( "deletereading $name place" ) if(ReadingsVal($name,"place","") eq $dataset->{desc});
+      if(defined($attr{$name}{clearPlace}) and $attr{$name}{clearPlace} == 1)
+      {
+        if(ReadingsVal( $name, "place", "" ) eq $place){ #exit place
+          readingsBulkUpdate($hash, "place", "-");
+          $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{tst});
+        }
+      }
       foreach my $placenumber (@placenumbers)
       {
         readingsBulkUpdate($hash, "zone_".$placenumber,"inactive");
@@ -1253,8 +1071,6 @@ sub livetracking_dispatch($$$)
 
     if( $param->{type} eq 'life360data' ) {
       livetracking_ParseLife360($hash,$json);
-    } elsif( $param->{type} eq 'openpathsdata' ) {
-      livetracking_ParseOpenPaths($hash,$json);
     } elsif( $param->{type} eq 'swarmdata' ) {
       livetracking_ParseSwarm($hash,$json);
     }
@@ -1273,43 +1089,61 @@ sub livetracking_BootstrapLife360($)
     return undef;
   }
 
-  if(!defined($hash->{helper}{life360_script}) or $hash->{helper}{life360_script} eq "")
-  {
-    my $url = "https://www.life360.com/circles/#/";
-
-    HttpUtils_NonblockingGet({
-      url => $url,
-      noshutdown => 1,
-      hash => $hash,
-      type => 'scriptdata',
-      callback => \&livetracking_bootstrap,
-    });
-    return undef;
-  }
-
-  if(!defined($hash->{helper}{life360_secret}) or $hash->{helper}{life360_secret} eq "")
-  {
-    my $url = "https://www.life360.com/circles/scripts/".$hash->{helper}{life360_script}.".scripts.js";
-
-    HttpUtils_NonblockingGet({
-      url => $url,
-      noshutdown => 1,
-      hash => $hash,
-      type => 'secretdata',
-      callback => \&livetracking_bootstrap,
-    });
-    return undef;
-  }
+  # if(!defined($hash->{helper}{life360_script}) or $hash->{helper}{life360_script} eq "")
+  # {
+  #   my $url = "https://api-cloudfront.life360.com/circles/#/";
+  #
+  #   HttpUtils_NonblockingGet({
+  #     url => $url,
+  #     noshutdown => 1,
+  #     hash => $hash,
+  #     type => 'scriptdata',
+  #     callback => \&livetracking_bootstrap,
+  #   });
+  #   return undef;
+  # }
+  #
+  # if(!defined($hash->{helper}{life360_secret}) or $hash->{helper}{life360_secret} eq "")
+  # {
+  #   my $url = "https://www.life360.com/circles/scripts/".$hash->{helper}{life360_script}.".scripts.js";
+  #
+  #   HttpUtils_NonblockingGet({
+  #     url => $url,
+  #     noshutdown => 1,
+  #     hash => $hash,
+  #     type => 'secretdata',
+  #     callback => \&livetracking_bootstrap,
+  #   });
+  #   return undef;
+  # }
+  #
+  # if(!defined($hash->{helper}{life360_token}) or !defined($attr{$name}{life360_userid}) or $hash->{helper}{life360_token} eq "" or $attr{$name}{life360_userid} eq "")
+  # {
+  #   my $url = "https://www.life360.com/v3/oauth2/token.json";
+  #
+  #   HttpUtils_NonblockingGet({
+  #     url => $url,
+  #     method => "POST",
+  #     header => "Content-Type: application/x-www-form-urlencoded\r\nAuthorization: Basic ".$hash->{helper}{life360_secret},
+  #     data => "countryCode=1&password=".uri_escape($hash->{helper}{life360_pass})."&username=".uri_escape($hash->{helper}{life360_user})."&persist=true&grant_type=password",
+  #     noshutdown => 1,
+  #     hash => $hash,
+  #     type => 'tokendata',
+  #     callback => \&livetracking_bootstrap,
+  #   });
+  #
+  #   return undef;
+  # }
 
   if(!defined($hash->{helper}{life360_token}) or !defined($attr{$name}{life360_userid}) or $hash->{helper}{life360_token} eq "" or $attr{$name}{life360_userid} eq "")
   {
-    my $url = "https://www.life360.com/v3/oauth2/token.json";
+    my $url = "https://api-cloudfront.life360.com/v3/oauth2/token.json";
 
     HttpUtils_NonblockingGet({
       url => $url,
       method => "POST",
-      header => "Content-Type: application/x-www-form-urlencoded\r\nAuthorization: Basic ".$hash->{helper}{life360_secret},
-      data => "countryCode=1&password=".uri_escape($hash->{helper}{life360_pass})."&username=".uri_escape($hash->{helper}{life360_user})."&persist=true&grant_type=password",
+      header => "Content-Type: application/json\r\nAuthorization: Basic YnJ1czR0ZXZhcHV0UmVadWNydUJSVXdVYnJFTUVDN1VYZTJlUEhhYjpSdUt1cHJBQ3JhbWVzV1UydVRyZVF1bXVtYTdhemFtQQ==",
+      data => '{"username":"'.$hash->{helper}{life360_user}.'","password":"'.$hash->{helper}{life360_pass}.'","grant_type":"password","countryCode":1}',
       noshutdown => 1,
       hash => $hash,
       type => 'tokendata',
@@ -1321,7 +1155,7 @@ sub livetracking_BootstrapLife360($)
 
   if(!defined($attr{$name}{life360_circle}) or $attr{$name}{life360_circle} eq "")
   {
-    my $url = "https://www.life360.com/v3/circles";
+    my $url = "https://api-cloudfront.life360.com/v3/circles";
 
     HttpUtils_NonblockingGet({
       url => $url,
@@ -1353,27 +1187,28 @@ sub livetracking_bootstrap($$$)
     Log3 $name, 5, "$name: $data";
 
 
-    if( $param->{type} eq 'scriptdata' )
-    {
-      if ($data =~ /\bscripts\/\b(.*?)\b.scripts.js\b/)
-      {
-        $hash->{helper}{life360_script} = $1;
-        Log3 $name, 4, "$name: life360 script ".$hash->{helper}{life360_script};
-        InternalTimer( gettimeofday() + 1, "livetracking_BootstrapLife360", $hash, 0);
-      }
-      return undef;
-    }
-    elsif( $param->{type} eq 'secretdata' )
-    {
-      if ($data =~ /CLIENT_SECRET = "(.*?)";/)
-      {
-        $hash->{helper}{life360_secret} = $1;
-        Log3 $name, 4, "$name: life360 secret ".$hash->{helper}{life360_secret};
-        InternalTimer( gettimeofday() + 1, "livetracking_BootstrapLife360", $hash, 0);
-      }
-      return undef;
-    }
-    elsif( $param->{type} eq 'tokendata' )
+    # if( $param->{type} eq 'scriptdata' )
+    # {
+    #   if ($data =~ /\bscripts\/\b(.*?)\b.scripts.js\b/)
+    #   {
+    #     $hash->{helper}{life360_script} = $1;
+    #     Log3 $name, 4, "$name: life360 script ".$hash->{helper}{life360_script};
+    #     InternalTimer( gettimeofday() + 1, "livetracking_BootstrapLife360", $hash, 0);
+    #   }
+    #   return undef;
+    # }
+    # elsif( $param->{type} eq 'secretdata' )
+    # {
+    #   if ($data =~ /CLIENT_SECRET = "(.*?)";/)
+    #   {
+    #     $hash->{helper}{life360_secret} = $1;
+    #     Log3 $name, 4, "$name: life360 secret ".$hash->{helper}{life360_secret};
+    #     InternalTimer( gettimeofday() + 1, "livetracking_BootstrapLife360", $hash, 0);
+    #   }
+    #   return undef;
+    # }
+    #els
+    if( $param->{type} eq 'tokendata' )
     {
       my $json = eval { JSON->new->utf8(0)->decode($data) };
       if($@)
@@ -1403,7 +1238,7 @@ sub livetracking_bootstrap($$$)
       foreach my $dataset (@{$json->{circles}})
       {
         Log3 $name, 5, "$name: Life360 Circle: ".$dataset->{name}.", ID: ".$dataset->{id};
-        my $url = "https://www.life360.com/v3/circles/".$dataset->{id};
+        my $url = "https://api-cloudfront.life360.com/v3/circles/".$dataset->{id};
 
         HttpUtils_NonblockingGet({
           url => $url,
@@ -1926,7 +1761,7 @@ sub livetracking_utf8clean($) {
   <ul>
     <code>define &lt;name&gt; livetracking &lt;...&gt;</code>
     <br>
-    Example: <code>define livetrackingdata livetracking [life360_email] [life360_pass] [openpaths_key] [openpaths_secret] [swarm_token]</code><br/>
+    Example: <code>define livetrackingdata livetracking [life360_email] [life360_pass] [swarm_token]</code><br/>
     Any combination of these services can be defined as long as their order is correct.
     <br>&nbsp;
     <li><code>...</code>
@@ -1940,11 +1775,7 @@ sub livetracking_utf8clean($) {
    <ul>
       <li><a name="#All">All</a>
       <br/>
-      Manually trigger a data update for all sources (OpenPaths/Swarm)
-      </li><br>
-      <li><a name="#OpenPaths">OpenPaths</a>
-      <br/>
-      Manually trigger a data update for OpenPaths
+      Manually trigger a data update for all sources (Life360/Swarm)
       </li><br>
       <li><a name="#Life360">Life360</a>
       <br/>
@@ -2083,9 +1914,9 @@ sub livetracking_utf8clean($) {
          <br>
          Home location
       </li><br>
-      <li><a name="swarmHome">swarmHome</a> (lat,lon)
+      <li><a name="swarmHome">swarmHome/SwarmHomeName</a> (lat,lon)
          <br>
-         Fake home location (that is assigned to private homes for security reasons) of your Swarm home (exact position)
+         Fake home location or name (that is assigned to private homes for security reasons) of your Swarm home (exact position)
       </li><br>
       <li><a name="filterAccuracy">filterAccuracy</a> (m)
          <br>

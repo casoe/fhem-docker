@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 00_MQTT2_CLIENT.pm 25958 2022-04-14 13:35:48Z rudolfkoenig $
+# $Id: 00_MQTT2_CLIENT.pm 26925 2022-12-29 14:37:54Z rudolfkoenig $
 package main;
 
 use strict;
@@ -56,6 +56,7 @@ MQTT2_CLIENT_Initialize($)
     subscriptions
     SSL
     sslargs
+    topicConversion:0,1
     username
   );
   use warnings 'qw';
@@ -517,7 +518,7 @@ MQTT2_CLIENT_Read($@)
     }
     $val = substr($pl, $off);
     if($unicodeEncoding) {
-      if(!$hash->{binaryTopicRegexp} || $tp !~ m/^$hash->{binaryTopicRegexp}$/) {
+      if(!$hash->{binaryTopicRegexp} || $tp !~ m/^$hash->{binaryTopicRegexp}$/){
         $val = Encode::decode('UTF-8', $val);
       }
     }
@@ -530,10 +531,10 @@ MQTT2_CLIENT_Read($@)
       my $ir = AttrVal($name, "ignoreRegexp", undef);
       if(!defined($ir) || "$tp:$val" !~ m/$ir/) {
         my $ac = AttrVal($name, "autocreate", "no");
-        $ac = $ac eq "1" ? "simple" : ($ac eq "0" ? "no" : $ac); # backward comp.
+        $ac = $ac eq "1" ? "simple" : ($ac eq "0" ? "no" : $ac); #backward comp.
 
         my $cid = makeDeviceName($hash->{clientId});
-        $tp =~ s/:/_/g; # 96608
+        $tp =~ s/:/_/g if(AttrVal($name, "topicConversion", 1)); # 96608
         Dispatch($hash, "autocreate=$ac\0$cid\0$tp\0$val", undef, $ac eq "no");
 
         my $re = AttrVal($name, "rawEvents", undef);
@@ -740,14 +741,15 @@ MQTT2_CLIENT_feedTheList($$$)
   my ($server, $tp, $val, $cid) = @_;
   my $fl = $server->{".feedList"};
   if($fl) {
+    my $now = gettimeofday();
+    my $ts = sprintf("%s.%03d", FmtTime($now), 1000*($now-int($now)));
     foreach my $fwid (keys %{$fl}) {
       my $cl = $FW_id2inform{$fwid};
       if(!$cl || !$cl->{inform}{filter} || $cl->{inform}{filter} ne '^$') {
         delete($fl->{$fwid});
         next;
       }
-      FW_AsyncOutput($cl, "", 
-                  defined($cid) ? "RCVD: $tp $val<br>" : "SENT: $tp $val<br>");
+      FW_AsyncOutput($cl,"",toJSON([$ts,defined($cid)?"RCVD":"SENT",$tp,$val]));
     }
     delete($server->{".feedList"}) if(!keys %{$fl});
   }
@@ -870,12 +872,16 @@ MQTT2_CLIENT_feedTheList($$$)
     <li>disconnectAfter &lt;seconds&gt;<br>
       if set, the connection will be closed after &lt;seconds&gt; of
       inactivity, and will be automatically reopened when sending a command.
-      </li>
+      </li><br>
 
     <a id="MQTT2_CLIENT-attr-ignoreRegexp"></a>
     <li>ignoreRegexp<br>
       if $topic:$message matches ignoreRegexp, then it will be silently ignored.
-      </li>
+      For general purpose servers, it is a good idea to set it e.g. to
+      <ul>
+        homeassistant/[^:"]+/config|tasmota/discovery/[^/:]+/(config|sensors)
+      </ul> and also include the topics used to send commands towards your MQTT
+      clients.</li><br>
 
     <a id="MQTT2_CLIENT-attr-lwt"></a>
     <li>lwt &lt;topic&gt; &lt;message&gt; <br>
@@ -941,6 +947,13 @@ MQTT2_CLIENT_feedTheList($$$)
     <li>sslargs<br>
       a list of space separated tuples of key:value, where key is one of the
       possible options documented in perldoc IO::Socket::SSL
+      </li><br>
+
+    <a id="MQTT2_CLIENT-attr-topicConversion"></a>
+    <li>topicConversion [1|0]<br>
+      due to historic reasons colon (:) is converted in the topic to underscore
+      (_). Setting this attribute to 0 will disable this conversion.  Default
+      is 1.
       </li><br>
 
     <a id="MQTT2_CLIENT-attr-username"></a>

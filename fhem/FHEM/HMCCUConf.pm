@@ -2,7 +2,7 @@
 #
 #  HMCCUConf.pm
 #
-#  $Id: HMCCUConf.pm 25675 2022-02-13 15:00:07Z zap $
+#  $Id: HMCCUConf.pm 26565 2022-10-20 12:24:12Z zap $
 #
 #  Version 5.0
 #
@@ -140,7 +140,7 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		F => 3, S => 'LUX', C => '', V => '', P => 2
 	},
 	'MOTION_DETECTOR' => {
-		F => 3, S => 'MOTION', C => '', V => '', P => 1
+		F => 3, S => 'MOTION', C => '', V => '', P => 2
 	},
 	'MOTIONDETECTOR_TRANSCEIVER' => {
 		F => 3, S => 'MOTION', C => 'MOTION_DETECTION_ACTIVE', V => 'active:1,inactive:0', P => 2
@@ -237,7 +237,7 @@ $HMCCU_CONFIG_VERSION = '5.0';
 
 %HMCCU_READINGS = (
 	'ACCELERATION_TRANSCEIVER' =>
-		'^(C#\.)?MOTION:motion',
+		'^(C#\.)?MOTION:+motion',
 	'ARMING' =>
 		'^(C#\.)?ARMSTATE$:+armState',
 	'BLIND' =>
@@ -283,9 +283,9 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	'MOTION_DETECTOR' =>
 		'^(C#\.)?BRIGHTNESS$:brightness;(C#\.)?MOTION:motion',
 	'MOTIONDETECTOR_TRANSCEIVER' =>
-		'^(C#\.)?ILLUMINATION$:brightness;^(C#\.)?MOTION$:motion;(C#\.)?MOTION_DETECTION_ACTIVE$:detection',
+		'^(C#\.)?ILLUMINATION$:+brightness;^(C#\.)?MOTION$:+motion;(C#\.)?MOTION_DETECTION_ACTIVE$:+detection',
 	'PRESENCEDETECTOR_TRANSCEIVER' =>
-		'^(C#\.)?ILLUMINATION$:brightness;(C#\.)?PRESENCE_DETECTION_STATE:presence;(C#\.)?PRESENCE_DETECTION_ACTIVE:detection',
+		'^(C#\.)?ILLUMINATION$:+brightness;(C#\.)?PRESENCE_DETECTION_STATE:+presence;(C#\.)?PRESENCE_DETECTION_ACTIVE:+detection',
 	'SHUTTER_TRANSMITTER' =>
 		'^(C#\.)?LEVEL$:+pct,+level',
 	'SHUTTER_VIRTUAL_RECEIVER' =>
@@ -368,6 +368,7 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'close' => 'V:LEVEL:0',
 		'up' => 'V:LEVEL:?delta=+20',
 		'down' => 'V:LEVEL:?delta=-20',
+		'oldPos' => 'V:LEVEL:100.5',
 		'stop' => 'V:STOP:1'
 	},
 	'BLIND_VIRTUAL_RECEIVER' => {
@@ -613,6 +614,12 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	'RAINDETECTOR_HEAT' => {
 		'cmdIcon' => 'on:general_an off:general_aus'
 	},
+	'SHUTTER_CONTACT' => {
+		'devStateIcon' => 'close:fts_window_1w open:fts_window_1w_open'
+	},
+	'SHUTTER_CONTACT_TRANSCEIVER' => {
+		'devStateIcon' => 'close:fts_window_1w open:fts_window_1w_open'
+	},
 	'SHUTTER_TRANSMITTER' => {
 		'substexcl' => 'pct',
 	},
@@ -740,29 +747,29 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'STATE' => { '0' => 'off', 'false' => 'off', '1' => 'on', 'true' => 'on', 'off' => '0', 'on' => '1' },
 	},
 	'BLIND' => {
-		'LEVEL' =>     { '0' => 'closed', '100' => 'open', 'close' => '0', 'open' => '100' },
+		'LEVEL' =>     { '0' => 'closed', '100' => 'open', 'closed' => '0', 'open' => '100' },
 		'DIRECTION' => { '0' => 'none', '1' => 'up', '2' => 'down' },
 		'WORKING' =>   { '0' => 'no', 'false' => 'no', '1' => 'yes', 'true' => 'yes' }
 	},
 	'BLIND_TRANSMITTER' => {
-		'LEVEL' =>     { '0' => 'closed', '100' => 'open', 'close' => '0', 'open' => '100' }
+		'LEVEL' =>     { '0' => 'closed', '100' => 'open', 'closed' => '0', 'open' => '100' }
 	},
 	'BLIND_VIRTUAL_RECEIVER' => {
-		'LEVEL' =>     { '0' => 'closed', '100' => 'open', 'close' => '0', 'open' => '100' },
+		'LEVEL' =>     { '0' => 'closed', '100' => 'open', 'closed' => '0', 'open' => '100' },
 		'DIRECTION' => { '0' => 'none', '1' => 'up', '2' => 'down' },
 		'WORKING' =>   { '0' => 'no', 'false' => 'no', '1' => 'yes', 'true' => 'yes' }
 	},
 	'JALOUSIE' => {
-		'LEVEL' =>       { '0' => 'closed', '100' => 'open', 'close' => '0', 'open' => '100' },
-		'LEVEL_SLATS' => { '0' => 'closed', '100' => 'open', 'close' => '0', 'open' => '100' },
+		'LEVEL' =>       { '0' => 'closed', '100' => 'open', 'closed' => '0', 'open' => '100' },
+		'LEVEL_SLATS' => { '0' => 'closed', '100' => 'open', 'closed' => '0', 'open' => '100' },
 		'DIRECTION' =>   { '0' => 'none', '1' => 'up', '2' => 'down' },
 		'WORKING' =>     { '0' => 'no', 'false' => 'no', '1' => 'yes', 'true' => 'yes' }
 	},
 	'SHUTTER_TRANSMITTER' => {
-		'LEVEL' =>     { '0' => 'closed', '100' => 'open', 'close' => '0', 'open' => '100' }
+		'LEVEL' =>     { '0' => 'closed', '100' => 'open', 'closed' => '0', 'open' => '100' }
 	},
 	'SHUTTER_VIRTUAL_RECEIVER' => {
-		'LEVEL' => { '0' => 'closed', '100' => 'open', 'close' => '0', 'open' => '100' }
+		'LEVEL' => { '0' => 'closed', '100' => 'open', 'closed' => '0', 'open' => '100' }
 	},
 	'DIMMER' => {
 		'LEVEL' =>     { '0' => 'off', '100' => 'on', 'off' => '0', 'on' => '100' },

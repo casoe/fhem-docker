@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 25971 2022-04-16 10:17:59Z rudolfkoenig $
+# $Id: fhem.pl 27055 2023-01-14 15:54:12Z rudolfkoenig $
 
 
 use strict;
@@ -219,6 +219,7 @@ sub cfgDB_FileWrite;
 # ShutdownFn-called before shutdown, if DelayedShutdownFn is "over"
 # StateFn  - set local info for this device, do not activate anything
 # UndefFn  - clean up (delete timer, close fd), called by delete and rereadcfg
+# prioSave - save the definition at the start, for a small SubProcess
 
 #Special values in %defs:
 # TYPE    - The name of the module it belongs to
@@ -230,12 +231,13 @@ sub cfgDB_FileWrite;
 # IODev   - attached to io device
 # CHANGED - Currently changed attributes of this device. Used by NotifyFn
 # VOLATILE- Set if the definition should be saved to the "statefile"
-# NOTIFYDEV - if set, the notifyFn will only be called for this device
+# NOTIFYDEV - if set, the NotifyFn will only be called for this device
 
 use vars qw($addTimerStacktrace);# set to 1 by fhemdebug
 use vars qw($auth_refresh);
 use vars qw($cmdFromAnalyze);   # used by the warnings-sub
 use vars qw($devcount);         # Maximum device number, used for storing
+use vars qw($devcountPrioSave); # Maximum prioSave device number
 use vars qw($unicodeEncoding);  # internal encoding is unicode (wide character)
 use vars qw($featurelevel); 
 use vars qw($fhemForked);       # 1 in a fhemFork()'ed process, else undef
@@ -277,7 +279,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 25971 2022-04-16 10:17:59Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 27055 2023-01-14 15:54:12Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -310,7 +312,7 @@ my $readytimeout = ($^O eq "MSWin32") ? 0.1 : 5.0;
 
 $init_done = 0;
 $lastDefChange = 0;
-$featurelevel = 6.1; # see also GlobalAttr
+$featurelevel = 6.2; # see also GlobalAttr
 $numCPUs = `grep -c ^processor /proc/cpuinfo 2>&1` if($^O eq "linux");
 $numCPUs = ($numCPUs && $numCPUs =~ m/(\d+)/ ? $1 : 1);
 
@@ -407,7 +409,8 @@ my %ra = (
   "event-on-update-reading"    => { s=>",", c=>".attreour" },
   "event-on-change-reading"    => { s=>",", c=>".attreocr",   r=>":.*" },
   "timestamp-on-change-reading"=> { s=>",", c=>".attrtocr" },
-  "event-min-interval"         => { s=>",", c=>".attrminint", r=>":.*" },
+  "event-min-interval"         => { s=>",", c=>".attrminint", r=>":.*",
+                                    isNum=>1 },
   "oldreadings"                => { s=>",", c=>".or" },
   "devStateIcon"               => { s=>" ", r=>":.*", p=>"^{.*}\$",
                                     pv=>{"%name"=>1, "%state"=>1, "%type"=>1} },
@@ -723,6 +726,7 @@ while (1) {
                               (!defined($timeout) || $timeout > $readytimeout));
   $timeout = 5 if $winService->{AsAService} && $timeout > 5;
   $nfound = select($rout=$rin, $wout=$win, $eout=$ein, $timeout) if(!$nfound);
+  my $err = int($!);
 
   $winService->{serviceCheck}->() if($winService->{serviceCheck});
   if($gotSig) {
@@ -733,14 +737,14 @@ while (1) {
   }
 
   if($nfound < 0) {
-    my $err = int($!);
     next if($err==0 || $err==4); # 4==EINTR
 
     Log 1, "ERROR: Select error $nfound ($err), error count= $errcount";
     $errcount++;
 
     # Handling "Bad file descriptor". This is a programming error.
-    if($err == 9 || $err == 10038) {  # BADF, don't want to "use errno.ph"
+    # 9/10038 => BADF, 11=>EAGAIN. don't want to "use errno.ph"
+    if($err == 11 || $err == 9 || $err == 10038) { 
       my $nbad = 0;
       foreach my $p (keys %selectlist) {
         my ($tin, $tout) = ('', '');
@@ -1358,8 +1362,7 @@ devspec2array($;$$)
         };
 
         if($@) {
-          Log 1, "devspec2array $name: $@";
-          stacktrace();
+          warn "devspec2array $name: $@"; #128362
           return $name;
         }
       }
@@ -1632,6 +1635,7 @@ WriteStatefile()
     if($defs{$d}{VOLATILE}) {
       my $def = $defs{$d}{DEF};
       $def =~ s/;/;;/g; # follow-on-for-timer at
+      $def =~ s/\n/\\\n/g;
       print $SFH "define $d $defs{$d}{TYPE} $def\n";
     }
 
@@ -1716,7 +1720,12 @@ CommandSave($$)
   @structChangeHist = ();
   DoTrigger("global", "SAVE", 1);
 
-  restoreDir_saveFile($restoreDir, $attr{global}{statefile}) if(!configDBUsed());
+  if(!configDBUsed()) {
+    my @t = localtime(gettimeofday());
+    my $stf = ResolveDateWildcards(AttrVal("global", "statefile",  ""), @t);
+    restoreDir_saveFile($restoreDir, $stf);
+  }
+
   $data{saveID} = createUniqueId(); # for configDB, #126323
   my $ret = WriteStatefile();
 
@@ -2129,7 +2138,9 @@ CommandDefine($$)
   $hash{TYPE}  = $m;
   $hash{STATE} = "???";
   $hash{DEF}   = $a[2] if(int(@a) > 2);
-  $hash{NR}    = $devcount++;
+  #130588: start early after next save, for a small SubProcess size
+  $hash{NR}    = ($modules{$m}{prioSave} && $devcountPrioSave < 30) ? 
+                  $devcountPrioSave++ : $devcount++;
   $hash{CFGFN} = $currcfgfile
         if($currcfgfile ne AttrVal("global", "configfile", "") &&
           !configDBUsed());
@@ -2161,6 +2172,22 @@ CommandDefine($$)
       addStructChange("define", $name, $def) if(!$opt{silent});
       DoTrigger("global", "DEFINED $name", 1);
     }
+
+    if($init_done && $modules{$m}{Match}) { # reset multiple IOdev, #127565
+      foreach my $an (keys %defs) {
+        my $ah = $defs{$an};
+        my $cl = $ah->{Clients};
+        $cl = $modules{$ah->{TYPE}}{Clients} if(!$cl);
+        next if(!$cl || !$ah->{'.clientArray'});
+        foreach my $cmRe ( split(/:/, $cl) ) {
+          if($m =~ m/^$cmRe$/) {
+            delete($ah->{'.clientArray'});
+            last;
+          }
+        }
+      }
+    }
+
   }
   return ($ret && $opt{ignoreErr} ?
         "Cannot define $name, remove -ignoreErr for details" : $ret);
@@ -2566,12 +2593,14 @@ PrintHash($$)
       } elsif(ref($h->{$c}) eq "ARRAY") {
          $sstr .= sprintf("%*s %s:\n", $lev, " ", $c);
          foreach my $v (@{$h->{$c}}) {
-           $sstr .= sprintf("%*s %s\n", $lev+2, " ", defined($v) ? $v:"undef");
+           $sstr .= sprintf("%*s %s\n",
+                        $lev+2, " ", defined($v) ? $v:"undef");
          }
       }
     } else {
       my $v = $h->{$c};
-      $str .= sprintf("%*s %-10s %s\n", $lev," ",$c, defined($v) ? $v : "");
+      $str .= sprintf("%*s %-10s %s\n",
+                        $lev," ",$c, defined($v) ? $v : "");
     }
   }
   delete $h->{".visited"};
@@ -2584,22 +2613,29 @@ CommandList($$)
 {
   my ($cl, $param) = @_;
   my $str = "";
+  my %opt;
+  my $optRegexp = '-r|-R|-i';
+  $param = cmd_parseOpts($param, $optRegexp, \%opt);
 
-  if($param =~ m/^-r *(.*)$/i) {
+  if($opt{r} || $opt{R}) {
     my @list;
-    my $arg = $1;
-    if($param =~ m/^-R/) {
-      return "-R needs a valid device as argument" if(!$arg);
-      push @list, $arg;
-      push @list, getPawList($arg);
+    if($opt{R}) {
+      return "-R needs a valid device as argument" if(!$param);
+      push @list, $param;
+      push @list, getPawList($param);
     } else {
-      @list = devspec2array($arg ? $arg : ".*", $cl);
+      @list = devspec2array($param ? $param : ".*", $cl);
     }
     foreach my $d (@list) {
       return "No device named $d found" if(!defined($defs{$d}));
       $str .= "\n" if($str);
       my @a = GetDefAndAttr($d);
       $str .= join("\n", @a)."\n" if(@a);
+      if($opt{i}) {
+        my $intHash = PrintHash($defs{$d}, 2);
+        $intHash =~ s/\n/\n#/g;
+        $str .= "#".$intHash;
+      }
     }
     foreach my $d (sort @list) {
       $str .= "\n" if($str);
@@ -2711,7 +2747,7 @@ CommandReload($$;$)
       $cfgDB = 'X';
     } else {
       # configDB not used and file not found: it's a real error!
-      return "Can't read $file: $!";
+      return "Can't read $file";
     }
   }
 
@@ -2776,6 +2812,8 @@ CommandRename($$)
   return "Invalid characters in name (not A-Za-z0-9._): $new"
                         if(!goodDeviceName($new));
   return "Cannot rename global" if($old eq "global");
+  return "Cannot rename $old from itself"
+        if($cl && $cl->{SNAME} && $cl->{SNAME} eq $old);
 
   %ntfyHash = ();
   $defs{$new} = $defs{$old};
@@ -2880,7 +2918,7 @@ GlobalAttr($$$$)
   if($type eq "del") {
     my %noDel = ( modpath=>1, verbose=>1, logfile=>1, configfile=>1, encoding=>1 );
     return "The global attribute $name cannot be deleted" if($noDel{$name});
-    $featurelevel = 6.1 if($name eq "featurelevel");
+    $featurelevel = 6.2 if($name eq "featurelevel");
     $haveInet6    = 0   if($name eq "useInet6"); # IPv6
     delete($defs{global}{ignoreRegexpObj}) if($name eq "ignoreRegexp");
     return undef;
@@ -3137,6 +3175,11 @@ CommandAttr($$)
         my @a = split($ra{$attrName}{s}, $lval) ;
         for my $v (@a) {
           my $v = $v; # resolve the reference to avoid changing @a itself
+          if($ra{$attrName}{isNum}) {
+            my @va = split(":", $v);
+            return "attr $sdev $attrName $v: argument is not a number" 
+                if(!defined($va[1]) || !looks_like_number($va[1]));
+          }
           $v =~ s/$ra{$attrName}{r}// if($ra{$attrName}{r});
           my $err ="Argument $v for attr $sdev $attrName is not a valid regexp";
           return "$err: use .* instead of *" if($v =~ /^\*/); # no err in eval!?
@@ -3686,6 +3729,7 @@ EvalSpecials($%)
   if(defined($specials{"%EVENT"})) {
     foreach my $part (split(" ", $specials{"%EVENT"})) {
       $specials{"%EVTPART$idx"} = $part;
+      last if($idx >= 20);
       $idx++;
     }
   }
@@ -3831,6 +3875,7 @@ DoTrigger($$@)
   # the inner loop.
   if($max && !defined($hash->{INTRIGGER})) {
     $hash->{INTRIGGER}=1;
+    $hash->{eventCount}++;
     if($attr{global}{verbose} >= 5) {
       Log 5, "Starting notify loop for $dev, " . scalar(@{$hash->{CHANGED}}) . 
         " event(s), first is " . escapeLogLine($hash->{CHANGED}->[0]);
@@ -3990,6 +4035,9 @@ doGlobalDef($)
   CommandAttr(undef, "global verbose 3");
   CommandAttr(undef, "global configfile $arg");
   CommandAttr(undef, "global logfile -");
+
+  $devcountPrioSave = 2;
+  $devcount = 30;
 }
 
 #####################################
@@ -4144,7 +4192,8 @@ Dispatch($$;$$)
     if(defined($h)) {
       foreach my $m (sort keys %{$h}) {
         my ($order, $mname) = split(":", $m);
-        next if($modules{$mname}{LOADED}); # checked in the loop above, #125292
+        next if(!$modules{$mname} ||       # #130952 / FS20V
+                $modules{$mname}{LOADED}); # checked in the loop above, #125292
         if($dmsg =~ m/$h->{$m}/s) {
           if(AttrVal("global", "autoload_undefined_devices", 1)) {
             my $newm = LoadModule($mname);
@@ -5318,7 +5367,10 @@ json2nameValue($;$$$$)
         $esc = !$esc;
       } elsif($s eq '"' && !$esc) {
         my $val = substr($t,1,$off-1);
-        $val =~ s/\\u([0-9A-F]{4})/chr(hex($1))/gsie; # toJSON reverse
+        if($val =~ m/\\u([0-9A-F]{4})/i) {
+          $val =~ s/\\u([0-9A-F]{4})/chr(hex($1))/gsie; # toJSON reverse
+          $val = Encode::encode("UTF-8", $val) if(!$unicodeEncoding); #128932
+        }
         my %t = ( n =>"\n", '"'=>'"', '\\'=>'\\' );
         $val =~ s/\\([n"\\])/$t{$1}/ge;
         return (undef, $val, substr($t,$off+1));

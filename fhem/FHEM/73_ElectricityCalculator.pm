@@ -1,4 +1,4 @@
-# $Id: 73_ElectricityCalculator.pm 25403 2022-01-01 15:13:41Z Sailor $
+# $Id: 73_ElectricityCalculator.pm 26694 2022-11-13 19:24:42Z Sailor $
 ########################################################################################################################
 #
 #     73_ElectricityCalculator.pm
@@ -152,7 +152,10 @@ sub ElectricityCalculator_Define($$$)
 
 	### Start timer for execution around midnight
 	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
-	my $EpochNextMidnight = timelocal(1, 0, 0, $mday, $mon, $year+1900) + 86400;
+	my $EpochThisMidnight 			= Time::Local::timelocal_nocheck(0,0,0,$mday  ,$mon,$year);
+	my $EpochNextMidnight 			= Time::Local::timelocal_nocheck(0,0,0,$mday+1,$mon,$year);
+	my $SecondsToday 				= $EpochNextMidnight - $EpochThisMidnight;
+	$hash->{system}{SecondsToday} 	= $SecondsToday;
 	InternalTimer($EpochNextMidnight, "ElectricityCalculator_MidnightTimer", $hash, 0);
 
 	### For debugging purpose only
@@ -160,8 +163,8 @@ sub ElectricityCalculator_Define($$$)
 	Log3 $name, 5, $name. " : ElectricityCalculator_MidnightTimer - year              : " . $year;
 	Log3 $name, 5, $name. " : ElectricityCalculator_MidnightTimer - mon               : " . $mon;
 	Log3 $name, 5, $name. " : ElectricityCalculator_MidnightTimer - day               : " . $mday;
-	Log3 $name, 5, $name. " : ElectricityCalculator_MidnightTimer - timelocal         : " . timelocal(1, 0, 0, $mday, $mon, $year+1900);
 	Log3 $name, 5, $name. " : ElectricityCalculator_MidnightTimer - nextMidnight      : " . $EpochNextMidnight;
+	Log3 $name, 5, $name. " : ElectricityCalculator_MidnightTimer - SecondsToday      : " . $SecondsToday;
 
 	return undef;
 }
@@ -535,8 +538,8 @@ sub ElectricityCalculator_MidnightTimer($)
 			next;
 		}
 		
-		my $ElectricityCounterReadingValue 				= ReadingsVal($ElectricityCountName,                              $ElectricityCountReadingName                              , "error");
-		my $LastUpdateTimestampUnix                     = ReadingsVal($ElectricityCalcReadingDestinationDeviceName, "." . $ElectricityCalcReadingPrefix . "_LastUpdateTimestampUnix", 0      );
+		my $ElectricityCounterReadingValue 					= ReadingsVal($ElectricityCountName,                              $ElectricityCountReadingName                              , "error");
+		my $LastUpdateTimestampUnix                   		= ReadingsVal($ElectricityCalcReadingDestinationDeviceName, "." . $ElectricityCalcReadingPrefix . "_LastUpdateTimestampUnix", 0      );
 	
 		### Calculate time difference since last update
 		my $DeltaTimeSinceLastUpdate = time() - $LastUpdateTimestampUnix ;
@@ -554,25 +557,25 @@ sub ElectricityCalculator_MidnightTimer($)
 		if (($ElectricityCalcReadingPrefix ne "error") && ($ElectricityCalcReadingDestinationDeviceName ne "error") && ($LastUpdateTimestampUnix > 0)){
 
 			### If there was no update in the last 24h
-			if ( $DeltaTimeSinceLastUpdate >= 86400) {
+			if ( $DeltaTimeSinceLastUpdate >= $ElectricityCalcDev->{system}{SecondsToday}) {
 				### Create Log entries for debugging purpose
-				Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Last Update       : No Update in the last 24h!";
+				Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Last Update       : No Update in the last day!";
 
 			}
 			else {
 				### Create Log entries for debugging purpose
-				Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Last Update       : There was an Update in the last 24h!";
+				Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Last Update       : There was an Update in the last day!";
 			}
 
 			### Create Log entries for debugging purpose			
 			#Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - ElectricityCalcRDD      : \n" . Dumper($ElectricityCalcReadingDestinationDevice);
 			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - ElectricityCounter: " . $ElectricityCounterReadingValue;
-			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre WFRDaySum     : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, "."  . 	$ElectricityCalcReadingPrefix . "_PowerDaySum",     	"error");
-			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre WFRDayCount   : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, "."  . 	$ElectricityCalcReadingPrefix . "_PowerDayCount",     	"error");
-			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre WFRDayCurrent : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, 		$ElectricityCalcReadingPrefix . "_PowerCurrent",     	"error");
-			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre WFRDayAver    : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, 		$ElectricityCalcReadingPrefix . "_PowerDayAver",     	"error");
-			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre WFRDayMax     : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, 		$ElectricityCalcReadingPrefix . "_PowerDayMax",    		"error");
-			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre WFRDayMin     : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, 		$ElectricityCalcReadingPrefix . "_PowerDayMin",     	"error");
+			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre PowerDaySum   : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, "."  . 	$ElectricityCalcReadingPrefix . "_PowerDaySum",     	"error");
+			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre PowerDayCount : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, "."  . 	$ElectricityCalcReadingPrefix . "_PowerDayCount",     	"error");
+			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre PowerCurrent  : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, 		$ElectricityCalcReadingPrefix . "_PowerCurrent",     	"error");
+			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre PowerDayAver  : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, 		$ElectricityCalcReadingPrefix . "_PowerDayAver",     	"error");
+			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre PowerDayMax   : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, 		$ElectricityCalcReadingPrefix . "_PowerDayMax",    		"error");
+			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre PowerDayMin   : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, 		$ElectricityCalcReadingPrefix . "_PowerDayMin",     	"error");
 			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre ConsumDay     : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, 		$ElectricityCalcReadingPrefix . "_EnergyDay",     		"error");
 			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre ConsumDayLast : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, 		$ElectricityCalcReadingPrefix . "_EnergyDayLast",		"error");
 			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - Pre ConsumCstDay  : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName, 		$ElectricityCalcReadingPrefix . "_EnergyCostDay",		"error");
@@ -601,14 +604,15 @@ sub ElectricityCalculator_MidnightTimer($)
 	}
 
 	### Start timer for execution around midnight
-	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
-	my $EpochNextMidnight = timelocal(1, 0, 0, $mday, $mon, $year+1900) + 86400;
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) 	= localtime(time);
+	my $EpochThisMidnight 										= Time::Local::timelocal_nocheck(0,0,0,$mday  ,$mon,$year);
+	my $EpochNextMidnight 										= Time::Local::timelocal_nocheck(0,0,0,$mday+1,$mon,$year);
+	my $SecondsToday 											= $EpochNextMidnight - $EpochThisMidnight;
+	$ElectricityCalcDev->{system}{SecondsToday} 				= $SecondsToday;
 	InternalTimer($EpochNextMidnight, "ElectricityCalculator_MidnightTimer", $ElectricityCalcDev, 0);
 	
 	### For debugging purpose only
 	Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer _______Looping finished___________";
-	Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - time              : " . time();
-	Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - timelocal         : " . timelocal(1, 0, 0, $mday, $mon, $year+1900);
 	Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator_MidnightTimer - nextMidnight      : " . $EpochNextMidnight;
 }
 ####END####### Midnight Routine ########################################################################################END#####
@@ -881,10 +885,10 @@ sub ElectricityCalculator_Notify($$)
 			readingsSingleUpdate( $ElectricityCalcReadingDestinationDevice,       $ElectricityCalcReadingPrefix . "_CounterMeterLast",     sprintf($ElectricityCalcDev->{system}{DecimalPlace}, ($ElectricityCountReadingValueCurrent)),1);
 			readingsSingleUpdate( $ElectricityCalcReadingDestinationDevice,       $ElectricityCalcReadingPrefix . "_CounterYear1st",       sprintf($ElectricityCalcDev->{system}{DecimalPlace}, ($ElectricityCountReadingValueCurrent)),1);
 			readingsSingleUpdate( $ElectricityCalcReadingDestinationDevice,       $ElectricityCalcReadingPrefix . "_CounterYearLast",      sprintf($ElectricityCalcDev->{system}{DecimalPlace}, ($ElectricityCountReadingValueCurrent)),1);
-			readingsSingleUpdate( $ElectricityCalcReadingDestinationDevice, "." . $ElectricityCalcReadingPrefix . "_WFRDaySum",            0, 1);
-			readingsSingleUpdate( $ElectricityCalcReadingDestinationDevice, "." . $ElectricityCalcReadingPrefix . "_WFRDayCount",          0, 1);
-			readingsSingleUpdate( $ElectricityCalcReadingDestinationDevice,       $ElectricityCalcReadingPrefix . "_WFRDayMin",            0, 1);
-			readingsSingleUpdate( $ElectricityCalcReadingDestinationDevice,       $ElectricityCalcReadingPrefix . "_WFRDayMax",            0, 1);
+			readingsSingleUpdate( $ElectricityCalcReadingDestinationDevice, "." . $ElectricityCalcReadingPrefix . "_PowerDaySum",          0, 1);
+			readingsSingleUpdate( $ElectricityCalcReadingDestinationDevice, "." . $ElectricityCalcReadingPrefix . "_PowerDayCount",        0, 1);
+			readingsSingleUpdate( $ElectricityCalcReadingDestinationDevice,       $ElectricityCalcReadingPrefix . "_PowerDayMin",          0, 1);
+			readingsSingleUpdate( $ElectricityCalcReadingDestinationDevice,       $ElectricityCalcReadingPrefix . "_PowerDayMax",          0, 1);
 			readingsSingleUpdate( $ElectricityCalcReadingDestinationDevice, "." . $ElectricityCalcReadingPrefix . "_LastUpdateTimestampUnix", time(), 0);
 
 			### Create Log entries for debugging
@@ -966,10 +970,17 @@ sub ElectricityCalculator_Notify($$)
 		Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator - LastUpdateTimestampUnix                          : " . ReadingsVal($ElectricityCalcReadingDestinationDeviceName,  "." . $ElectricityCalcReadingPrefix . "_LastUpdateTimestampUnix", undef);
 		Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator - ElectricityCountReadTimeRelDelta                 : " . $ElectricityCountReadingLastChangeDelta;
 
-		if (($ElectricityCountReadingTimestampCurrentHour < $ElectricityCountReadingTimestampPreviousHour) || ($ElectricityCountReadingLastChangeDelta > 86400))
+		if (($ElectricityCountReadingTimestampCurrentHour < $ElectricityCountReadingTimestampPreviousHour) || ($ElectricityCountReadingLastChangeDelta > $ElectricityCalcDev->{system}{SecondsToday}))
 		{
 			### Create Log entries for debugging
-			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator - First reading of day detected OR last reading is older than 24h!";
+			Log3 $ElectricityCalcName, 5, $ElectricityCalcName. " : ElectricityCalculator - First reading of day detected OR last reading is older than 1 day!";
+
+			### Recalculate new dayspan in seconds
+			my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) 	= localtime(time);
+			my $EpochThisMidnight 										= Time::Local::timelocal_nocheck(0,0,0,$mday  ,$mon,$year);
+			my $EpochNextMidnight 										= Time::Local::timelocal_nocheck(0,0,0,$mday+1,$mon,$year);
+			my $SecondsToday 											= $EpochNextMidnight - $EpochThisMidnight;
+			$ElectricityCalcDev->{system}{SecondsToday} 				= $SecondsToday;
 
 			### Calculate Electricity energy of previous day € = (Wprevious[kWh] - WcurrentDay[kWh]) 
 			my $ElectricityCalcEnergyDayLast      = ($ElectricityCountReadingValuePrevious - ReadingsVal($ElectricityCalcReadingDestinationDeviceName, $ElectricityCalcReadingPrefix . "_CounterDay1st", "0"));

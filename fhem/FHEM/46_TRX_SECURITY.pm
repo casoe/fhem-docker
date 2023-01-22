@@ -1,4 +1,4 @@
-# $Id: 46_TRX_SECURITY.pm 20805 2019-12-22 15:31:48Z KernSani $
+# $Id: 46_TRX_SECURITY.pm 27002 2023-01-08 12:44:25Z KernSani $
 ##############################################################################
 #
 #     46_TRX_SECURITY.pm
@@ -382,7 +382,7 @@ sub TRX_SECURITY_parse_X10Sec($$) {
         $firstdevice = 0;
         $def         = $modules{TRX_SECURITY}{defptr2}{$device_name};
         if ( !$def ) {
-            Log3 $hash, 1,
+            Log3 $hash, 5,
               "TRX_SECURITY_parse_X10Sec() UNDEFINED $device_name TRX_SECURITY $dev_type $device $dev_reading";
             Log3 $hash, 3, "TRX_SECURITY_parse_X10Sec() Unknown device $device_name, please define it";
             return "UNDEFINED $device_name TRX_SECURITY $dev_type $device $dev_reading";

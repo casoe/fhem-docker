@@ -1,5 +1,5 @@
 ################################################################
-# $Id: 98_JsonList2.pm 23727 2021-02-12 20:31:37Z rudolfkoenig $
+# $Id: 98_JsonList2.pm 26701 2022-11-14 09:51:02Z rudolfkoenig $
 ################################################################
 
 package main;
@@ -28,7 +28,7 @@ JsonList2_Escape($)
   $a =~ s/"/\\"/g; 
   $a =~ s/\n/\\n/g; 
   my $b = "x$a";
-  $a = "<BINARY>" if(!utf8::decode($b)); # Forum #55318
+  $a = "<BINARY>" if(!utf8::decode($b) && !$unicodeEncoding); # Forum #55318
   return $a;
 }
 

@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 98_weblink.pm 23597 2021-01-23 17:57:05Z rudolfkoenig $
+# $Id: 98_weblink.pm 26988 2023-01-07 09:18:42Z rudolfkoenig $
 package main;
 
 use strict;
@@ -237,10 +237,10 @@ webdev_AWaddPos($$$)
 =item summary_DE HTTP Link fuer das FHEMWEB Frontend
 =begin html
 
-<a name="weblink"></a>
+<a id="weblink"></a>
 <h3>weblink</h3>
 <ul>
-  <a name="weblinkdefine"></a>
+  <a id="weblinkdefine"></a>
   <b>Define</b>
   <ul>
     <code>define &lt;name&gt; weblink
@@ -257,10 +257,12 @@ webdev_AWaddPos($$$)
       define interactive_webcam weblink iframe http://w.x.y.z/webcam.cgi<br>
       define hr weblink htmlCode &lt;hr&gt<br>
       define w_Frlink weblink htmlCode { WeatherAsHtml("w_Frankfurt") }<br>
-      define systemCommands weblink cmdList
-             pair:Pair:set+cul2+hmPairForSec+60
-             restart:Restart:shutdown+restart
-             update:UpdateCheck:update+check
+      define systemCommands weblink cmdList\
+      <ul>
+             pair:Pair:set+cul2+hmPairForSec+60\<br>
+             restart:Restart:shutdown+restart\<br>
+             update:UpdateCheck:update+check<br>
+      </ul>
       define aw weblink associatedWith rgr_Residents 3
       </code>
     </ul>
@@ -279,16 +281,16 @@ webdev_AWaddPos($$$)
     </ul>
   </ul>
 
-  <a name="weblinkset"></a>
+  <a id="weblink-set"></a>
   <b>Set</b> <ul>N/A</ul><br>
 
-  <a name="weblinkget"></a>
+  <a id="weblink-get"></a>
   <b>Get</b> <ul>N/A</ul><br>
 
-  <a name="weblinkattr"></a>
+  <a id="weblink-attr"></a>
   <b>Attributes</b>
   <ul>
-    <a name="htmlattr"></a>
+    <a id="weblink-attr-htmlattr"></a>
     <li>htmlattr<br>
       HTML attributes to be used for link, image and iframe type of links.
       E.g.:<br>
@@ -299,7 +301,7 @@ webdev_AWaddPos($$$)
         </code>
       </ul></li>
 
-    <a name="nodetaillink"></a>
+    <a id="weblink-nodetaillink"></a>
     <li>nodetaillink<br>
       Show no detail link for the types image and iframe.
       </li>

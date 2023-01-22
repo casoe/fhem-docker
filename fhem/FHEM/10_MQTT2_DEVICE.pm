@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_MQTT2_DEVICE.pm 25889 2022-03-27 10:39:22Z rudolfkoenig $
+# $Id: 10_MQTT2_DEVICE.pm 26860 2022-12-16 08:13:49Z rudolfkoenig $
 package main;
 
 use strict;
@@ -448,8 +448,8 @@ MQTT2_DEVICE_Attr($$)
     } else {
       my ($a, $h) = parseParams($param); #126679
       foreach my $key (keys %{$h}) {
-        return "$key is not valid, must only contain a-zA-z0-9_"
-                if($key !~ m/[a-z0-9_]/);
+        return "$key is not valid, must only contain a-zA-Z0-9_"
+                if($key !~ m/^[a-zA-Z0-9_]+$/);
       }
       $hash->{".DT"} = $h;
     }
@@ -855,11 +855,12 @@ MQTT2_DEVICE_addPos($@)
 #####################################
 # Utility functions for the AttrTemplates
 sub
-zigbee2mqtt_RGB2JSON($)
+zigbee2mqtt_RGB2JSON($;$)
 {
-  my $rgb = shift(@_);
+  my ($rgb,$trans) = (@_);
   $rgb =~ m/^(..)(..)(..)/;
-  return toJSON({'transition'=>1, 'color'=>{r=>hex($1),g=>hex($2),b=>hex($3)}});
+  return toJSON({'transition'=>defined($trans) ? $trans : 1,
+                 'color'=>{r=>hex($1),g=>hex($2),b=>hex($3)}});
 }
 
 sub

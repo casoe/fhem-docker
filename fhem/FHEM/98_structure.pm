@@ -1,4 +1,4 @@
-# $Id: 98_structure.pm 24999 2021-09-21 07:54:25Z rudolfkoenig $
+# $Id: 98_structure.pm 26331 2022-08-17 20:12:34Z rudolfkoenig $
 ##############################################################################
 #
 #     98_structure.pm
@@ -914,7 +914,7 @@ structure_Attr($@)
     <li><a href="#disable">disable</a></li>
     <li><a href="#disabledForIntervals">disabledForIntervals</a></li>
 
-    <a name="structureconsiderDisabledMembers"></a>
+    <a name="structure-attr-considerDisabledMembers"></a>
     <li>considerDisabledMembers<br>
         wenn gesetzt (auf 1), werden "disabled" Mitglieder bei der Berechnung
         der Struktur-Status ber&uuml;cksichtigt, sonst werden diese ignoriert.

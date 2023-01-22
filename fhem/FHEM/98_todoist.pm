@@ -1,5 +1,5 @@
 ﻿##############################################
-# $Id: 98_todoist.pm 24386 2021-05-05 08:18:00Z marvin78 $
+# $Id: 98_todoist.pm 26953 2023-01-03 12:58:56Z marvin78 $
 
 
 package main;
@@ -17,7 +17,8 @@ eval "use Date::Parse;1" or $missingModule .= "Date::Parse ";
 
 #######################
 # Global variables
-my $version = "1.3.11";
+my $version = "1.3.15";
+my $apiUrl = "https://api.todoist.com/sync/v9/";
 
 my $srandUsed;
 
@@ -326,12 +327,13 @@ sub todoist_ReorderTasks ($$) {
       my $method="POST";
       
       $param = {
-        url        => "https://api.todoist.com/sync/v8/sync",
+        url        => $apiUrl."sync",
         data       => $data,
         method     => $method,
         wType      => "reorder",
         timeout    => 7,
-        header     => "Content-Type: application/x-www-form-urlencoded",
+        header     => "Content-Type: application/x-www-form-urlencoded\r\n".
+					  "Authorization: Bearer ".$pwd,
         hash       => $hash,
         callback   => \&todoist_HandleTaskCallback,  ## call callback sub to work with the data we get
       };
@@ -583,14 +585,15 @@ sub todoist_UpdateTask($$$) {
       Log3 $name,4, "todoist ($name): JSON sent to todoist API: ".Dumper($data);
       
       $param = {
-        url        => "https://api.todoist.com/sync/v8/sync",
+        url        => $apiUrl."sync",
         data       => $data,
         tTitle     => $title,
         method     => $method,
         wType      => $type,
         taskId     => $taskId,
         timeout    => 7,
-        header     => "Content-Type: application/x-www-form-urlencoded",
+        header     => "Content-Type: application/x-www-form-urlencoded\r\n".
+					  "Authorization: Bearer ".$pwd,
         hash       => $hash,
         callback   => \&todoist_HandleTaskCallback,  ## call callback sub to work with the data we get
       };
@@ -712,14 +715,15 @@ sub todoist_CreateTask($$) {
       
         
         $param = {
-          url        => "https://todoist.com/sync/v8/items/add",
+          url        => $apiUrl."items/add",
           data       => $data,
           tTitle     => $title,
           method     => "POST",
           wType      => "create",
           parentId   => $parentId,
           timeout    => 7,
-          header     => "Content-Type: application/x-www-form-urlencoded",
+          header     => "Content-Type: application/x-www-form-urlencoded\r\n".
+					    "Authorization: Bearer ".$pwd,
           hash       => $hash,
           callback   => \&todoist_HandleTaskCallback,  ## call callback sub to work with the data we get
         };
@@ -879,10 +883,10 @@ sub todoist_GetTasks($;$) {
       };
       
       # set url for API access
-      my $url = "https://todoist.com/sync/v8/projects/get_data";
+      my $url = $apiUrl."projects/get_data";
       ## check if we get also the completed Tasks
       if ($completed == 1) {
-        $url = "https://todoist.com/sync/v8/completed/get_all";
+        $url = $apiUrl."completed/get_all";
         $data->{'limit'}=50;
       }
       
@@ -893,7 +897,8 @@ sub todoist_GetTasks($;$) {
         url        => $url,
         method     => "POST",
         data       => $data,
-        header     => "Content-Type: application/x-www-form-urlencoded",
+		header     => "Content-Type: application/x-www-form-urlencoded\r\n".
+					  "Authorization: Bearer ".$pwd,
         timeout    => 7,
         completed  => $completed,
         hash       => $hash,
@@ -1194,11 +1199,12 @@ sub todoist_GetUsers($) {
       Log3 $name,5, "$name: hash: ".Dumper($hash);
       
       $param = {
-        url        => "https://todoist.com/sync/v8/sync",
+        url        => $apiUrl."sync",
         data       => $data,
         timeout    => 7,
         method     => "POST",
-        header     => "Content-Type: application/x-www-form-urlencoded",
+        header     => "Content-Type: application/x-www-form-urlencoded\r\n".
+					  "Authorization: Bearer ".$pwd,
         hash       => $hash,
         callback   => \&todoist_GetUsersCallback,  ## call callback sub to work with the data we get
       };
@@ -1334,11 +1340,12 @@ sub todoist_GetProjects($) {
       Log3 $name,5, "$name: hash: ".Dumper($hash);
       
       $param = {
-        url        => "https://todoist.com/sync/v8/sync",
+        url        => $apiUrl."sync",
         data       => $data,
         timeout    => 7,
         method     => "POST",
-        header     => "Content-Type: application/x-www-form-urlencoded",
+        header     => "Content-Type: application/x-www-form-urlencoded\r\n".
+					  "Authorization: Bearer ".$pwd,
         hash       => $hash,
         callback   => \&todoist_GetProjectsCallback,  ## call callback sub to work with the data we get
       };

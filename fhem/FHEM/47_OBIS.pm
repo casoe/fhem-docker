@@ -13,7 +13,7 @@
 # Thanks to matzefizi for letting me merge this with 70_SMLUSB.pm and for testing
 # Thanks to immi for testing and supporting help and tips
 # 
-# $Id: 47_OBIS.pm 25436 2022-01-08 09:28:37Z gvzdus $
+# $Id: 47_OBIS.pm 26870 2022-12-18 11:03:32Z gvzdus $
 
 package main;
 use strict;
@@ -420,7 +420,7 @@ sub OBIS_Parse_List
       # Signed (5) or Unsigned (6) Int
       my $num = 0;
       my $subme = 0;
-      if ($tltype==0x50 && $len<4 && $isobis && $cntdown==2 && $result[0]=~/^1-0:16\.7\.0/ && $hash->{helper}{DZGHACK}) {
+      if ($tltype==0x50 && $len<4 && $isobis && $cntdown==2 && $result[0]=~/^1-0:[1357]6\.7\.0/ && $hash->{helper}{DZGHACK}) {
 		$tltype = 0x60;
       }
       if ($len==8) {

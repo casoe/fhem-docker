@@ -1,5 +1,5 @@
 ################################################################################
-# $Id: 70_ESCVP21net.pm 25750 2022-02-27 14:41:04Z hapege $
+# $Id: 70_ESCVP21net.pm 26919 2022-12-28 21:13:22Z hapege $
 #
 # ESCVP21net 
 #
@@ -35,6 +35,14 @@
 #    1.01.14  fixed problem with DevIo "No route" sending fhem to 100% CPU
 #    1.01.15  add debug options
 #    1.01.16  add cyclicConnect to mitigate lost TCP connection issue
+#    1.01.17  add TW9400
+#    1.01.18  added undocumented settings (IMGPROC, IRIS, LIRIS)
+#    1.01.19  added LS12000 (added POPLP, LENS, HLENS)
+#    1.01.20  added more LS12000 options, enable 2-value commands
+#    1.01.21  added HC2150
+#    1.01.22  added "on" and "off" as direct set commands
+#    1.01.23  adding some default attributes on Define (icon, webCmd, cmdIcon,stateFormat)
+#    1.01.24  optimize help text
 #
 ################################################################################
 #
@@ -68,7 +76,7 @@ use POSIX;
 
 #use JSON::XS qw (encode_json decode_json);
 
-my $version = "1.01.16";
+my $version = "1.01.24";
 my $missingModul = "";
 
 eval "use JSON::XS qw (encode_json decode_json);1" or $missingModul .= "JSON::XS ";
@@ -76,12 +84,12 @@ eval "use JSON::XS qw (encode_json decode_json);1" or $missingModul .= "JSON::XS
 # key(s) in defaultsets and defaultresults will be overwritten,
 # if <type>sets/<type>result defines the same key(s)
 my %ESCVP21net_debugsets = (
-  "reRead"   => ":noArg",
-  "encode"   => ":noArg",
-  "decode"   => ":noArg",
-  "PWSTATUS" => ":get",
-  "cleanup"  => ":noArg",
-  "connect"  => ":noArg",
+  "reRead"          => ":noArg",
+  "encode"          => ":noArg",
+  "decode"          => ":noArg",
+  "PWSTATUS"        => ":get",
+  "cleanup"         => ":noArg",
+  "connect"         => ":noArg",
   "removeTimer"     => ":noArg",
   "closeDevice"     => ":noArg",
   "deleteNextOpen"  => ":noArg",
@@ -93,10 +101,33 @@ my %ESCVP21net_defaultsets = (
   "GetAll"    => ":noArg",
   "GetStatus" => ":noArg",
   "ASPECT"    => ":get,HDMI,PC",
-  "KEY"       => ":get,HDMI1,PC",
+  "KEY"       => ":03,05,3C,3D",
   "LAMP"      => ":get",
   "MUTE"      => ":get,on,off,toggle",
-  "PWR"       => ":get,on,off,toggle"
+  "PWR"       => ":get,on,off,toggle",
+  "on"        => ":noArg",
+  "off"       => ":noArg"
+);
+
+my %ESCVP21net_Entrysets = (  
+  "BRIGHT"       => ":get",
+  "BRIGHTset"    => ":slider,0,1,255",
+  "CONTRAST"      => ":get",
+  "CONTRASTset"   => ":slider,0,1,255",
+  "DENSITY"      => ":get",
+  "DENSITYset"   => ":slider,0,1,255",
+  "TINT"         => ":get",
+  "TINTset"      => ":slider,0,1,255",
+  "SHARP"        => ":get",
+  "SHARPset"     => ":slider,0,1,255"
+);
+
+my %ESCVP21net_HomeBasicsets = (  
+  "GAMMA"        => ":get,-2,-1,0,1,2,custom"
+);
+
+my %ESCVP21net_HomeEntertainmentsets = (  
+  #
 );
 
 my %ESCVP21net_Miscsets = (
@@ -104,23 +135,30 @@ my %ESCVP21net_Miscsets = (
 );
 
 # TW5650 sets
+# also valid for HC2150 
 my %ESCVP21net_TW5650sets = (
-  "ASPECT"  => ":get,Auto,Auto20,Normal,Full,Zoom",
+  "ASPECT"       => ":get,Auto,Auto20,Normal,Full,Zoom",
+  "AUTOHOME"     => ":get,off,on",
   "AUTOKEYSTONE" => ":get,on,off",
-  "BTAUDIO" => ":get,on,off,toggle",
-  "CMODE"   => ":get,Dynamic,Natural,Living,Cinema,3D_Cinema,3D_Dynamic",
-  "HREVERSE" => ":get,Flip,Normal",
-  "ILLUM"   => ":get,on,off,toggle",
-  "LUMINANCE" => ":get,high,low,toggle",
-  "MCFI"    => ":get,off,low,normal,high",
-  "MSEL"     => ":get,black,blue,user",
-  "OVSCAN"  => ":get,off,4%,8%,auto",
-  "SIGNAL"  => ":get,none,2D,3D",
-  "SNO"     => ":get",
-  "SOURCE"	=> ":get,HDMI1,HDMI2,ScreenMirror,Input1,USB,LAN",
-  "VOLset"  => ":slider,0,1,20",
-  "VOL"     => ":get",
-  "VREVERSE" => ":get,Flip,Normal"
+  "BTAUDIO"      => ":get,on,off,toggle",
+  "CMODE"        => ":get,Dynamic,Natural,Living,Cinema,3D_Cinema,3D_Dynamic",
+  "ERASEMEM"     => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",
+  "HREVERSE"     => ":get,Flip,Normal",
+  "ILLUM"        => ":get,on,off,toggle",
+  "IMGPROC"      => ":get,fine,fast",
+  "IRIS"         => ":get,00,01,02",
+  "LUMINANCE"    => ":get,high,low,toggle",
+  "MCFI"         => ":get,off,low,normal,high",
+  "MSEL"         => ":get,black,blue,user",
+  "OVSCAN"       => ":get,off,4%,8%,auto",
+  "POPMEM"       => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",
+  "PUSHMEM"      => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",  
+  "SIGNAL"       => ":get,none,2D,3D",
+  "SNO"          => ":get",
+  "SOURCE"       => ":get,HDMI1,HDMI2,ScreenMirror,Input1,USB,LAN",
+  "VOLset"       => ":slider,0,1,20",
+  "VOL"          => ":get",
+  "VREVERSE"     => ":get,Flip,Normal"
 );
 
 my %ESCVP21net_TW5650result = (
@@ -168,8 +206,10 @@ my %ESCVP21net_TW6100result = (
   "SOURCE:F0"  => "ChangeCyclic"
 );
 
+# TW7400 sets
 my %ESCVP21net_TW7400sets = (
   "4KENHANCE" => ":get,off,FullHD",
+  "AUTOHOME"     => ":get,off,on",
   "ASPECT"    => ":get,Normal,Auto,Full,Zoom",
   "CMODE"     => ":get,Dynamic,Natural,BrightCinema,Cinema,3D_Cinema,3D_Dynamic,DigitalCinema",
   "HREVERSE"  => ":get,Flip,Normal",
@@ -204,31 +244,130 @@ my %ESCVP21net_TW7400result = (
   "SOURCE:F0"  => "ChangeCyclic"
 );
 
+# TW9400 sets
+my %ESCVP21net_TW9400sets = (
+  "4KENHANCE"    => ":get,off,FullHD",
+  "ASPECT"       => ":get,Auto,Normal,Full,Zoom",
+  "AUTOHOME"     => ":get,off,on",
+  "CMODE"        => ":get,Dynamic,Natural,BrightCinema,Cinema,3D_Cinema,3D_Dynamic,BW_Cinema,DigialCinema",
+  "DYNRANGE"     => ":get,Auto,SDR,HDR10,HLG",
+  "HREVERSE"     => ":get,Flip,Normal",
+  "ILLUM"        => ":get,on,off,toggle",
+  "IMGPRESET"    => ":get,Setting1,Setting2,Setting3,Setting4,Setting5",
+  "IMGPROC"      => ":get,fine,fast",
+  "IRIS"         => ":get,00,01,02",
+  "LIRIS"        => ":get,0,128,255",   
+  "LUMINANCE"    => ":get,normal,eco,medium",
+  "MCFI"         => ":get,off,low,normal,high",
+  "MSEL"         => ":get,black,blus,user",
+  "OVSCAN"       => ":get,off,4%,8%,auto",
+  "PRODUCT"      => ":get,ModelName_on,ModelName_off",
+  "SIGNAL"       => ":get,none,2D,3D",
+  "SNO"          => ":get",
+  "SOURCE"       => ":get,HDMI1,HDMI2,Input1,Input2,ScreenMirror,PC1,PC2,USB,LAN,Video,Video(RCA),WirelessHD",
+  "VREVERSE"     => ":get,Flip,Normal",
+  "WLPWR"        => ":get,WLAN_on,WLAN_off"
+);
+
+my %ESCVP21net_TW9400result = (
+  "CMODE:06"     => "Dynamic",
+  "CMODE:07"     => "Natural",
+  "CMODE:0C"     => "BrightCinema",
+  "CMODE:15"     => "Cinema",
+  "CMODE:17"     => "3D_Cinema",
+  "CMODE:18"     => "3D_Dynamic",
+  "CMODE:20"     => "BW_Cinema",
+  "CMODE:22"     => "DigitalCinema",
+  "LUMINANCE:00" => "normal",
+  "LUMINANCE:01" => "eco",
+  "LUMINANCE:02" => "medium"
+);
+
+# LS12000 sets
+my %ESCVP21net_LS12000sets = (
+  "ASPECT"       => ":get,Auto,Full,Zoom,Anamorphic,HorizSqueeze",
+  "CMODE"        => ":get,Dynamic,Natural,BrightCinema,Cinema,BW_Cinema,Vivid",
+  "DYNRANGE"     => ":get,Auto,SDR,HDR10,HLG",
+  "ERASEMEM"     => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",
+  "HLENS"        => ":get",
+  "HREVERSE"     => ":get,Flip,Normal",
+  "ILLUM"        => ":get,on,off,toggle",
+  "IMGPRESET"    => ":get,Setting1,Setting2,Setting3,Setting4,Setting5",
+  "LENS"         => ":get",
+  "LUMINANCE"    => ":get,min,middle,max",
+  "MCFI"         => ":get,off,low,normal,high",
+  "OVSCAN"       => ":get,off,4%,8%,auto",
+  "POPLA"        => ":Memory01,Memory02,Memory03",  
+  "POPLP"        => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",
+  "POPMEM"       => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",
+  "PUSHLA"       => ":Memory01,Memory02,Memory03",  
+  "PUSHLP"       => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",
+  "PUSHMEM"      => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",  
+  "SIGNAL"       => ":get",
+  "SNO"          => ":get",
+  "SOURCE"       => ":get,HDMI1,HDMI2",
+  "VREVERSE"     => ":get,Flip,Normal"
+);
+
+my %ESCVP21net_LS12000result = (
+  "ASPECT:30"     => "Auto",
+  "ASPECT:40"     => "Full",
+  "ASPECT:50"     => "Zoom",
+  "ASPECT:80"     => "Anamorphic",
+  "ASPECT:90"     => "HorizSqueeze",
+  "CMODE:06"      => "Dynamic",
+  "CMODE:07"      => "Natural",
+  "CMODE:0C"      => "BrightCinema",
+  "CMODE:15"      => "Cinema",
+  "CMODE:20"      => "BW_Cinema",
+  "CMODE:23"      => "Vivid",
+  "LUMINANCE:00"  => "min",
+  "LUMINANCE:127" => "middle",
+  "LUMINANCE:255" => "max",
+  "SIGNAL:00"     => "no_signal",
+  "SIGNAL:01"     => "signal_detected"
+);
 
 # scotty sets - sort of godmode, gives you enhanced set possibilities
 my %ESCVP21net_Scottysets = (
-  "4KENHANCE" => ":get,off,FullHD",
-  "ASPECT"    => ":get,Auto,Auto20,Normal,Full,Zoom,Wide",
+  "4KENHANCE"    => ":get,off,FullHD",
+  "ASPECT"       => ":get,Auto,Auto20,Normal,Full,Zoom,Wide",
+  "AUTOHOME"     => ":get,off,on",
   "AUTOKEYSTONE" => ":get,on,off",
-  "AUDIO"     => ":get,Audio1,Audio2,USB",
-  "AVOUT"     => ":get,projection,constantly",
-  "BTAUDIO"   => ":get,on,off,toggle",
-  "CMODE"     => ":get,sRGB,Normal,Meeting,Presentation,Theatre,Game/LivingRoom,Natural,Dynamic/Sports,09,Custom,Living,BlackBoard,WhiteBoard,14,Photo,Cinema,3D_Cinema,3D_Dynamic",
-  "FREEZE"    => ":get,on,off,toggle",
-  "HREVERSE"  => ":get,Flip,Normal",
-  "ILLUM"     => ":get,on,off,toggle",
-  "LUMINANCE" => ":get,high,low,toggle",
-  "MSEL"      => ":get,black,blus,user",
-  "OVSCAN"    => ":get,off,4%,8%,auto",
-  "PRODUCT"   => ":get,ModelName_on,ModelName_off",
-  "PWSTATUS"  => ":get",
-  "SIGNAL"    => ":get,none,2D,3D",
-  "SNO"       => ":get",
-  "SOURCE"    => ":get,HDMI1,HDMI2,Input1,Input2,ScreenMirror,PC1,PC2,USB,LAN,Video,Video(RCA),WirelessHD",
-  "VOL"       => ":get",
-  "VOLset"    => ":slider,-1,1,20",
-  "VREVERSE"  => ":get,Flip,Normal",
-  "WLPWR"     => ":get,WLAN_on,WLAN_off"
+  "AUDIO"        => ":get,Audio1,Audio2,USB",
+  "AVOUT"        => ":get,projection,constantly",
+  "BTAUDIO"      => ":get,on,off,toggle",
+  "CMODE"        => ":get,sRGB,Normal,Meeting,Presentation,Theatre,Game/LivingRoom,Natural,Dynamic/Sports,09,Custom,Living,BlackBoard,WhiteBoard,14,Photo,Cinema,3D_Cinema,3D_Dynamic,BW_Cinema,DigitalCinema,Vivid",
+  "DYNRANGE"     => ":get,Auto,SDR,HDR10,HLG",
+  "ERASEMEM"     => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",
+  "FREEZE"       => ":get,on,off,toggle",
+  "HLENS"        => ":get",
+  "HREVERSE"     => ":get,Flip,Normal",
+  "ILLUM"        => ":get,on,off,toggle",
+  "IMGPRESET"    => ":get,Setting1,Setting2,Setting3,Setting4,Setting5",
+  "IMGPROC"      => ":get,fine,fast",
+  "IRIS"         => ":get,00,01,02",
+  "LENS"         => ":get",
+  "LIRIS"        => ":get,0,128,255",        
+  "LUMINANCE"    => ":get,high,low,toggle",
+  "MCFI"         => ":get,off,low,normal,high",
+  "MSEL"         => ":get,black,blus,user",
+  "OVSCAN"       => ":get,off,4%,8%,auto",
+  "POPLA"        => ":Memory01,Memory02,Memory03",  
+  "POPLP"        => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",
+  "POPMEM"       => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",
+  "PUSHLA"       => ":Memory01,Memory02,Memory03",  
+  "PUSHLP"       => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",
+  "PUSHMEM"      => ":Memory01,Memory02,Memory03,Memory04,Memory05,Memory06,Memory07,Memory08,Memory09,Memory10",  
+  "PRODUCT"      => ":get,ModelName_on,ModelName_off",
+  "PWSTATUS"     => ":get",
+  "SIGNAL"       => ":get,none,2D,3D",
+  "SNO"          => ":get",
+  "SOURCE"       => ":get,HDMI1,HDMI2,Input1,Input2,ScreenMirror,PC1,PC2,USB,LAN,Video,Video(RCA),WirelessHD",
+  "VOL"          => ":get",
+  "VOLset"       => ":slider,-1,1,20",
+  "VREVERSE"     => ":get,Flip,Normal",
+  "WLPWR"        => ":get,WLAN_on,WLAN_off"
 );
 
 my %ESCVP21net_Scottyresult = (
@@ -250,6 +389,9 @@ my %ESCVP21net_Scottyresult = (
   "CMODE:15"     => "Cinema",
   "CMODE:17"     => "3D_Cinema",
   "CMODE:18"     => "3D_Dynamic",
+  "CMODE:20"     => "BW_Cinema",  
+  "CMODE:22"     => "DigitalCinema",
+  "CMODE:Vivid"  => "23",  
   "LUMINANCE:00" => "normal",
   "LUMINANCE:01" => "eco",
   "LUMINANCE:02" => "medium"
@@ -264,11 +406,15 @@ my %ESCVP21net_data = (
   "ASPECT:Auto"           => "30",
   "ASPECT:Full"           => "40",
   "ASPECT:Zoom"           => "50",
+  "ASPECT:Anamorphic"     => "80",
+  "ASPECT:HorizSqueeze"   => "90",
   "AUDIO:Audio1"          => "01",
   "AUDIO:Audio2"          => "02",
   "AUDIO:USB"             => "03",
   "AUTOKEYSTONE:on"       => "ON",
   "AUTOKEYSTONE:off"      => "OFF",
+  "AUTOHOME:off"          => "00",
+  "AUTOHOME:on"           => "01",
   "AVOUT:projection"      => "00",
   "AVOUT:constantly"      => "01",
   "BTAUDIO:on"            => "01",
@@ -293,18 +439,49 @@ my %ESCVP21net_data = (
   "CMODE:Cinema"          => "15",
   "CMODE:3D_Cinema"       => "17",
   "CMODE:3D_Dynamic"      => "18",
-  "CMODE:DigitalCinema"   => "22",  
+  "CMODE:DigitalCinema"   => "22",
+  "CMODE:Vivid"           => "23",
+  "DYNRANGE:Auto"         => "00",
+  "DYNRANGE:SDR"          => "01",
+  "DYNRANGE:HDR10"        => "20",
+  "DYNRANGE:HLG"          => "30",              
+  "ERASEMEM:Memory01"     => "02 01",
+  "ERASEMEM:Memory02"     => "02 02",
+  "ERASEMEM:Memory03"     => "02 03",
+  "ERASEMEM:Memory04"     => "02 04",
+  "ERASEMEM:Memory05"     => "02 05",
+  "ERASEMEM:Memory06"     => "02 06",
+  "ERASEMEM:Memory07"     => "02 07",
+  "ERASEMEM:Memory08"     => "02 08",
+  "ERASEMEM:Memory09"     => "02 09",
+  "ERASEMEM:Memory10"     => "02 0A",
   "FREEZE:on"             => "ON",
   "FREEZE:off"            => "OFF",
+  "GAMMA:-2"              => "24",
+  "GAMMA:-1"              => "23",
+  "GAMMA:0"               => "22",
+  "GAMMA:1"               => "21",
+  "GAMMA:2"               => "20",
+  "GAMMA:custom"          => "F0",
   "HREVERSE:Flip"         => "ON",
   "HREVERSE:Normal"       => "OFF",
   "ILLUM:on"              => "01",
   "ILLUM:off"             => "00",
+  "IMGPRESET:Setting1"    => "01",
+  "IMGPRESET:Setting2"    => "02",
+  "IMGPRESET:Setting3"    => "03",
+  "IMGPRESET:Setting4"    => "04",
+  "IMGPRESET:Setting5"    => "05",
+  "IMGPROC:fine"          => "01",
+  "IMGPROC:fast"          => "02",
   "LUMINANCE:high"        => "00",
   "LUMINANCE:low"         => "01",
   "LUMINANCE:normal"      => "00",
   "LUMINANCE:eco"         => "01",
   "LUMINANCE:medium"      => "02",
+  "LUMINANCE:min"         => "00",
+  "LUMINANCE:middle"      => "127",
+  "LUMINANCE:max"         => "255",
   "MCFI:off"              => "00",
   "MCFI:low"              => "01",
   "MCFI:normal"           => "02",
@@ -318,27 +495,73 @@ my %ESCVP21net_data = (
   "OVSCAN:4%"             => "02",
   "OVSCAN:8%"             => "04",
   "OVSCAN:auto"           => "A0",
+  "POPLA:Memory01"        => "01",
+  "POPLA:Memory02"        => "02",
+  "POPLA:Memory03"        => "03",
+  "POPLP:Memory01"        => "01",
+  "POPLP:Memory02"        => "02",
+  "POPLP:Memory03"        => "03",
+  "POPLP:Memory04"        => "04",
+  "POPLP:Memory05"        => "05",
+  "POPLP:Memory06"        => "06",
+  "POPLP:Memory07"        => "07",
+  "POPLP:Memory08"        => "08",
+  "POPLP:Memory09"        => "09",
+  "POPLP:Memory10"        => "0A",
+  "PUSHLA:Memory01"       => "01",
+  "PUSHLA:Memory02"       => "02",
+  "PUSHLA:Memory03"       => "03",
+  "PUSHLP:Memory01"       => "01",
+  "PUSHLP:Memory02"       => "02",
+  "PUSHLP:Memory03"       => "03",
+  "PUSHLP:Memory04"       => "04",
+  "PUSHLP:Memory05"       => "05",
+  "PUSHLP:Memory06"       => "06",
+  "PUSHLP:Memory07"       => "07",
+  "PUSHLP:Memory08"       => "08",
+  "PUSHLP:Memory09"       => "09",
+  "PUSHLP:Memory10"       => "0A",  
   "PRODUCT:ModelName_off" => "00",
   "PRODUCT:ModelName_on"  => "01",
+  "PUSHMEM:Memory01"      => "02 01",
+  "PUSHMEM:Memory02"      => "02 02",
+  "PUSHMEM:Memory03"      => "02 03",
+  "PUSHMEM:Memory04"      => "02 04",
+  "PUSHMEM:Memory05"      => "02 05",
+  "PUSHMEM:Memory06"      => "02 06",
+  "PUSHMEM:Memory07"      => "02 07",
+  "PUSHMEM:Memory08"      => "02 08",
+  "PUSHMEM:Memory09"      => "02 09",
+  "PUSHMEM:Memory10"      => "02 0A",
+  "POPMEM:Memory01"       => "02 01",
+  "POPMEM:Memory02"       => "02 02",
+  "POPMEM:Memory03"       => "02 03",
+  "POPMEM:Memory04"       => "02 04",
+  "POPMEM:Memory05"       => "02 05",
+  "POPMEM:Memory06"       => "02 06",
+  "POPMEM:Memory07"       => "02 07",
+  "POPMEM:Memory08"       => "02 08",
+  "POPMEM:Memory09"       => "02 09",
+  "POPMEM:Memory10"       => "02 0A",
   "PWR:on"                => "ON",
   "PWR:off"               => "OFF",
   "SIGNAL:none"           => "00",
   "SIGNAL:2D"             => "01",
   "SIGNAL:3D"             => "02",
   "SIGNAL:not_supported"  => "03",
-  "SOURCE:HDMI1"          => "30",
-  "SOURCE:HDMI2"          => "A0",
-  "SOURCE:ScreenMirror"   => "56",
-  "SOURCE:PC"             => "10",
-  "SOURCE:Input1"         => "10",  
+  "SOURCE:Input1"         => "10",
+  "SOURCE:PC"             => "10",  
+  "SOURCE:PC1"            => "1F",
   "SOURCE:Input2"         => "20",  
+  "SOURCE:Dsub"           => "20",
+  "SOURCE:PC2"            => "2F",
+  "SOURCE:HDMI1"          => "30",
   "SOURCE:Video"          => "40",  
   "SOURCE:Video(RCA)"     => "41",  
-  "SOURCE:PC1"            => "1F",
-  "SOURCE:PC2"            => "2F",
   "SOURCE:USB"            => "52",
   "SOURCE:LAN"            => "53",
-  "SOURCE:Dsub"           => "20",
+  "SOURCE:ScreenMirror"   => "56",
+  "SOURCE:HDMI2"          => "A0",
   "SOURCE:WirelessHD"     => "D0",  
   "VREVERSE:Flip"         => "ON",
   "VREVERSE:Normal"       => "OFF",
@@ -363,16 +586,35 @@ my %ESCVP21net_defaultresults = (
   "AUDIO:03"         => "USB",
   "AVOUT:00"         => "projection",
   "AVOUT:01"         => "constantly",
+  "AUTOHOME:00"      => "off",
+  "AUTOHOME:01"      => "on",  
   "AUTOKEYSTONE:ON"  => "on",
   "AUTOKEYSTONE:OFF" => "off",
   "BTAUDIO:01"       => "on",
   "BTAUDIO:00"       => "off",
+  "DYNRANGE:00"      => "Auto",
+  "DYNRANGE:01"      => "SDR",
+  "DYNRANGE:20"      => "HDR10",
+  "DYNRANGE:30"      => "HLG",  
   "FREEZE:ON"        => "on",
   "FREEZE:OFF"       => "off",
+  "GAMMA:24"         => "-2",
+  "GAMMA:23"         => "-1",
+  "GAMMA:22"         => "0",
+  "GAMMA:21"         => "1",
+  "GAMMA:20"         => "2",
+  "GAMMA:F0"         => "custom",
   "HREVERSE:ON"      => "Flip",
   "HREVERSE:OFF"     => "Normal",
   "ILLUM:01"         => "on", 
   "ILLUM:00"         => "off",
+  "IMGPRESET:01"     => "Setting1",
+  "IMGPRESET:02"     => "Setting2",
+  "IMGPRESET:03"     => "Setting3",
+  "IMGPRESET:04"     => "Setting4",
+  "IMGPRESET:05"     => "Setting5",
+  "IMGPROC:01"       => "fine",
+  "IMGPROC:02"       => "fast",    
   "MCFI:00"          => "off",
   "MCFI:01"          => "low",
   "MCFI:02"          => "normal",
@@ -493,10 +735,19 @@ sub ESCVP21net_Define {
   ESCVP21net_setTypeCmds($hash);
   
 	# check if definition is new or existing 
-	if($init_done && !defined($hash->{OLDDEF}))
+	#if($init_done && !defined($hash->{OLDDEF}))
+  if($init_done)
 	{
-		# set stateFormat
-    $attr{$name}{"stateFormat"} = "PWR";
+		# commands here seem not to be run on restart, but only on new define
+    # set stateFormat
+    #$attr{$name}{"stateFormat"} = "LAMP";
+    #$attr{$name}{cmdIcon} = "PWRon:remotecontrol/black_btn_GREEN PWRoff:remotecontrol/black_btn_RED GetStatus:remotecontrol/black_btn_STATUS GetAll:remotecontrol/black_btn_INFO" if (!defined ($attr{$name}{cmdIcon}));
+    $attr{$name}{cmdIcon} = "on:remotecontrol/black_btn_GREEN off:remotecontrol/black_btn_RED GetStatus:remotecontrol/black_btn_STATUS GetAll:remotecontrol/black_btn_INFO" if (!defined ($attr{$name}{cmdIcon}));
+    #$attr{$name}{eventMap} = "/PWR on:PWRon/PWR off:PWRoff/" if (!defined ($attr{$name}{eventMap}));
+    $attr{$name}{icon} = "it_camera" if (!defined ($attr{$name}{icon}));
+    $attr{$name}{stateFormat} = "PWR" if (!defined ($attr{$name}{stateFormat}));
+    #$attr{$name}{webCmd} = "PWRon:PWRoff:GetStatus:GetAll" if (!defined ($attr{$name}{webCmd}));
+    $attr{$name}{webCmd} = "on:off:GetStatus:GetAll" if (!defined ($attr{$name}{webCmd}));
  	}
   main::Log3 $name, 5, "[$name]: Define: device $name defined";
   
@@ -508,6 +759,7 @@ sub ESCVP21net_Undef {
   RemoveInternalTimer($hash);
   BlockingKill( $hash->{helper}{RUNNING_PID} ) if ( defined( $hash->{helper}{RUNNING_PID} ) );
   DevIo_CloseDev($hash);
+  delete($modules{ESCVP21net}{defptr});
   return ;
 }
 
@@ -569,6 +821,7 @@ sub ESCVP21net_Notify($$) {
       ESCVP21net_Attr("set",$name,"AdditionalSettings",$hash->{AdditionalSettings});
       main::Log3 $name, 5, "adding attrs: $name, ".$hash->{AdditionalSettings};
     }
+    
   }
 
   if($devName eq $name && grep(m/^CONNECTED|opened$/, @{$events})){
@@ -927,19 +1180,22 @@ sub ESCVP21net_Set {
   my $name = shift @param;
   my $opt = shift @param;
   if (int(@param) > 0){
-    $value = join("", @param);
+    # changed for multi parameter by adding joining params by space
+    #$value = join("", @param);
+    $value = join(" ", @param);
     #my $value = shift @param;    
   }
   else{
     $value = "none";
   }
-  # add LF to log for better overview...
+  # add LF to log for better overview in Logfile...
   if ($opt ne "?"){
     main::Log3 $name, 5, "\n";
     main::Log3 $name, 5, "[$name]: Set: called with $name $opt $value";
   }
   
   $hash = $defs{$name};
+  $hash->{version} = $version;
   my $list = "";
   my $timeout    = 10;
   my $blockingFn = "ESCVP21net_setValue";
@@ -1049,7 +1305,7 @@ sub ESCVP21net_Set {
   }
 ##### end of debug options
   
-  # everything fine so far, so contruct $arg to pass by blockingFn  
+  # everything fine so far, so construct $arg to pass by blockingFn  
   my $arg = $name."|".$opt."|".$value;
   # store latest command to helper
   $hash->{helper}{lastCommand} = $opt;  
@@ -1074,7 +1330,7 @@ sub ESCVP21net_setValue($){
   # subroutine should be called unblocking e.g. via ESCVP21net_Set
   my ($string) = @_;
   my ( $name, $cmd, $val ) = split( "\\|", $string );
-  my $result = "none";
+  my $result = "none"; # set as default for initialization
   my $returnval = "$name|$cmd|error"; # just for initialization
   my @resultarr;
   my $data = "";
@@ -1087,6 +1343,16 @@ sub ESCVP21net_setValue($){
   my $sendloop = "1";
   my @cmds2set;
   my $hash = $defs{$name};
+
+  # handle special on/off command
+  if($cmd eq "on") {
+    $cmd = "PWR";
+    $val = "on";
+  }
+  if($cmd eq "off") {
+    $cmd = "PWR";
+    $val = "off";
+  }
 
   # add ? if cmd is get
   if ($val eq "get"){
@@ -1101,22 +1367,44 @@ sub ESCVP21net_setValue($){
   elsif(!defined($val)){
     # val is empty for GetAll, GetStatus
     $val = "none";
-  }  
+  }
+
   # else get the correct raw command from data hash
   else {
     $datakey = $cmd.":".$val;
     if (exists($ESCVP21net_data{$datakey})){
       $val = $ESCVP21net_data{$datakey};
     }
-    # VOLset needs special treatment, since Epson does some funny by-12 calculation
-    if ($cmd eq "VOLset"){
-      $val = $val*$volfactor;
-	    $cmd = "VOL";      
+    # handle commands with integers to set, named XXXXset
+    # test if cmd ends with set, then strip set and set cmd to string without set
+    # e.g. VOLset becomes VOL
+    # BRIGHTset: not all values might be accepted, projector switches to next possible lower value    
+    if ($cmd =~ /set$/){
+      my $cmdraw = $cmd;
+      
+      # VOLset needs special treatment, since Epson does some funny by-12 calculation
+      if ($cmd eq "VOLset"){
+        $val = $val*$volfactor;
+	      #$cmd = "VOL";      
+        }
+      
+      $cmd =~ s/set//;
+      main::Log3 $name, 5, "[$name]: setValue: $cmdraw contains set, cmd changed to $cmd";
     }
+
+    # BRIGHTset
+    # not all values might be accepted, projector switches to nex possible lower value
+    #if ($cmd eq "BRIGHTset"){
+    #  #$val = $val*$factor;
+	  #  $cmd = "BRIGHT";      
+    #}
+
     # set end encode data to be sent, Epson wants \r\n and utf8
     $data = "$cmd $val\r\n";
     $encdata = encode("utf8",$data);  
   }
+
+  main::Log3 $name, 5, "[$name]: setValue: command to send is $data";
 
   # now open socket - couldn't get read/write to socket via DevIo
   my $sock = ESCVP21net_openSocket($hash);
@@ -1355,9 +1643,12 @@ sub ESCVP21net_setValueDone {
     }
     else{
       $rv = readingsBulkUpdate($hash, $cmd, $result, 1);
-      # if VOL, we also have to set VOLset!
-      $rv = readingsBulkUpdate($hash, "VOLset", "set to $result", 1)
-        if ($cmd eq "VOL");
+      # if cmd was originally XXXset, we also have to set XXXset
+      if ($hash->{helper}{lastCommand} =~ /set$/){
+        $rv = readingsBulkUpdate($hash, $hash->{helper}{lastCommand}, "set to $result", 1);
+      }
+      #if ($cmd eq "VOL") {$rv = readingsBulkUpdate($hash, "VOLset", "set to $result", 1);}
+      #if ($cmd eq "BRIGHT") {$rv = readingsBulkUpdate($hash, "BRIGHTset", "set to $result", 1);}  
       $getcmds .= $cmd.",";     
     }
     main::Log3 $name, 5, "[$name]: setValueDone: resultarray loop end: $cmd set to $rv";
@@ -1389,12 +1680,32 @@ sub ESCVP21net_setValueError {
 
 sub ESCVP21net_calcResult {
   my ($hash, $result, $cmd, $datakey, $volfactor) = @_;
+  my $name = $hash->{NAME};
+  my $setval;
+  if ($datakey =~ /:/){
+    $setval = (split ":", $datakey, 2)[1];
+  }
+  else {
+    $setval = $datakey;
+  }
+  
   # result is of the form "LAMP=1234 :"
   # or something like IMEVENT=0001 03 00000002 00000000 T1 F1 : (happens sometimes at PWR off, 03 is the relevant value then)
+  main::Log3 $name, 5, "[$name]: calcResult got Result: $result, Command: $cmd, Datakey: $datakey, SetVal: $setval";
   if (!$result){
     $result = "none";
     return $result;
   }
+  elsif ($result =~ "ERR"){
+    # Projector rturned an error - happens when no "get" is implemented by Epson
+    # I decided to not output just "Error", but take the value which was originally set
+    # and write it to result
+    # Not 100% clean, since one might set an value outside fhem, and the module has no chance to read that
+    # but why, WTF, should someone use anything but fhem to set something ;-)
+    #$result = "projector does not provide return value";
+    #return $result;
+    $result = $setval;
+  }  
   elsif ($result =~ "IMEVENT"){
     $result = (split / /, $result, 3)[1];
   }
@@ -1537,7 +1848,7 @@ sub ESCVP21net_VP21init ($$) {
 sub ESCVP21net_checkConnection ($) {
   # checks each intervall if connection is still alive - DevIo recognizes a broken connection
   # (like device switched completely off) only after TCP timeout of 60-90 minutes
-  # check can be omitted by setting checkIntervall to "off"  
+  # check can be omitted by setting checkInterval to "off"  
   my ($hash) = @_;
   my $name = $hash->{NAME};
   
@@ -1669,9 +1980,10 @@ sub ESCVP21net_setTypeCmds ($){
   my $name = $hash->{NAME};
   my %ESCVP21net_typesets;
   my %ESCVP21net_typeresults;
+  main::Log3 $name, 5, "[$name]: setTypeCmds: model type is $hash->{model}";
   
-  if ($hash->{model} eq "TW5650"){
-    %ESCVP21net_typesets = (%ESCVP21net_defaultsets,%ESCVP21net_TW5650sets, %VP21addattrs);
+  if (($hash->{model} eq "TW5650") || ($hash->{model} eq "HC2150")){
+    %ESCVP21net_typesets = (%ESCVP21net_defaultsets,%ESCVP21net_Entrysets,%ESCVP21net_HomeBasicsets,%ESCVP21net_TW5650sets, %VP21addattrs);
     %ESCVP21net_typeresults = (%ESCVP21net_defaultresults,%ESCVP21net_TW5650result);
     main::Log3 $name, 5, "[$name]: setTypeCmds: loaded TW5650 sets and result";
   }
@@ -1681,17 +1993,27 @@ sub ESCVP21net_setTypeCmds ($){
     main::Log3 $name, 5, "[$name]: setTypeCmds: loaded EB2250 sets and result";
   }
   elsif ($hash->{model} eq "TW6100"){
-    %ESCVP21net_typesets = (%ESCVP21net_defaultsets,%ESCVP21net_TW6100sets, %VP21addattrs);
+    %ESCVP21net_typesets = (%ESCVP21net_defaultsets,%ESCVP21net_Entrysets,%ESCVP21net_HomeBasicsets,%ESCVP21net_TW6100sets, %VP21addattrs);
     %ESCVP21net_typeresults = (%ESCVP21net_defaultresults,%ESCVP21net_TW6100result);
     main::Log3 $name, 5, "[$name]: setTypeCmds: loaded TW6100 sets and result";
   } 
   elsif ($hash->{model} eq "TW7400"){
-    %ESCVP21net_typesets = (%ESCVP21net_defaultsets,%ESCVP21net_TW7400sets, %VP21addattrs);
+    %ESCVP21net_typesets = (%ESCVP21net_defaultsets,%ESCVP21net_Entrysets,%ESCVP21net_HomeBasicsets,%ESCVP21net_TW7400sets, %VP21addattrs);
     %ESCVP21net_typeresults = (%ESCVP21net_defaultresults,%ESCVP21net_TW7400result);
     main::Log3 $name, 5, "[$name]: setTypeCmds: loaded TW7400 sets and result";
   }
+  elsif ($hash->{model} eq "TW9400"){
+    %ESCVP21net_typesets = (%ESCVP21net_defaultsets,%ESCVP21net_Entrysets,%ESCVP21net_HomeBasicsets,%ESCVP21net_TW9400sets, %VP21addattrs);
+    %ESCVP21net_typeresults = (%ESCVP21net_defaultresults,%ESCVP21net_TW9400result);
+    main::Log3 $name, 5, "[$name]: setTypeCmds: loaded TW9400 sets and result";
+  }  
+  elsif ($hash->{model} eq "LS12000"){
+    %ESCVP21net_typesets = (%ESCVP21net_defaultsets,%ESCVP21net_Entrysets,%ESCVP21net_HomeBasicsets,%ESCVP21net_LS12000sets, %VP21addattrs);
+    %ESCVP21net_typeresults = (%ESCVP21net_defaultresults,%ESCVP21net_LS12000result);
+    main::Log3 $name, 5, "[$name]: setTypeCmds: loaded LS12000 sets and result";
+  }  
   elsif ($hash->{model} eq "Scotty"){
-    %ESCVP21net_typesets = (%ESCVP21net_defaultsets,%ESCVP21net_Scottysets, %VP21addattrs);
+    %ESCVP21net_typesets = (%ESCVP21net_defaultsets,%ESCVP21net_Entrysets,%ESCVP21net_HomeBasicsets,%ESCVP21net_Scottysets, %VP21addattrs);
     %ESCVP21net_typeresults = (%ESCVP21net_defaultresults,%ESCVP21net_Scottyresult);
     main::Log3 $name, 5, "[$name]: setTypeCmds: loaded Scotty sets and result";
   }  
@@ -1839,7 +2161,8 @@ sub ESCVP21net_openDevice{
 <h3>ESCVP21net</h3>
 
 <ul>
-  <i>ESCVP21net</i> implements Epson VP21 control via (W)LAN, uses VP.net.
+  <br><i>ESCVP21net</i> implements Epson VP21 control via (W)LAN, uses VP.net.
+  <br>Attention: To be able to switch the projector power on via (W)LAN, you have to enable wireless/LAN standby mode (or whatever it is called in your projector menu), so that the projector does NOT deactivate the (W)LAN in standby mode!
   <br><br>
   <a id="ESCVP21net-define"></a>
   <b>Define</b>
@@ -1857,11 +2180,19 @@ sub ESCVP21net_openDevice{
       <li><b>model</b> - defines your type of projector. It is used for loading a suitable pre-defined command set.
         <br>No parameter or <i>default</i> will provide you with a limit "set" (PWR, MUTE, LAMP, KEY, GetAll, GetStatus).
         <br>You can try <i>TW5650</i> to get a typical set of implemented commands. Providing the maintainer with a suitable set for your projector will extend the module's capabilities ;-)
-        <br>Individually supported by now: TW5650, EB2250U, TW6100, TW7400
+        <br>Individually supported by now: TW5650, EB2250U, TW6100, TW7400, TW9400, LS12000, HC2150
         <br>"Hidden Feature:" Type <i>Scotty</i> will give you everything (as he does always ;) ). Not every command will work for you. You are the Captain, so decide wisely what to choose...
       </li>
       <li>Example: <code>define EPSON ESCVP21net 10.10.0.1 3629 TW5650</code>
       </li>
+    </ul>
+    <br>
+    <br>The first Define (or defmod) will configure
+    <ul>
+      <li>a standard icon (it will use "it_camera", since I am not really a good designer)</li>
+      <li>webCmds for on, off, GetStatus, GetAll</li>
+      <li>cmdIcons for the webCmds</li>
+      <li>stateFormat as PWR</li>
     </ul>      
   </ul>
   <br>
@@ -1874,32 +2205,279 @@ sub ESCVP21net_openDevice{
     <br>For the predefined commands, "nice" names will be shown in the readings, e.g. for PWR: <b>Standby (Net on)</b> instead of the boring <b>PWR=04</b> (which is the device's answer if the projector is in Standby with LAN on).
     <br>Default set commands are
     <br><br>
-    <li>PWR
-      <br><i>on</i> or <i>off</i> to switch power, <i>get</i> to query current value
-    </li>
-    <br>
-    <li>MUTE
-      <br><i>on</i> or <i>off</i> to mute video signal (i.e. blank screen), <i>get</i> to query current state
-    </li>
-    <br>
-    <li>LAMP
-      <br><i>get</i> to query lamp hours
-    </li>
-    <br>
-    <li>KEY
-      <br>sends the value you enter to the projector.
-      <br>E.g.<i>KEY 03</i> should open the OSD menu, <i>KEY 05</i> should close it.
-    </li>
-    <br>
+    <a id="ESCVP21net-set-GetAll"></a>
     <li>GetAll
       <br>This is a little bit special - it does not send just one command to the projector, but will select <b>every</b> command defined which has a <b>get</b> option, send it to the projector and update the corresponding reading. If a command gives no result or an error, this will be suppressed, the old value is silently kept.
       <br>The status of GetAll is shown in the <b>GetAll</b> reading. It will either show the read commands, or inform if an error was received.
     </li>
     <br>
+    <a id="ESCVP21net-set-GetStatus"></a>
     <li>GetStatus
       <br>Also special - also does not send just one command to the projector, but will select <b>every</b> command you defined in attr "statusCheckCmd" which has a <b>get</b> option, send it to the projector and update the corresponding reading. If a command gives no result or an error, this will be suppressed, the old value is silently kept.
       <br>The status of GetStatus is shown in the <b>GetStatus</b> reading. It will either show the read commands, or inform if an error was received.
-    </li>    
+    </li>
+    <br>    
+    <a id="ESCVP21net-set-LAMP"></a>
+    <li>LAMP
+      <br><i>get</i> to query lamp hours.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-MUTE"></a>
+    <li>MUTE
+      <br><i>on</i> or <i>off</i> to mute video signal (i.e. blank screen), <i>get</i> to query current state.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-KEY"></a>
+    <li>KEY
+      <br>sends the value you enter to the projector.
+      <br>E.g.<i>KEY 03</i> or <i>KEY 3C</i> should open the OSD menu, <i>KEY 05</i> or or <i>KEY 3D</i> should close it.
+      <br>Feel free to define your own KEY sets via the attribute "AdditionalSettings".
+    </li>
+    <br>
+    <a id="ESCVP21net-set-PWR"></a>
+    <li>PWR
+      <br><i>on</i> or <i>off</i> to switch power, <i>get</i> to query current value.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-on"></a>
+    <li>on
+      <br>Hm, what could that mean ... OK, shortcut to switch your projector on - give it a try!
+    </li>
+    <br>
+    <a id="ESCVP21net-set-off"></a>
+    <li>off
+      <br>Wohoo ... want to switch it off again? Then use this command.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-ASPECT"></a>
+    <li>ASPECT
+      <br>set/get aspect ratio. Values depend on your model.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-AUTOHOME"></a>
+    <li>AUTOHOME
+      <br>set/get auto display of home screen.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-AUTOKEYSTONE"></a>
+    <li>AUTOKEYSTONE
+      <br>set/get auto keystone correction.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-BRIGHT"></a>
+    <li>BRIGHT
+      <br>get brightness value.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-BRIGHTset"></a>
+    <li>BRIGHTset
+      <br>Set brightness value.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-BTAUDIO"></a>
+    <li>BTAUDIO
+      <br>set/get bluetooth audio (on/off).
+    </li>
+    <br>
+    <a id="ESCVP21net-set-CMODE"></a>
+    <li>CMODE
+      <br>set/get color mode.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-CONTRAST"></a>
+    <li>CONTRAST
+      <br>get contrast enhancement value.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-CONTRASTset"></a>
+    <li>CONTRASTset
+      <br>set contrast enhancement value.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-DENSITY"></a>
+    <li>DENSITY
+      <br>get density value.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-DENSITYset"></a>
+    <li>DENSITYset
+      <br>set density value.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-ERASEMEM"></a>
+    <li>ERASEMEM
+      <br>Erase picture setting memory slot (1...10), related to PUSHMEM, POPMEM.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-GAMMA"></a>
+    <li>GAMMA
+      <br>set/get gamma value (-2...2)
+    </li>
+    <br>
+    <a id="ESCVP21net-set-HREVERSE"></a>
+    <li>HREVERSE
+      <br>set/get horizontal reverse setting.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-ILLUM"></a>
+    <li>ILLUM
+      <br>set/get illumination setting of on-device control lights.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-IMGPROC"></a>
+    <li>IMGPROC
+      <br>undocumented setting for image processing (fine/fast). Might not be available on some devices.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-IRIS"></a>
+    <li>IRIS
+      <br>undocumented setting for iris setting. Might not be available on some devices.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-LIRIS"></a>
+    <li>LIRIS
+      <br>undocumented setting for L-iris setting (whatever that means...). Might not be available on some devices.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-LUMINANCE"></a>
+    <li>LUMINANCE
+      <br>set/get luminance setting (high/low).
+    </li>
+    <br>
+    <a id="ESCVP21net-set-MCFI"></a>
+    <li>MCFI
+      <br>set/get frame interpolation setting.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-MSEL"></a>
+    <li>MSEL
+      <br>set/get background color for A/V mute screen.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-OVSCAN"></a>
+    <li>OVSCAN
+      <br>set/get overscan ratio.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-POPMEM"></a>
+    <li>POPMEM
+      <br>restore image setting from memory slot (1...10), related to PUSHMEM, ERASEMEM.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-PUSHMEM"></a>
+    <li>PUSHMEM
+      <br>save current image setting to memory slot (1...10), related to POPMEM, ERASEMEM.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-PWSTATUS"></a>
+    <li>PWSTATUS
+      <br>undocumented. Gets pwer status (see PWR).
+    </li>
+    <br>
+    <a id="ESCVP21net-set-SHARP"></a>
+    <li>SHARP
+      <br>get sharpness value.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-SHARPset"></a>
+    <li>SHARPset
+      <br>set sharpness value.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-SIGNAL"></a>
+    <li>SIGNAL
+      <br>set/get signal state (e.g 2D/3D).
+    </li>
+    <br>
+    <a id="ESCVP21net-set-SNO"></a>
+    <li>SNO
+      <br>get serial number of device.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-SOURCE"></a>
+    <li>SOURCE
+      <br>set/get current source of video input.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-TINT"></a>
+    <li>TINT
+      <br>get tint value.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-TINTset"></a>
+    <li>TINTset
+      <br>set tint value.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-VOL"></a>
+    <li>VOL
+      <br>get volume setting. Normally a multiple of 12 (whyever...).
+    </li>
+    <br>
+    <a id="ESCVP21net-set-VOLset"></a>
+    <li>VOLset
+      <br>set volume. Range is 1...20, since epson wants a multiple of 12 to be set (whyever...).
+    </li>
+    <br>
+    <a id="ESCVP21net-set-VREVERSE"></a>
+    <li>VREVERSE
+      <br>set/get vertical reverse setting.
+    </li>
+    <br><br>
+    <br> The following commands are only available if debug is set to 1. They are not meant for normal operation.
+    <br> Use at your own risk, might crash fhem if used in the "wrong" situation.
+    <br> But stay calm - restart always helps (at least I hope so...)
+    <br><br>
+    <a id="ESCVP21net-set-cleanup"></a>
+    <li>cleanup
+      <br>debug option. Deletes timers, closes connection, kills nonblocking function. Handle with care!
+    </li>
+    <br>
+    <a id="ESCVP21net-set-closeDevice"></a>
+    <li>closeDevice
+      <br>debug option. Closes connection to device.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-connect"></a>
+    <li>connect
+      <br>debug option. Closes active connection to device and forces reconnect.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-decode"></a>
+    <li>decode
+      <br>debug option. Decodes stored json values for set.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-deleteNextOpen"></a>
+    <li>deleteNextOpen
+      <br>debug option. Deletes timer for next device open command.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-encode"></a>
+    <li>encode
+      <br>debug option. Force new json encoding of set values.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-isOpen"></a>
+    <li>isOpen
+      <br>debug option. Query if connection to device is open and logs result in logfile (verbose 5 required).
+    </li>
+    <br>
+    <a id="ESCVP21net-set-openDevice"></a>
+    <li>openDevice
+      <br>debug option. Force new connection to device. Handle with care.
+    </li>
+    <br>
+    <a id="ESCVP21net-set-reRead"></a>
+    <li>reRead
+      <br>debug option. Force update of set commands, useful if you changed e.g "AdditionalSettings".
+    </li>
+    <br>
+    <a id="ESCVP21net-set-removeTimer"></a>
+    <li>removeTimer
+      <br>debug option. Removes all timers for connection check.
+    </li>
+    <br>
   </ul>
   <br>
 
@@ -1907,48 +2485,57 @@ sub ESCVP21net_openDevice{
   <b>Attributes</b>
   <br>
   <ul>
+    <a id="ESCVP21net-attr-Manufacturer"></a>
     <li>Manufacturer
       <br><i>Epson|default</i> - is not used currently.
     </li>
     <br>
+    <a id="ESCVP21net-attr-AdditionalSettings"></a>
     <li>AdditionalSettings
       <br><i>cmd1:val_1,...,val_n cmd2:val_1,...,val_n</i>
       <br>You can specify own set commands here, they will be added to the <b>set</b> list.
       <br>Multiple own sets can be specified, separated by a blank.
       <br>command and values are separated by <b>":"</b>, values are separated by <b>","</b>.
       <br>Example: <i>ASPECT:get,10,20,30 SN:noArg</i>
-      <br>Each command with <i>get</i> will we queried when unsing <i>set &lt;name&gt; GetAll</i> 
+      <br>Each command with <i>get</i> will we queried when unsing <i>set &lt;name&gt; GetAll</i>
+      <br>Might need a restart to be recognized, or use "reRead" setting. 
     </li>
     <br>
+    <a id="ESCVP21net-attr-connectionCheck"></a>
     <li>connectionCheck
       <br><i>off|(value in seconds)</i>
       <br><i>value</i> defines the intervall in seconds to perform an connection check. This is useful, since the standard connection handling of fhem (DevIo) will not detect an broken TCP connection, so the state <b>disconnected</b> will only trigger after TCP timeout (60-90 minutes). If you are ok with this, just set it to <i>off</i>.
       <br>Default value is 60 seconds.
     </li>
     <br>            
-    <li>statusCheckIntervall
+    <a id="ESCVP21net-attr-statusCheckInterval"></a>
+    <li>statusCheckInterval
       <br><i>off|(value in seconds)</i>
       <br><i>value</i> defines the intervall in seconds to perform an status check. Each <i>interval</i> the projector is queried with the command defined by <i>statusCheckCmd</i> (default: PWR to get power status).
       <br>Default value is 60 seconds.
     </li>
     <br>
+    <a id="ESCVP21net-attr-statusCheckCmd"></a>
     <li>statusCheckCmd
       <br><i>(any command(s) you set)</i>
-      <br>Defines the command(s) used by statusCheckIntervall. Multiple commands can specified, e.g. <i>PWR LAMP</i>. Default: PWR to get power status.
+      <br>Defines the command(s) used by statusCheckInterval. Multiple commands can specified, e.g. <i>PWR LAMP</i>. Default: PWR to get power status.
       <br>Wrong commands or commands without a <i>get</i> will be ignored.
     </li>
     <br>            
+    <a id="ESCVP21net-attr-statusOfflineMsg"></a>
     <li>statusOfflineMsg
       <br><i>(any message text you set)</i>
-      <br>Defines the message to set in the Reading related to <i>statusCheckCmd</i> when the device goes offline. Status of device will be checked after each <i>statusCheckIntervall</i> (default: 60s), querying the <i>statusCheckCmd</i> command (default: PWR), and if STATE is <i>disconnected</i> the Reading of <i>statusCheckCmd</i> will be set to this message. Default: offline.
+      <br>Defines the message to set in the Reading related to <i>statusCheckCmd</i> when the device goes offline. Status of device will be checked after each <i>statusCheckInterval</i> (default: 60s), querying the <i>statusCheckCmd</i> command (default: PWR), and if STATE is <i>disconnected</i> the Reading of <i>statusCheckCmd</i> will be set to this message. Default: offline.
     </li>
     <br>
-    <li>cyclicReconnectg
+    <a id="ESCVP21net-attr-cyclicConnect"></a>
+    <li>cyclicConnect
       <br><i>off|(value in seconds)</i>
       <br><i>value</i> defines the intervall in seconds to perform an periodic reconnect. Each <i>interval</i> we try to re-open the TCP connectionto the projector. Implemented to work around DevIo not recognizing a server-side broken connection, which can lead to a unnecessary, however non-blocking, system load.
       <br>Default value is 3600 seconds.
     </li>
     <br>
+    <a id="ESCVP21net-attr-debug"></a>
     <li>debug
       <br>You won't need it. But ok, if you insist...
       <br>debug will reveal some more set commands, namely <i>encode, decode, reread</i>. They will store the currents sets and results in json format to hidden readings <i>(encode)</i> or restore them <i>(decode)</i>. <i>reread</i> will just restore the available set commands for your projector type in case they got "lost". Don't use the other debug commands - unnless you know what you do...

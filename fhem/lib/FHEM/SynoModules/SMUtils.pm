@@ -1,9 +1,9 @@
 ########################################################################################################################
-# $Id: SMUtils.pm 25554 2022-01-24 21:23:40Z DS_Starter $
+# $Id: SMUtils.pm 26946 2023-01-02 21:45:29Z DS_Starter $
 #########################################################################################################################
 #       SMUtils.pm
 #
-#       (c) 2020-2022 by Heiko Maaz
+#       (c) 2020-2023 by Heiko Maaz
 #       e-mail: Heiko dot Maaz at t-online dot de
 #
 #       This Module provides routines for FHEM modules developed for Synology use cases.
@@ -26,6 +26,10 @@
 #########################################################################################################################
 
 # Version History
+# 1.24.2   fix evalDecodeJSON return
+# 1.24.2   fix evaljson return
+# 1.24.1   extend moduleVersion by useCTZ
+# 1.24.0   new sub encodeSpecChars
 # 1.23.1   correct version format
 # 1.23.0   new sub evalDecodeJSON
 # 1.22.0   new sub addCHANGED
@@ -50,7 +54,7 @@ use FHEM::SynoModules::ErrCodes qw(:all);                                 # Erro
 use GPUtils qw( GP_Import GP_Export ); 
 use Carp qw(croak carp);
 
-use version 0.77; our $VERSION = version->declare('1.23.2');
+use version 0.77; our $VERSION = version->declare('1.24.3');
 
 use Exporter ('import');
 our @EXPORT_OK = qw(
@@ -102,6 +106,7 @@ BEGIN {
           attr
           AttrVal
           asyncOutput
+          Log
           Log3
           data
           defs
@@ -369,7 +374,8 @@ sub moduleVersion {
   my $notes       = $paref->{notes}     // carp "got no reference of a version hash" && return;
   my $useAPI      = $paref->{useAPI};
   my $useSMUtils  = $paref->{useSMUtils};
-  my $useErrCodes = $paref->{useErrCodes}; 
+  my $useErrCodes = $paref->{useErrCodes};
+  my $useCTZ      = $paref->{useCTZ};
 
   my $type        = $hash->{TYPE};
   my $package     = (caller)[0];                                                         # das PACKAGE des aufrufenden Moduls          
@@ -377,6 +383,7 @@ sub moduleVersion {
   $hash->{HELPER}{VERSION_API}      = $useAPI      ? FHEM::SynoModules::API->VERSION()      : "unused";
   $hash->{HELPER}{VERSION_SMUtils}  = $useSMUtils  ? FHEM::SynoModules::SMUtils->VERSION()  : "unused";
   $hash->{HELPER}{VERSION_ErrCodes} = $useErrCodes ? FHEM::SynoModules::ErrCodes->VERSION() : "unused";
+  $hash->{HELPER}{VERSION_CTZ}      = $useCTZ      ? FHEM::Utility::CTZ->VERSION()          : "unused";
 
   my $v                    = (sortVersion("desc",keys %{$notes}))[0];                    # die Modulversion aus Versionshash selektieren
   $hash->{HELPER}{VERSION} = $v;
@@ -385,14 +392,14 @@ sub moduleVersion {
   if($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {          # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;                                           # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{<TYPE>}{META}}
       
-      if($modules{$type}{META}{x_version}) {                                             # {x_version} nur gesetzt wenn $Id: SMUtils.pm 25554 2022-01-24 21:23:40Z DS_Starter $ im Kopf komplett! vorhanden
+      if($modules{$type}{META}{x_version}) {                                             # {x_version} nur gesetzt wenn $Id: SMUtils.pm 26946 2023-01-02 21:45:29Z DS_Starter $ im Kopf komplett! vorhanden
           $modules{$type}{META}{x_version} =~ s/1\.1\.1/$v/gx;
       } 
       else {
           $modules{$type}{META}{x_version} = $v; 
       }
       
-      FHEM::Meta::SetInternals($hash);                                                   # FVERSION wird gesetzt ( nur gesetzt wenn $Id: SMUtils.pm 25554 2022-01-24 21:23:40Z DS_Starter $ im Kopf komplett! vorhanden )
+      FHEM::Meta::SetInternals($hash);                                                   # FVERSION wird gesetzt ( nur gesetzt wenn $Id: SMUtils.pm 26946 2023-01-02 21:45:29Z DS_Starter $ im Kopf komplett! vorhanden )
   } 
   else {                                                                                 # herkömmliche Modulstruktur
       $hash->{VERSION} = $v;                                                             # Internal VERSION setzen
@@ -977,7 +984,7 @@ sub _readCredOnBoot {
       return 1;
   }  
    
-  my ($username, $passwd) = split "$sep", decode_base64( _descramble($credstr) );
+  my ($username, $passwd) = split "$sep", decode_base64( _descramble($credstr) ), 2;
    
   if(!$username || !$passwd) {
       ($err,$sc) = _getCredentialsFromHash ($hash, $ctc);                           # nur Error und Credetials Shortcut lesen !
@@ -1038,7 +1045,7 @@ sub _readCredFromCache {
       return (1, $token);
   }
 
-  my ($username, $passwd) = split "$sep", decode_base64( _descramble($credstr) );
+  my ($username, $passwd) = split "$sep", decode_base64( _descramble($credstr) ), 2;
     
   if(!$username || !$passwd) {
       $err = qq{possible problem in splitting with separator "$sep"};
@@ -1054,8 +1061,22 @@ sub _readCredFromCache {
   my $logpw = AttrVal($name, "showPassInLog", 0) ? $passwd // "" : "********";
 
   Log3($name, 4, "$name - ".$sc." read from RAM: $username $logpw");
+  
+  $passwd = encodeSpecChars ($passwd);
 
 return (1, $username, $passwd);
+}
+
+######################################################################################
+#    UrlEncode spezielle Zeichen im Passwort u.ä.
+#    see https://help.fanruan.com/finereport-en/doc-view-1136.html
+#    substitute Chars: + / ? % # & =
+######################################################################################
+sub encodeSpecChars {
+  my $s = shift;
+  $s    =~ s/([\x25 \x23 \x26 \x2B \x2F \x3D \x3F])/sprintf "%%%02x", ord($1)/eg;
+  
+  return $s;
 }
 
 ###############################################################################
@@ -1118,9 +1139,9 @@ return ($err,$sc,$credstr);
 #                        Test ob JSON-String vorliegt
 ###############################################################################
 sub evaljson { 
-  my $hash    = shift // carp $carpnohash                   && return;
-  my $myjson  = shift // carp "got no string for JSON test" && return;
-  my $OpMode  = $hash->{OPMODE};
+  my $hash    = shift           // carp $carpnohash                   && return;
+  my $myjson  = shift           // carp "got no string for JSON test" && return;
+  my $OpMode  = $hash->{OPMODE} // q{};
   my $name    = $hash->{NAME};
   
   my $success = 1;
@@ -1131,25 +1152,31 @@ sub evaljson {
       return ($success,$myjson);
   }
   
-  eval {decode_json($myjson)} or do {                                                            
-      if( ($hash->{HELPER}{RUNVIEW} && $hash->{HELPER}{RUNVIEW} =~ m/^live_.*hls$/x) || 
-              $OpMode =~ m/^.*_hls$/x ) {                                                        # SSCam: HLS aktivate/deaktivate bringt kein JSON wenn bereits aktiviert/deaktiviert
-          Log3($name, 5, "$name - HLS-activation data return: $myjson");
-          
-          if ($myjson =~ m/{"success":true}/x) {
-              $success = 1;
-              $myjson  = '{"success":true}';    
+  eval {decode_json($myjson)
+       } 
+       or do {                                                            
+          if( ($hash->{HELPER}{RUNVIEW} && $hash->{HELPER}{RUNVIEW} =~ m/^live_.*hls$/x) || 
+                  $OpMode =~ m/^.*_hls$/x ) {                                                        # SSCam: HLS aktivate/deaktivate bringt kein JSON wenn bereits aktiviert/deaktiviert
+              Log3 ($name, 5, "$name - HLS-activation data return: $myjson");
+              
+              if ($myjson =~ m/{"success":true}/x) {
+                  $success = 1;
+                  $myjson  = '{"success":true}';    
+              }
+          } 
+          else {
+              $success      = 0;
+              my $errorcode = "9000";         
+              my $error     = expErrors($hash, $errorcode);                                         # Fehlertext zum Errorcode ermitteln
+              
+              if($error) {          
+                  setReadingErrorState ($hash, $error, $errorcode);
+              }
+              else {
+                  Log3 ($name, 1, "$name - ERROR while decode JSON: ".(split ' at', $@)[0]);
+              }          
           }
-      } 
-      else {
-          $success = 0;
-
-          my $errorcode = "9000";         
-          my $error     = expErrors($hash,$errorcode);                                          # Fehlertext zum Errorcode ermitteln
-            
-          setReadingErrorState ($hash, $error, $errorcode);  
-      }
-  };
+      };
   
 return ($success,$myjson);
 }
@@ -1160,9 +1187,9 @@ return ($success,$myjson);
 #         SSCam-Kontext angepasst
 ###############################################################################
 sub evalDecodeJSON { 
-  my $hash    = shift // carp $carpnohash                   && return;
-  my $myjson  = shift // carp "got no string for JSON test" && return;
-  my $OpMode  = $hash->{OPMODE};
+  my $hash    = shift           // carp $carpnohash                   && return;
+  my $myjson  = shift           // carp "got no string for JSON test" && return;
+  my $OpMode  = $hash->{OPMODE} // q{};
   my $name    = $hash->{NAME};
   
   my $success = 1;
@@ -1174,26 +1201,33 @@ sub evalDecodeJSON {
       return ($success,$myjson);
   }
   
-  eval {$decoded = decode_json($myjson)} or do {
-      if( ($hash->{HELPER}{RUNVIEW} && $hash->{HELPER}{RUNVIEW} =~ m/^live_.*hls$/x) || 
-              $OpMode =~ m/^.*_hls$/x ) {                                                        # SSCam: HLS aktivate/deaktivate bringt kein JSON wenn bereits aktiviert/deaktiviert
-          Log3($name, 5, "$name - HLS-activation data return: $myjson");
-          
-          if ($myjson =~ m/{"success":true}/x) {
-              $success = 1;
-              $myjson  = '{"success":true}';
-              $decoded = decode_json($myjson);             
+  eval {$decoded = decode_json($myjson)
+       } 
+       or do {
+          if( ($hash->{HELPER}{RUNVIEW} && $hash->{HELPER}{RUNVIEW} =~ m/^live_.*hls$/x) || 
+                  $OpMode =~ m/^.*_hls$/x ) {                                                        # SSCam: HLS aktivate/deaktivate bringt kein JSON wenn bereits aktiviert/deaktiviert
+              Log3($name, 5, "$name - HLS-activation data return: $myjson");
+              
+              if ($myjson =~ m/{"success":true}/x) {
+                  $success = 1;
+                  $myjson  = '{"success":true}';
+                  $decoded = decode_json($myjson);             
+              }
+          } 
+          else {
+              $success = 0;
+              $decoded = q{};
+              
+              my $errorcode = "9000";         
+              my $error     = expErrors($hash,$errorcode);                                          # Fehlertext zum Errorcode ermitteln
+                
+              if($error) {          
+                  setReadingErrorState ($hash, $error, $errorcode);
+              }
+              else {
+                  Log3 ($name, 1, "$name - ERROR while decode JSON: ".(split ' at', $@)[0]);
+              }   
           }
-      } 
-      else {
-          $success = 0;
-          $decoded = q{};
-          
-          my $errorcode = "9000";         
-          my $error     = expErrors($hash,$errorcode);                                          # Fehlertext zum Errorcode ermitteln
-            
-          setReadingErrorState ($hash, $error, $errorcode);  
-      }
   };
   
 return ($success,$decoded);
@@ -1229,7 +1263,7 @@ sub login {
   Log3($name, 4, "$name - --- Begin Function login ---");
   
   my ($success, $username, $password) = getCredentials($hash,0,"credentials",$sep);                      # Credentials abrufen
-  
+    
   if (!$success) {
       Log3($name, 2, qq{$name - Credentials couldn't be retrieved successfully - make sure you've set it with "set $name credentials <username> <password>"});
       delActiveToken($hash) if($type eq "SSCam");      

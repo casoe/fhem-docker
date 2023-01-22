@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 92_FileLog.pm 25748 2022-02-27 10:29:56Z rudolfkoenig $
+# $Id: 92_FileLog.pm 26959 2023-01-04 12:56:01Z rudolfkoenig $
 package main;
 
 use strict;
@@ -498,6 +498,7 @@ FileLog_Set($@)
     $hash->{REGEXP} = $re;
     $hash->{DEF} = $hash->{logfile} ." $re";
     notifyRegexpChanged($hash, $re);
+    addStructChange("set", $me, join(" ", @a));
     
   } elsif($cmd eq "removeRegexpPart") {
     my %h;
@@ -512,6 +513,7 @@ FileLog_Set($@)
     $hash->{REGEXP} = $re;
     $hash->{DEF} = $hash->{logfile} ." $re";
     notifyRegexpChanged($hash, $re);
+    addStructChange("set", $me, join(" ", @a));
 
   } elsif($cmd eq "absorb") {
     my $victim = $a[2];
@@ -998,7 +1000,7 @@ RESCAN:
         my $ld = substr($fld[0],0,$hd);     # TimeStamp-Part (hour or date)
         if(!defined($h->{last1}) || $h->{last3} ne $ld) {
           if(defined($h->{last1})) {
-            my @lda = split("[_:]", $lastdate{$hd});
+            my @lda = split("[_:]", $lastdate{$i});
             my $ts = "12:00:00";            # middle timestamp
             $ts = "$lda[1]:30:00" if($hd == 13);
             my $v = $fld[$col]-$h->{last1};
@@ -1016,7 +1018,7 @@ RESCAN:
           $h->{last3} = $ld;
         }
         $h->{last2} = $fld[$col];
-        $lastdate{$hd} = $fld[0];
+        $lastdate{$i} = $fld[0];
 
       } elsif($t == 3) {                    # int function
         $val = $1 if($fld[$col] =~ m/^(\d+).*/o);
@@ -1098,7 +1100,7 @@ RESCAN:
   for(my $i = 0; $i < int(@a); $i++) {
     my $h = $d[$i];
     my $hd = $h->{didx};
-    if($hd && $lastdate{$hd}) {
+    if($hd && $lastdate{$i}) {
       my $val = defined($h->{last1}) ? $h->{last2}-$h->{last1} : 0;
       $min[$i] = $val if($min[$i] ==  999999);
       $max[$i] = $val if($max[$i] == -999999);
@@ -1106,7 +1108,7 @@ RESCAN:
       $sum[$i] = ($sum[$i] ? $sum[$i] + $val : $val);
       $cnt[$i]++;
 
-      my @lda = split("[_:]", $lastdate{$hd});
+      my @lda = split("[_:]", $lastdate{$i});
       my $ts = "12:00:00";                   # middle timestamp
       $ts = "$lda[1]:30:00" if($hd == 13);
       my $line = sprintf("%s_%s %0.1f\n", $lda[0],$ts,
@@ -1568,6 +1570,8 @@ FileLog_regexpFn($$)
         devspec:reading:minInterval triples.  You may use regular expressions
         for reading. The data will only be written, if at least minInterval
         seconds elapsed since the last event of the matched type.
+        Note: only readings existing at the time the attribute is set will be
+        considered.
         </li><br>
 
     <li><a href="#ignoreRegexp">ignoreRegexp</a></li>
@@ -1896,6 +1900,8 @@ FileLog_regexpFn($$)
         "devspec:readings:minInterval" Tripel. readings kann ein regexp sein.
         Die Daten werden nur dann geschrieben, falls seit dem letzten Auftreten
         des gleichen Events mindestens minInterval Sekunden vergangen sind.
+        Achtung: nur solche Readings werden geprueft, die zum Zeitpunkt des
+        Attribut setzens existiert haben.
         </li><br>
 
     <li><a href="#ignoreRegexp">ignoreRegexp</a></li>

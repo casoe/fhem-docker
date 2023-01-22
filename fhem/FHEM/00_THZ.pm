@@ -1,8 +1,8 @@
 ##############################################
 # 00_THZ
-# $Id: 00_THZ.pm 25245 2021-11-20 12:38:29Z immi $
-# by immi 11/2021
-my $thzversion = "0.198";
+# $Id: 00_THZ.pm 26890 2022-12-23 16:30:50Z immi $
+# by immi 12/2022
+my $thzversion = "0.206";
 # this code is based on the hard work of Robert; I just tried to port it
 # http://robert.penz.name/heat-pump-lwz/
 ########################################################################################
@@ -168,7 +168,7 @@ my %parsinghash = (
 	      [" fault2CODE: ",		32, 4, "faultmap", 1],	[" fault2TIME: ",	36, 4, "hex2time", 1],  [" fault2DATE: ",	40, 4, "hexdate", 1],
 	      [" fault3CODE: ",		44, 4, "faultmap", 1],	[" fault3TIME: ",	48, 4, "hex2time", 1],  [" fault3DATE: ",	52, 4, "hexdate", 1]
 	      ],
-  "E8fan"	=> [[" inputFanSpeed: ",	58, 2, "hex", 1],    # like in sGlobal
+  "E8fan"	=> [["inputFanSpeed: ",	58, 2, "hex", 1],    # like in sGlobal
 		[" outputFanSpeed: ",		60, 2, "hex", 1],    # like in sGlobal
 		[" pFanstageXAirflowInlet: ",	62, 4, "hex", 1],    # m3/h  corresponding to p37Fanstage1AirflowInlet or p38Fanstage2AirflowInlet
 		[" pFanstageXAirflowOutlet: ",	66, 4, "hex", 1],    # m3/h corresponding to p40Fanstage1AirflowOutlet or p41Fanstage2AirflowOutlet
@@ -246,11 +246,32 @@ my %parsinghash = (
 	      [" heatTemp: ",		28, 4, "hex2int", 10],  
 	      [" seasonMode: ",		38, 2, "somwinmode", 1],
 	      [" integralSwitch: ",	44, 4, "hex2int", 1],	[" hcOpMode: ",		48, 2, "opmodehc", 1], 	      
-          [" roomSetTemp: ",		62, 4, "hex2int", 10],	[" x60: ", 		60, 4, "hex2int", 10],
+	      [" roomSetTemp: ",	62, 4, "hex2int", 10],	[" x60: ", 		60, 4, "hex2int", 10],
 	      [" x64: ", 		64, 4, "raw", 1],	[" insideTempRC: ", 	68, 4, "hex2int", 10],
 	      [" x72: ", 		72, 4, "raw", 1],	[" x76: ", 		76, 4, "raw", 1],
 	      [" onHysteresisNo: ",	32, 2, "hex", 1],	[" offHysteresisNo: ",	34, 2, "hex", 1],
 	      [" hcBoosterStage: ",	36, 2, "hex", 1]
+         ],
+  # contribution from joerg  hellijo  Antwort #1085  Juni 2022
+   "F4hc1214j" => [["outsideTemp: ",	4, 4, "hex2int", 10],	[" x08: ",		8, 4, "raw", 1],
+ 	      [" returnTemp: ",		12, 4, "hex2int", 10],	[" integralHeat: ",	16, 4, "hex2int", 1],
+	      [" flowTemp: ",		20, 4, "hex2int", 10],	[" heatSetTemp: ", 	24, 4, "hex2int", 10],
+	      [" heatTemp: ",		28, 4, "hex2int", 10], 
+	      [" seasonMode: ",		38, 2, "somwinmode", 1],
+	      [" integralSwitch: ",	44, 4, "hex2int", 1],	[" hcOpMode: ",		48, 2, "opmodehc", 1],
+	      [" roomSetTemp: ",	62, 4, "hex2int", 10],	[" x50: ", 		50, 4, "hex2int", 10],
+	      [" x66: ", 		66, 4, "raw", 1],	[" insideTempRC: ", 	74, 4, "hex2int", 10],
+	      [" x70: ", 		70, 4, "raw", 1],	[" x76: ", 		78, 4, "raw", 1],
+	      [" onHysteresisNo: ",	32, 2, "hex", 1],	[" offHysteresisNo: ",	34, 2, "hex", 1],
+	      [" hcStage: ",		36, 2, "hex", 1],# 0=Aus; 1=Solar; 2=V1
+	      [" boosterStage2: ", 	40, 1, "bit3", 1],
+	      [" x58: ", 		58, 4, "raw", 1],	[" x54: ", 		54, 4, "raw", 1],
+	      [" blockTimeAfterCompStart: ", 82, 4, "hex2int", 1], [" insideTemp: ", 	86, 4, "hex2int", 10],
+	      [" solarPump: ",		40, 1, 	"bit2", 1],	[" boosterStage1: ",	40, 1, 	"bit1", 1],
+	      [" compressor: ",		40, 1, 	"bit0", 1],	[" heatPipeValve: ",	41, 1, 	"bit3", 1],
+	      [" diverterValve: ",	41, 1, 	"bit2", 1],	[" dhwPump: ",		41, 1, 	"bit1", 1],
+	      [" heatingCircuitPump: ",	41, 1, 	"bit0", 1],     [" mixerOpen: ",	43, 1, 	"bit1", 1],
+	      [" mixerClosed: ",	43, 1, 	"bit0", 1]
          ],
   "F5hc2"  => [["outsideTemp: ",	4, 4, "hex2int", 10],	[" returnTemp: ",	 8, 4, "hex2int", 10],
 	      [" vorlaufTemp: ",	12, 4, "hex2int", 10],	[" heatSetTemp: ",	16, 4, "hex2int", 10],
@@ -340,10 +361,10 @@ my %parsinghash = (
 	     ],
   "FDfirm" => [["version: ", 	4, 4, "hexdate", 1]
 	     ],
-  "FEfirmId" => [[" HW: ",		30,  2, "hex", 1], 	[" SW: ",	32,  4, "swver", 1],
+  "FEfirmId" => [["HW: ",		30,  2, "hex", 1], 	[" SW: ",	32,  4, "swver", 1],
 	      [" Date: ",		36, 22, "hex2ascii", 1]
 	     ],
-  "0A0176Dis" => [[" switchingProg: ",	11, 1, "bit0", 1],  [" compressor: ",	11, 1, "bit1", 1],
+  "0A0176Dis" => [["switchingProg: ",	11, 1, "bit0", 1],  [" compressor: ",	11, 1, "bit1", 1],
 	      [" heatingHC: ",		11, 1, "bit2", 1],  [" heatingDHW: ",	10, 1, "bit0", 1],
 	      [" boosterHC: ",		10, 1, "bit1", 1],  [" filterBoth: ",	 9, 1, "bit0", 1],
 	      [" ventStage: ",		 9, 1, "bit1", 1],  [" pumpHC: ",	 9, 1, "bit2", 1],
@@ -379,7 +400,8 @@ my %parsinghash = (
 ########################################################################################
 
 my %sets439technician =(
-#  "zResetLast10errors"		=> {cmd2=>"D1",     argMin =>   "0",	argMax =>  "0",	type =>"0clean",  unit =>""},
+#   "zResetLast10errors"		=> {cmd2=>"D1",     argMin =>   "0",	argMax =>  "0",	type =>"0clean",  unit =>""},
+   "zResetLast10errors"		=> {cmd2=>"D1",     argMin =>   "0",	argMax =>  "0",	type =>"D1last",  unit =>""},
 #  "zPassiveCoolingtrigger"	=> {cmd2=>"0A0597", argMin =>   "0",	argMax =>  "50",	type =>"1clean",  unit =>""},
   "zPumpHC"			=> {cmd2=>"0A0052", argMin =>   "0",	argMax =>  "1",	type =>"0clean",  unit =>""},  
   "zPumpDHW"			=> {cmd2=>"0A0056", argMin =>   "0",	argMax =>  "1",	type =>"0clean",  unit =>""}
@@ -389,22 +411,22 @@ my %sets439technician =(
 
 my %sets439539common = (
   "pOpMode"			=> {cmd2=>"0A0112", type   =>  "2opmode"},  # 1 Standby bereitschaft; 11 in Automatic; 3 DAYmode; SetbackMode; DHWmode; Manual; Emergency 
-  "p01RoomTempDayHC1"		=> {cmd2=>"0B0005", argMin =>  "12",	argMax =>   "30",	type =>"5temp",  unit =>" °C"},
-  "p02RoomTempNightHC1"		=> {cmd2=>"0B0008", argMin =>  "12",	argMax =>   "30",	type =>"5temp",  unit =>" °C"},
-  "p03RoomTempStandbyHC1"	=> {cmd2=>"0B013D", argMin =>  "12",	argMax =>   "30",	type =>"5temp",  unit =>" °C"},
-  "p01RoomTempDayHC1SummerMode"	=> {cmd2=>"0B0569", argMin =>  "12",	argMax =>   "30",	type =>"5temp",  unit =>" °C"},
-  "p02RoomTempNightHC1SummerMode"=> {cmd2=>"0B056B", argMin =>  "12",	argMax =>   "30",	type =>"5temp",  unit =>" °C"},
-  "p03RoomTempStandbyHC1SummerMode"=> {cmd2=>"0B056A", argMin =>  "12",	argMax =>   "30",	type =>"5temp",  unit =>" °C"},
+  "p01RoomTempDayHC1"		=> {cmd2=>"0B0005", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
+  "p02RoomTempNightHC1"		=> {cmd2=>"0B0008", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
+  "p03RoomTempStandbyHC1"	=> {cmd2=>"0B013D", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
+  "p01RoomTempDayHC1SummerMode"	=> {cmd2=>"0B0569", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
+  "p02RoomTempNightHC1SummerMode"=> {cmd2=>"0B056B", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
+  "p03RoomTempStandbyHC1SummerMode"=> {cmd2=>"0B056A", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
   "p13GradientHC1"		=> {cmd2=>"0B010E", argMin => "0.1",	argMax =>    "5",	type =>"6gradient", unit =>""}, # 0..5 rappresentato/100
   "p14LowEndHC1"		=> {cmd2=>"0B059E", argMin =>   "0",	argMax =>   "10",	type =>"5temp",  unit =>" K"},   #in °K 0..20°K rappresentato/10
   "p15RoomInfluenceHC1"		=> {cmd2=>"0B010F", argMin =>   "0",	argMax =>  "100",	type =>"0clean", unit =>" %"},
   "p19FlowProportionHC1"	=> {cmd2=>"0B059D", argMin =>   "0",	argMax =>  "100",	type =>"1clean", unit =>" %"}, #in % 0..100%
-  "p01RoomTempDayHC2"		=> {cmd2=>"0C0005", argMin =>  "12",	argMax =>   "28",	type =>"5temp",  unit =>" °C"},
-  "p02RoomTempNightHC2"		=> {cmd2=>"0C0008", argMin =>  "12",	argMax =>   "28",	type =>"5temp",  unit =>" °C"},
-  "p03RoomTempStandbyHC2"	=> {cmd2=>"0C013D", argMin =>  "12",	argMax =>   "28",	type =>"5temp",  unit =>" °C"},
-  "p01RoomTempDayHC2SummerMode"	=> {cmd2=>"0C0569", argMin =>  "12",	argMax =>   "28",	type =>"5temp",  unit =>" °C"},
-  "p02RoomTempNightHC2SummerMode"=> {cmd2=>"0C056B", argMin =>  "12",	argMax =>   "28",	type =>"5temp",  unit =>" °C"},
-  "p03RoomTempStandbyHC2SummerMode"=> {cmd2=>"0C056A", argMin =>  "12",	argMax =>   "28",	type =>"5temp",  unit =>" °C"},
+  "p01RoomTempDayHC2"		=> {cmd2=>"0C0005", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
+  "p02RoomTempNightHC2"		=> {cmd2=>"0C0008", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
+  "p03RoomTempStandbyHC2"	=> {cmd2=>"0C013D", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
+  "p01RoomTempDayHC2SummerMode"	=> {cmd2=>"0C0569", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
+  "p02RoomTempNightHC2SummerMode"=> {cmd2=>"0C056B", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
+  "p03RoomTempStandbyHC2SummerMode"=> {cmd2=>"0C056A", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
   "p16GradientHC2"		=> {cmd2=>"0C010E", argMin => "0.1",	argMax =>    "5",	type =>"6gradient", unit =>""}, # /100
   "p17LowEndHC2"		=> {cmd2=>"0C059E", argMin =>   "0",	argMax =>   "10", type =>"5temp",  unit =>" K"},
   "p18RoomInfluenceHC2"		=> {cmd2=>"0C010F", argMin =>   "0",	argMax =>  "100",	type =>"0clean", unit =>" %"}, 
@@ -466,11 +488,11 @@ my %sets439539common = (
   "pClockMinutes"		=> {cmd2=>"0A0126", argMin =>   "0",	argMax =>   "59",	type =>"0clean", unit =>""},
   "pHolidayBeginDay"		=> {cmd2=>"0A011B", argMin =>   "1",	argMax =>   "31",	type =>"0clean", unit =>""},
   "pHolidayBeginMonth"		=> {cmd2=>"0A011C", argMin =>   "1",	argMax =>   "12",	type =>"0clean", unit =>""},
-  "pHolidayBeginYear"		=> {cmd2=>"0A011D", argMin =>  "12",	argMax =>   "20",	type =>"0clean", unit =>""},
+  "pHolidayBeginYear"		=> {cmd2=>"0A011D", argMin =>  "12",	argMax =>   "30",	type =>"0clean", unit =>""},
   "pHolidayBeginTime"		=> {cmd2=>"0A05D3", argMin =>  "00:00",	argMax =>"23:59",	type =>"9holy",  unit =>""},
   "pHolidayEndDay"		=> {cmd2=>"0A011E", argMin =>   "1",	argMax =>   "31",	type =>"0clean", unit =>""},
   "pHolidayEndMonth"		=> {cmd2=>"0A011F", argMin =>   "1",	argMax =>   "12",	type =>"0clean", unit =>""},
-  "pHolidayEndYear"		=> {cmd2=>"0A0120", argMin =>  "12",	argMax =>   "20",	type =>"0clean", unit =>""},
+  "pHolidayEndYear"		=> {cmd2=>"0A0120", argMin =>  "12",	argMax =>   "30",	type =>"0clean", unit =>""},
   "pHolidayEndTime"		=> {cmd2=>"0A05D4", argMin =>  "00:00",	argMax =>"23:59",	type =>"9holy",  unit =>""}, # the answer look like  0A05D4-0D0A05D40029 for year 41 which is 10:15
   #"party-time"			=> {cmd2=>"0A05D1", argMin =>  "00:00",	argMax =>"23:59",	type =>"8party", unit =>""}, # value 1Ch 28dec is 7 ; value 1Eh 30dec is 7:30
   "programHC1_Mo_0"		=> {cmd2=>"0B1410", argMin =>  "00:00",	argMax =>"24:00",	type =>"7prog",  unit =>""},  #1 is monday 0 is first prog; start and end; value 1Ch 28dec is 7 ; value 1Eh 30dec is 7:30
@@ -844,6 +866,18 @@ my %getsonly214 = (
   "sGlobal"	     	=> {cmd2=>"FB", type =>"FBglob214",unit =>""}  
  ); 
 
+ my %getsonly214j = (  # contribution from joerg  hellijo  Antwort #1085  Juni 2022
+  "pFan"		=> {cmd2=>"01", type =>"01pxx214", unit =>""},
+  "pExpert"		=> {cmd2=>"02", type =>"02pxx206", unit =>""},
+  "sControl"  		=> {cmd2=>"F2", type =>"F2type",   unit =>""},
+  "sHC1"		=> {cmd2=>"F4", type =>"F4hc1214j", unit =>""},
+  #"sLVR"  		=> {cmd2=>"E8", type =>"E8tyype",  unit =>""},
+  #"sF0"  		=> {cmd2=>"F0", type =>"F0type",   unit =>""},
+  #"sF1"  		=> {cmd2=>"F1", type =>"F1type",   unit =>""},
+  #"sEF"  		=> {cmd2=>"EF", type =>"EFtype",   unit =>""},
+  "sGlobal"	     	=> {cmd2=>"FB", type =>"FBglob214",unit =>""}  
+ ); 
+
 
 my %sets=       (%sets439539common, %sets439only);
 my %gets=       (%getsonly439, %sets);
@@ -905,7 +939,7 @@ sub THZ_Initialize($) {
 		    ."interval_sBoostHCTotal:0,3600,7200,28800,43200,86400 "
 		    ."interval_sFlowRate:0,3600,7200,28800,43200,86400 "
 		    ."interval_sDisplay:0,60,120,180,300 "
-		    ."firmware:4.39,2.06,2.14,5.39,4.39technician "
+		    ."firmware:4.39,2.06,2.14,2.14j,5.39,4.39technician "
 		    ."interval_sDewPointHC1:0,60,120,180,300 "
 		    ."simpleReadTimeout:0.25,0.5,0.75,1,2,4,6 " #standard has been 0.75 since msg468515 If blocking attribut is NOT enabled then set the timeout value to a maximum value of 0.75 sec.
 		    ."nonblocking:0,1 "
@@ -986,6 +1020,7 @@ sub THZ_Refresh_all_gets($) {
 #        my %par = (hash => $hash, command => $cmdhash, NAME => $hash->{NAME} ); #does not group in apptime
         InternalTimer((gettimeofday() + $timedelay), "THZ_GetRefresh", \%par, 0);		#increment 0.6 $timedelay++
         $timedelay += 2;                      #0.6 seconds were ok but considering winter 2017/2018 I prefer to increase
+	$timedelay += 5 if (AttrVal($hash->{NAME}, "firmware" , "4.39")  =~ /^2/);  # I added 5 more seconds for joerg 05/2022
   }  
 }
 
@@ -998,18 +1033,23 @@ sub THZ_Refresh_all_gets($) {
 # it get the intervall directly from a attribute; the register with interval_command ne 0 will keep on refreshing
 ########################################################################################
 sub THZ_GetRefresh($) {
-	my ($par)=@_;
-	my $hash=$par->{hash};
-	my $command=$par->{command};    
+    my ($par)=@_;
+    my $hash=$par->{hash};
+    my $command=$par->{command};    
     my $name =$hash->{NAME};
     
-    if (ReadingsAge($name ,'z_Last_fhem_err', 100) < 100) {
-            Log3 $hash, 5, "[$name] THZ_GetRefresh($command) rescheduled (stop 100s after one error)";
+    if (ReadingsAge($name ,'z_Last_fhem_err', 120) < 120) {
+            Log3 $hash, 5, "[$name] THZ_GetRefresh($command) rescheduled (stop 120s after one error)";
             InternalTimer(gettimeofday() + 200, "THZ_GetRefresh", $par, 1);
             return;
     }
+    if (ReadingsAge($name ,$command, 41) < 41) {
+            Log3 $hash, 5, "[$name] THZ_GetRefresh($command) rescheduled (the reading has been updated in the last 40s)";
+            InternalTimer(gettimeofday() + 300, "THZ_GetRefresh", $par, 1);
+            return;
+    }
     
-	if (AttrVal($name, "nonblocking" , "0")  =~ /1/ ) {
+    if (AttrVal($name, "nonblocking" , "0")  =~ /1/ ) {
         if (!(exists($hash->{helper}{RUNNING_PID}))) {
             DevIo_CloseDev($hash);          #close device in parent process
             #$hash->{STATE}="disconnected";
@@ -1071,57 +1111,20 @@ sub THZ_Read($) {
     my $buf = DevIo_SimpleRead($hash);
     return "" if(!defined($buf));
     my $name = $hash->{NAME};
-    $hash->{helper}{PARTIAL} .= uc(unpack('H*', $buf));
-    my $msg=$hash->{helper}{PARTIAL};
+    my $msg=uc(unpack('H*', $buf));
     my $err;
-    if ( !defined($hash->{helper}{step}) or (length($msg) == 1)  or (($msg =~ m/^01/) and ($msg !~ m/1003$/m ))) {} 
-    else {
-        if    ($hash->{helper}{step} eq "step0") { #Expectedanswer0    is  "10"  DLE data link escape
-            if ($msg ne "10")   {$err .= " THZ_Get_Com: error found at step0 $msg"; $err .=" NAK!!" if ($msg eq "15");  THZ_Resethelper($hash);}
-            else                { THZ_Write($hash, $hash->{helper}{cmdHex}); 		$hash->{helper}{step}="step1";       $hash->{helper}{PARTIAL}="";  }
-        }    
-	elsif ($hash->{helper}{step} eq "step1") { #Expectedanswer1     is "1002",		DLE data link escape -- STX start of text  
-            if      ($msg eq "10") 	{ }
-            elsif   ($msg eq "15")  { $err .=  " THZ_Get_Com: error found at step1  NAK!! ";    THZ_Resethelper($hash); }
-            elsif   ($msg eq "1002" || $msg eq "02") {THZ_Write($hash,  "10"); 	                $hash->{helper}{step}="step2"; $hash->{helper}{PARTIAL}=""; }
-        }
-	elsif ($hash->{helper}{step} eq "step2") { #Expectedanswer2     is  message from the heatpump
-            ($err, $msg) = THZ_decode($msg);
-            $msg.=THZ_Parse1($hash,$msg);
-            THZ_Write($hash,  "10");
-            #THZ_Resethelper($hash);
-        }    
-    }   
-    Log3 $name, 3, "$name/RAW: $msg - $err - $hash->{helper}{step}";
+    if ($msg =~ m/^02|/^1002) {
+	THZ_Write($hash,  "10");
+	($err, $msg) = THZ_ReadAnswer($hash);	
+	THZ_Write($hash,  "10");  
+	($err, $msg) = THZ_decode($msg)  if  (!defined($err));
+	$msg= THZ_Parse1($hash,$msg)	 if  (!defined($err));  #only missing unit and readingupdate
+	$msg.= $err 			 if  (defined($err));
+     }
+    Log3 $name, 3, "$name/RAW: $msg";
 }
 
 
-#####################################
-#
-# THZ_Resethelper()
-#
-# Parameter hash
-#
-########################################################################################
-
-sub THZ_Resethelper($) {
-    my ($hash) = @_;
-    $hash->{helper}{step}="";
-    $hash->{helper}{cmdHex}="";
-    $hash->{helper}{PARTIAL}="";     
-}
-
-
-sub THZ_Testloopapproach($) {
-    my ($hash) = @_;
-    my $cmd="sGlobal";
-    #my $cmd="sHC1";
-    my $cmdhash = $gets{$cmd};
-    THZ_Write($hash,  "02");
-    $hash->{helper}{step}="step0";
-    $hash->{helper}{cmdHex}=THZ_encodecommand($cmdhash->{cmd2},"get");
-    $hash->{helper}{PARTIAL}="";
-}
 
 sub THZ_testtimer($) {
     my ($hash) = @_;
@@ -1445,7 +1448,7 @@ sub THZ_Get($@) {
         my ($seconds, $microseconds) = gettimeofday();
         $seconds= abs($seconds - time_str2num(ReadingsTimestamp($name, $parent, "1970-01-01 01:00:00")));
         my $risultato=ReadingsVal($name, $parent, 0);
-        $risultato=THZ_Get($hash, $name, $parent) if ($seconds > 20 );	#update of the parent: if under 20sec use the current value
+        $risultato=THZ_Get($hash, $name, $parent) if ($seconds > 29 );	#update of the parent: if under 29sec use the current value
         #$risultato=THZ_Parse1($hash,"B81700C800BE00A001C20190006402010000E601D602");
         my $parenthash=$gets{$parent}; my $parsingrule = $parsinghash{$parenthash->{type}};
         my $i=0; 
@@ -1512,7 +1515,7 @@ sub THZ_Get_Comunication($$) {
     ($err, $msg) = THZ_ReadAnswer($hash);
     if  (defined($err))     {$err .=  " THZ_Get_Com: error found at step1 "; select(undef, undef, undef, 0.1); return($err, $msg) ;}
     # Expectedanswer1     is "1002",		DLE data link escape -- STX start of text    
-    if  ($msg eq "10") 	    {($err, $msg) = THZ_ReadAnswer($hash);} # read again sometimes "10" pause "02"
+    if  ($msg eq "10") 	    {select(undef, undef, undef, 0.005) if (AttrVal($hash->{NAME}, "firmware" , "4.39")  =~ /^2/); ($err, $msg) = THZ_ReadAnswer($hash);} # read again sometimes "10" pause "02"
     if  ($msg ne "1002" and $msg ne "02") {$err .= " THZ_Get_Com: error found at step1 $msg"; $err .=" NAK!!" if ($msg eq "15"); select(undef, undef, undef, 0.1); return($err, $msg) ;}
     
     # ---------step2 send  DLE data link escape
@@ -1541,10 +1544,11 @@ sub THZ_ReadAnswer($) {
     my $rtimeout = (AttrVal($name, "simpleReadTimeout", "0.8"));
     $rtimeout +=1 if (AttrVal($hash->{NAME}, "firmware" , "4.39")  =~ /^2/);
     $rtimeout = minNum($rtimeout,1.8) if (AttrVal($name, "nonblocking", "0") eq 0); # set to max 1.8s if nonblocking disabled
-    my $count = 0; my $countmax = 20;
+    my $count = 0; my $countmax = 300;
     while ((!defined($buf)) and ($count <= $countmax)) {
-        if ($^O =~ /Win/){
-            select(undef, undef, undef, 0.005);  ###delay of 5 ms for windows-OS, because SimpleReadWithTimeout does not wait
+        select(undef, undef, undef, 0.002) if (AttrVal($hash->{NAME}, "firmware" , "4.39")  =~ /^2/);   # possible fix for joerg may2022, add 5ms wait time to the above -----    
+	if ($^O =~ /Win/){
+            select(undef, undef, undef, 0.002);  ###delay of 2 ms for windows-OS, because SimpleReadWithTimeout does not wait
             $buf =    DevIo_DoSimpleRead($hash);
             $buf =  undef if (length($buf)==0);
         }
@@ -1992,6 +1996,10 @@ sub THZ_Attr(@) {
             %sets = (%sets206, %setsonly214);
             %gets = (%getsonly2xx, %getsonly214, %sets206);
         }
+	elsif ($attrVal eq "2.14j") {
+            %sets = (%sets206, %setsonly214);
+            %gets = (%getsonly2xx, %getsonly214j, %sets206);
+        }
         elsif ($attrVal eq "5.39") {
             %sets=(%sets439539common, %sets539only);
             %gets=(%getsonly539, %sets);
@@ -2100,7 +2108,9 @@ sub function_heatSetTemp($$) {
         $Simul_heatSetTemp_simplified = sprintf("%.1f", maxNum(5,($tmp + $a1)));
         push(@ret, [$_, $Simul_heatSetTemp, $Simul_heatSetTemp_simplified]);
     }
-    my $titlestring =  'roomSetTemp=' . $roomSetTemp . '°C p13GradientHC1=' . $p13GradientHC1 . ' p14LowEndHC1=' . $p14LowEndHC1  .  'K p15RoomInfluenceHC1=' . $p15RoomInfluenceHC1 . "% insideTemp=" . $insideTemp .'°C';
+    my $titlestring =  'roomSetTemp=' . $roomSetTemp . '°C p13GradientHC1=' . $p13GradientHC1 . ' p14LowEndHC1=' . $p14LowEndHC1  .  'K p15RoomInfluenceHC1=' . $p15RoomInfluenceHC1;
+    $titlestring .= "%" if (AttrVal($devname, "firmware" , "4.39")  !~ /^2/ ); 
+    $titlestring .= " insideTemp=" . $insideTemp .'°C';
     return (\@ret, $titlestring, $heatSetTemp, $outside_tempFiltered, $pOpMode);
 }
 

@@ -1,5 +1,5 @@
 ##############################################################################
-# $Id: 98_Modbus.pm 25963 2022-04-14 16:52:16Z StefanStrobel $
+# $Id: 98_Modbus.pm 26789 2022-12-05 19:47:12Z StefanStrobel $
 # fhem Modul für Geräte mit Modbus-Interface - 
 # Basis für logische Geräte-Module wie zum Beispiel 
 # ModbusAttr.pm or ModbusSET.pm
@@ -23,6 +23,9 @@
 
 #
 #   ToDo / Ideas 
+#                   Datentypen vorbelegen - gelten falls nichts anderes per attr definiert ist
+#                       reading attr could be optional -> reading name is then object name like h234
+#
 #                   LastError Reading per logical device with error code and affected reading
 #                   verify that nextOpenDelay is integer and >= 1
 #                   set active results in error when tcp is already open
@@ -112,8 +115,7 @@
 # more explanations
 ####################
 
-#
-# if a logical device uses a serial physical device as io device, then $hash->{MODE}
+# if a logical device uses a physical device as io device, then $hash->{MODE}
 # is copied to the physical device and locks this device into this mode.
 #
 # $hash->{PROTOCOL} can be RTU, ASCII or TCP
@@ -124,19 +126,18 @@
 
 # phys connection   proto           mode on physical device
 #
-# serial            rtu / ascii     master and slave at same time not working, 
+# serial/tcp        rtu / ascii     master and slave at same time not working, 
 #                                   slave can not hear master / only one master per line
 #                                   also master and passive at sime time does not make sense
 #                                   also slave and passive is useless
 #                                   so if one logical device is passive, physical device can be locked passive
-#
 #                                   if one is master or slave, physical can be set to same
 #
 # serial            rtu / ascii     passive possible, physical then can also be locked.
 #
 # serial            tcp             nonsense
 #
-# tcp               rtu / ascii     passive not possible, only master / slave. phys = logocal
+# tcp               rtu / ascii     passive not possible, only master / slave. phys = logical
 #                   tcp             same.
 
 # so when definig / assigning iodev, mode can be locked on physical side.
@@ -150,14 +151,12 @@
 # NotifyFn is triggered at INITIALIZED, REREADCFG and MODIFIED.
 # here ModbusLD_GetIOHash($hash) is called where everything should happen (call register etc.)
 
-#
 # for enable after disable on physical side everything is done. On logical side GetIOHash is called again.
 # for attr IODev SetIODev is called
 # ReadyFn also doesnt change anything regarding IODev / Registration
 
 # So mainly things are handled after a define / initialized which triggers NotifyFn for every device 
 # Notify calls GetIoHash which calls SetIODev
-#
 
 #
 # Exprs und Maps
@@ -191,6 +190,7 @@ use Scalar::Util    qw(looks_like_number);
 use TcpServerUtils  qw(:all);
 use DevIo;
 use FHEM::HTTPMOD::Utils qw(:all);
+use Scalar::Util qw(weaken);                # needed for backlinks in queue structures (see chapter 11 in PBP / memory leak reported with relays)
 
 use Exporter ('import');
 our @EXPORT_OK = qw();
@@ -237,6 +237,8 @@ BEGIN {                         # functions / variables needed from package main
         DevIo_CloseDev
         DevIo_IsOpen
         DevIo_Disconnected
+        DevIo_getState
+        DevIo_setStates
         SetExtensions
 
         TcpServer_Open
@@ -267,7 +269,7 @@ BEGIN {                         # functions / variables needed from package main
 
 };
 
-my $Module_Version = '4.4.04 - 17.7.2021';
+my $Module_Version = '4.4.13 - 4.12.2022';
 
 my $PhysAttrs = join (' ', 
         'queueDelay',
@@ -283,14 +285,15 @@ my $PhysAttrs = join (' ',
         'openTimeout',
         'nextOpenDelay',
         'nextOpenDelay2',
-        'maxTimeoutsToReconnect',             # for Modbus over TCP/IP only        
+        'maxTimeoutsToReconnect',               # for Modbus over TCP/IP only        
         'skipGarbage:0,1',
+        'requestDelay',                         # for debugging / testing / simulations
         'timeoutLogLevel:3,4',
-        'closeAfterResponse:0,1',             # for Modbus over TCP/IP only
+        'closeAfterResponse:0,1',               # for Modbus over TCP/IP only
         'silentReconnect:0,1');
         
 my $LogAttrs = join (' ', 
-        'IODev',                              # fhem.pl macht dann $hash->{IODev} = $defs{$ioname}
+        'IODev',                                # fhem.pl macht dann $hash->{IODev} = $defs{$ioname}
         'queueMax',
         'alignTime',
         'enableControlSet:0,1',
@@ -329,7 +332,7 @@ my $ObjAttrs = join (' ',
         'obj-[cdih][0-9]+-expr',
         'obj-[cdih][0-9]+-ignoreExpr',
         'obj-[cdih][0-9]+-format',
-        'obj-[ih][0-9]+-type',
+        'obj-[cdih][0-9]+-type',
         'obj-[cdih][0-9]+-showGet',
         'obj-[cdih][0-9]+-allowWrite',
         'obj-[cdih][0-9]+-group',
@@ -382,7 +385,8 @@ my $DevAttrs = join (' ',
         'dev-type-[A-Za-z0-9_]+-set',
 
         'dev-timing-timeout',
-        'dev-timing-serverTimeout',       
+        'dev-timing-serverTimeout',
+        'dev-timing-serverTimeoutAbs',      # just for testing
         'dev-timing-sendDelay',
         'dev-timing-commDelay');
 
@@ -553,12 +557,12 @@ sub DefineFn {
         $dev .= ':502' if ($dev !~ /.*:[0-9]/);   # add default port if no port specified
         delete $ioHash->{SerialConn};
     }
+    $ioHash->{devioNoSTATE} = 1;            # let stateFormat do its thing, just set the reading 'state', not the Internal STATE
+    $ioHash->{DeviceName}   = $dev;         # needed by DevIo to get Device, Port, Speed etc.
+    $ioHash->{IODev}        = $ioHash;      # point back to self to make getIOHash easier
+    $ioHash->{NOTIFYDEV}    = 'global';     # NotifyFn nur aufrufen wenn global events (INITIALIZED)
+    DoClose($ioHash);                       # make sure everything is losed initally, set state to disconnected
 
-    $ioHash->{DeviceName} = $dev;       # needed by DevIo to get Device, Port, Speed etc.
-    $ioHash->{IODev}      = $ioHash;    # point back to self to make getIOHash easier
-    $ioHash->{NOTIFYDEV}  = 'global';   # NotifyFn nur aufrufen wenn global events (INITIALIZED)
-
-    DoClose($ioHash, 1);                # close, set Expect, clear Buffer, but don't set state to disconnected
     Log3 $name, 3, "$name: defined as $dev";
     return;                             # open is done later from NOTIFY
 }
@@ -638,8 +642,8 @@ sub DefineLDFn {
     $hash->{PROTOCOL} = $proto // 'RTU';
     Log3 $name, 3, "$name: defined $mode with id $id, protocol $hash->{PROTOCOL}" . ($logInfo // '');
     
-    # for Modbus TCP physical hash = logical has so MODE is set for physical device as well.    
-    # for Modbus over serial lines this is set when IODev Attr and GetIOHash is called 
+    # for Modbus TCP physical hash = logical hash so MODE is set for physical device as well.    
+    # for Modbus over IODev this is set when IODev Attr and GetIOHash is called 
     # or later when it is needed and GetIOHash is called
     
     # for TCP $id is an optional Unit ID that is ignored by most devices
@@ -678,7 +682,7 @@ sub DefineLDFn {
         delete $hash->{TCPServer};
         delete $hash->{TCPChild};
     }
-    SetStates($hash, 'disconnected');                   # initial state after define - might modify to disabled / inactive
+    GoToState($hash, 'disconnected');                   # initial state after define - might modify to disabled / inactive
     # connection will be opened later in NotifyFN (INITIALIZED, DEFINED, MODIFIED, ...)
     # for serial connections we use a separate physical device. This is set in Notify
     return;
@@ -694,16 +698,18 @@ sub UndefFn {
     my $name   = $ioHash->{NAME};
 
     # device is already in the process of being deleted so we should not issue commandDelete inside _Close again
-    DoClose($ioHash,1 ,1) if (IsOpen($ioHash));  # close, set Expect, clear Buffer, don't set state, don't delete yet
+    # dont check isOpen, call close even if closed and potentially on readyfn list
+    DoClose($ioHash, {NODELETE => 1});
 
     # lösche auch die Verweise aus logischen Modulen auf dieses physische.
-    foreach my $d (keys %{$ioHash->{defptr}}) {
+    foreach my $d (keys %{$ioHash->{defptr}}) {             # go through all logical devices using this physical
         Log3 $name, 3, "$name: Undef is removing IO device for $d";
         my $lHash = $defs{$d};
-        delete $lHash->{IODev} if ($lHash);
-        UpdateTimer($lHash, \&Modbus::GetUpdate, 'stop');
+        delete $lHash->{IODev} if ($lHash);                 # remove IODev entry at logical device
+        UpdateTimer($lHash, \&Modbus::GetUpdate, 'stop');   # stop update timer of logical device
     }
-    Profiler($ioHash, 'Idle');                   # set category to book following time, can be Delay, Fhem, Idle, Read, Send or Wait
+    Profiler($ioHash, 'Idle');                              # category to book time, Delay, Fhem, Idle, Read, Send or Wait
+    
     #Log3 $name, 3, "$name: _UnDef done";
     return;
 }
@@ -716,15 +722,20 @@ sub UndefLDFn {
     my $hash = shift;
     my $arg  = shift;
     my $name = $hash->{NAME};
-    Log3 $name, 3, "$name: _UnDef is closing $name";    
+    Log3 $name, 3, "$name: _UnDef is preparing $name for deletion";
     UnregAtIODev($hash);
     
     # device is already in the process of being deleted so we should not issue commandDelete inside _Close again
-    DoClose($hash,1 ,1) if (IsOpen($hash));      # close, set Expect, clear Buffer, don't set state, don't delete yet
-    UpdateTimer($hash, \&Modbus::GetUpdate, 'stop');        
-    delete $hash->{PROTOCOL};                       # just in case somebody keeps a pointer to our hash ...
+    # dont check isOpen, close even if closed and potentially on readyfn list
+    DoClose($hash, {NODELETE => 1});
+    UpdateTimer($hash, \&Modbus::GetUpdate, 'stop');
+    RemoveInternalTimer ("scan:$name");             # scan timer for logical devices
+    # other timers are stopped in DoClose
+    
+    delete $hash->{PROTOCOL};                       # fix memory leak
     delete $hash->{MODE};
     delete $hash->{IODev};
+    delete $hash->{CHILDOF};
     return;
 }
 
@@ -741,12 +752,11 @@ sub AttrFn {
     
     Log3 $name, 5, "$name: attr $cmd $aName" . (defined($aVal) ? ", $aVal" : "");
     if ($aName eq 'disable' && $init_done) {        # only after init_done, otherwise see NotifyFN
-        # disable on a physical serial device
+        # disable on a physical device
         if ($cmd eq "set" && $aVal) {
             Log3 $name, 3, "$name: attr disable set" . (IsOpen($hash) ? ", closing connection" : "");
-            DoClose($hash);                    # close, set Expect, clear Buffer, set state to disconnected
-            UpdateTimer($hash, \&Modbus::GetUpdate, 'stop');    
-        } 
+            GoToState($hash, 'disabled');       # close, stop timers and set state
+        }
         elsif ($cmd eq 'del' || ($cmd eq 'set' && !$aVal)) {
             Log3 $name, 3, "$name: attr disable removed";
             DoOpen($hash) if (!AttrVal($name, 'closeAfterResponse', 0));
@@ -878,57 +888,13 @@ sub AttrLDFn {
     
     if ($aName eq 'disable' && $init_done) {    # if not init_done, nothing to be done here (see NotifyFN)
         if ($cmd eq "set" && $aVal) {           # disable set on a logical device (not physical serial here!)
-            SetLDInactive($hash);
-            SetStates($hash, 'disabled');
+            GoToState($hash, 'disabled');       # set state, close / stop timers 
         } 
         elsif ($cmd eq 'del' || ($cmd eq 'set' && !$aVal)) {    # disable removed / cleared
             Log3 $name, 3, "$name: attr disable removed";
-            SetLDActive($hash);
-            SetStates($hash, 'enabled');                               # don't check attr disable (not cleared yet) and set to active temporarily
+            GoToState($hash, 'enabled');        # set state, open / start update timer
         }
     }   
-    return;
-}
-
-
-######################################################
-# set the logical device to inactive, close IO 
-# and stop timer
-sub SetLDInactive {
-    my $hash = shift;
-    my $name = $hash->{NAME};
-
-    if ($hash->{TCPConn}) {             # Modbus over TCP connection
-        Log3 $name, 3, "$name: device is beeing set to inactive / disabled" . (IsOpen($hash) ? ", closing TCP connection" : "");
-        DoClose($hash);                 # close, set Expect, clear Buffer, set state to disconnected
-        UpdateTimer($hash, \&Modbus::GetUpdate, 'stop');
-    } 
-    else {                              # connection via serial io device
-        UnregAtIODev($hash);            # unregister at physical device because logical device is disabled
-    }
-    UpdateTimer($hash, \&Modbus::GetUpdate, 'stop');
-    return;
-}
-
-
-######################################################
-# activate the logical device, reopen, set timer
-sub SetLDActive {
-    my $hash = shift;
-    my $name = $hash->{NAME};
-
-    if ($hash->{TCPConn}) {                     # Modbus over TCP connection
-        if (!IsOpen($hash)) {
-            DoOpen($hash) if !AttrVal($name, "closeAfterResponse", 0);
-        }
-    } 
-    else {
-        my $ioHash = GetIOHash($hash);     	    # get ioHash / check compatibility and set / register if necessary
-        Log3 $name, 3, "$name: " . ($ioHash ? "using $ioHash->{NAME}" : "no IODev") . " for communication";
-    }
-    if ($hash->{MODE} && $hash->{MODE} eq 'master') {
-        UpdateTimer($hash, \&Modbus::GetUpdate, 'start');   # set / change timer
-    }
     return;
 }
 
@@ -1121,7 +1087,9 @@ sub SetLDFn {
     my $fCode  = GetFC($hash, {TYPE => $type, ADR => $adr, LEN => $len, OPERATION => 'write'});
     my $ioHash = GetIOHash($hash);                      # ioHash has been checked in GetSetChecks above already
     DoRequest($hash, {TYPE => $type, ADR => $adr, LEN => $len, OPERATION => 'write', VALUES => $packedVal, FORCE => !$async, DBGINFO => "set $setName"});
-    StartQueueTimer($hash, \&Modbus::ProcessRequestQueue, {delay => 0});    # call processRequestQueue at next possibility (others waiting?)
+    # StartQueueTimer($hash, \&Modbus::ProcessRequestQueue, {delay => 0});    # call processRequestQueue at next possibility (others waiting?)
+    # DoRequest should call QueueRequest which calls StartQueueTimer without delay ...
+    
     if (!$async) {
         my $err = ReadAnswer($ioHash);
         return $err if ($err);
@@ -1139,7 +1107,7 @@ sub SetLDFn {
 
 
 ########################################################################
-# SET command - handle predefined control sets fpr logical device
+# SET command - handle predefined control sets for logical device
 sub ControlSet {
     my $hash    = shift;
     my $setName = shift;
@@ -1148,7 +1116,7 @@ sub ControlSet {
     
     if ($setName eq 'interval') {
         return 'set interval is only allowed when Fhem is Modbus master' if ($hash->{MODE} ne 'master');
-        if (!$setVal || $setVal !~ m{ \A [0-9.]+ (\.[0-9]+)? \z}xms ) {
+        if (!defined($setVal) || $setVal !~ m{ \A [0-9.]+ (\.[0-9]+)? \z}xms ) {
             Log3 $name, 3, "$name: set interval $setVal not valid";
             Log3 $name, 3, "$name: continuing with $hash->{Interval} (sec)" if ($hash->{Interval});
             return 'No valid Interval specified';
@@ -1186,14 +1154,12 @@ sub ControlSet {
     } 
     if ($setName eq 'active' && AttrVal($name, 'enableSetInactive', 1) ) {
         return 'device is disabled' if (AttrVal($name, 'disable', 0));
-        SetStates($hash, 'active');
-        SetLDActive($hash);
+        GoToState($hash, 'active');         # set state, open / start update timer
         return '0';
     } 
     if ($setName eq 'inactive' && AttrVal($name, 'enableSetInactive', 1)) {
         return 'device is disabled' if (AttrVal($name, 'disable', 0));
-        SetStates($hash, 'inactive');
-        SetLDInactive($hash);
+        GoToState($hash, 'inactive');       # set state, close / stop timers 
         return '0';
     }     
     if ($setName eq 'stop') {
@@ -1583,8 +1549,8 @@ sub DoOpen {
     my $caller  = FhemCaller();
     
     if ($hash->{DeviceName} eq 'none') {
-        Log3 $name, 5, "$name: open called from $caller, device is defined with none" if ($caller ne 'Ready'); 
-        SetStates($hash, 'opened');
+        Log3 $name, 5, "$name: open called from $caller, device is defined with none" if ($caller ne 'ReadyFn'); 
+        OpenCB($hash);                                      # set state and start timers
     } 
     elsif (!$hash->{TCPConn} && $hash->{TYPE} ne 'Modbus') {        # only open physical devices or TCP
         Log3 $name, 3, "$name: open called from $caller for logical device - this should not happen";
@@ -1597,18 +1563,18 @@ sub DoOpen {
     elsif ($hash->{TCPServer}) {
         # Modbus slave or relay over TCP connection -> open listening port
         Log3 $name, 5, "$name: Open called for listening to a TCP connection";
-        if ($arg_ref->{CLOSEFIRST} && IsOpen($hash)) {
-            DoClose($hash, 1);                      # close, set Expect, clear Buffer, don't set state
+        if ($arg_ref->{CLOSEFIRST}) {
+            DoClose($hash);                                 # close and set state in case open fails
         }
         my ($dest, $port) = split(/[:\s]+/, $hash->{DeviceName});
         my $ret = TcpServer_Open($hash, $port, $dest);
         if ($ret) {
             Log3 $name, 3, "$name: TcpServerOpen returned $ret";
         } else {
-            SetStates($hash, 'opened');
+            DevIo_setStates($hash, 'opened');
         }
     } 
-    else {                                          # normal case, physical device or TCP
+    else {                                                  # normal case, physical device or TCP
         my $timeOt = AttrVal($name, 'openTimeout', 3);
         my $delay2 = AttrVal($name, 'nextOpenDelay2', 1);
         my $nextOp = $hash->{NEXT_OPEN} // 0;
@@ -1622,11 +1588,12 @@ sub DoOpen {
             Log3 $name, 3, "$name: open - stop waiting for callback and reset the BUSY flag.";
             $hash->{BUSY_OPENDEV} = 0;
         }    
-        if ($arg_ref->{CLOSEFIRST} && IsOpen($hash)) {      # close first and already open
+        if ($arg_ref->{CLOSEFIRST}) {                       # close first and already open
             Log3 $name, 5, "$name: Open called for DevIo connection - closing first";
-            DoClose($hash, 1);                              # close, set Expect, clear Buffer, don't set state to disconnected
+            DoClose($hash);                                 # close and set state in case open fails
             delete $hash->{DevIoJustClosed};                # allow direct opening without further delay
-        } elsif ($nextOp && ($nextOp > $now)) {
+        }
+        elsif ($nextOp && ($nextOp > $now)) {
             Log3 $name, 5, "$name: open ignored because DevIo has set NEXT_OPEN to $nextOp / " . FmtTimeMs($nextOp) .
                 " and now is $now / " . FmtTimeMs($now);
             return;
@@ -1645,17 +1612,21 @@ sub DoOpen {
         $hash->{devioLoglevel}  = (AttrVal($name, 'silentReconnect', 0) ? 4 : 3);
         $hash->{TIMEOUT}        = $timeOt;
         if ($arg_ref->{FORCE}) {
-            DevIo_OpenDev($hash, $ready, 0);                # standard open
+            DevIo_OpenDev($hash, $ready, 0);                # standard synchronous open
             OpenCB($hash);                                  # do remaining steps (callback not specified in above call)
         } 
         else {
             $hash->{BUSY_OPENDEV} = 1;
             DevIo_OpenDev($hash, $ready, 0, \&OpenCB);      # async open
+            #DevIo_setStates($hash, 'opened');              # state will be set in callback
         }
     }
     Profiler($hash, 'Idle');                                # set category to book following time, can be Delay, Fhem, Idle, Read, Send or Wait
     ResetExpect($hash);
-    StartQueueTimer($hash, \&Modbus::ProcessRequestQueue, {delay => 0.5, silent => 0});      # process queue in case something is waiting but delay so open can call back
+    
+    # don't start queue timer until connection is actually open -> OpenCB
+    # StartQueueTimer($hash, \&Modbus::ProcessRequestQueue, {delay => 0.5, silent => 0});      # process queue in case something is waiting but delay so open can call back
+    
     DropBuffer($hash);
     delete $hash->{TIMEOUT};
     return;
@@ -1671,10 +1642,13 @@ sub OpenCB {
         Log3 $name, 5, "$name: Open callback: $msg" if ($msg);
     }
     delete $hash->{BUSY_OPENDEV};
-    if (IsOpen($hash)) {
+    if (IsOpen($hash)) {                                        # also works for 'none'
         delete $hash->{TIMEOUTS} ;
-        UpdateTimer($hash, \&Modbus::GetUpdate, 'start');           # set / change timer
-    } 
+        UpdateTimer($hash, \&Modbus::GetUpdate, 'start');       # set / change timer
+        DevIo_setStates($hash, 'opened');
+    }
+    # stop queue-Timer while disconnected and start it again with delay 0 here. ProcessRequestQueue will call open again if not open yet.
+    StartQueueTimer($hash, \&Modbus::ProcessRequestQueue, {delay => 0, silent => 0});
     return;
 }
 
@@ -1683,8 +1657,12 @@ sub OpenCB {
 # close connection 
 # $hash is physical or both (connection over TCP)
 sub DoClose {
-    my ($hash, $noState, $noDelete) = @_;
-    my $name = $hash->{NAME};
+    my $hash      = shift;
+    my $arg_ref   = shift // {};
+    my $noDelete  = $arg_ref->{NODELETE}  // 0;
+    my $keepQueue = $arg_ref->{KEEPQUEUE} // 0;
+    my $noState   = $arg_ref->{NOSTATE}   // 0;
+    my $name      = $hash->{NAME};
     
     if (!$hash->{TCPConn} && $hash->{TYPE} ne 'Modbus') {
         Log3 $name, 3, "$name: close called from " . FhemCaller() . 
@@ -1693,19 +1671,31 @@ sub DoClose {
     }
     
     Log3 $name, 5, "$name: Close called from " . FhemCaller() . 
-        ($noState || $noDelete ? ' with ' : '') . ($noState ? 'noState' : '') .     # set state?
-        ($noState && $noDelete ? ' and ' : '') . ($noDelete ? 'noDelete' : '');     # command delete on connection device?
+        ($keepQueue || $noDelete ? ' with ' : '') . ($keepQueue ? 'keepQueue' : '') .
+        ($keepQueue && $noDelete ? ' and ' : '') . ($noDelete ? 'noDelete' : '');
     
     delete $hash->{LASTOPEN};                           # reset so next open will actually call OpenDev
-    if ($hash->{TCPChild} && IsOpen($hash)) {           # this is a slave or relay connection hash
+    if ($hash->{TCPChild}) {                            # this is a slave or relay connection hash
         Log3 $name, 4, "$name: Close TCP server listening connection and delete hash";
         TcpServer_Close($hash);
         RemoveInternalTimer ("stimeout:$name");
-        CommandDelete(undef, $name) if (!$noDelete);
-        if ($hash->{CHILDOF} && $hash->{CHILDOF}{LASTCONN} && $hash->{CHILDOF}{LASTCONN} eq $hash->{NAME}) {
-            Log3 $name, 5, "$name: Close is removing lastconn from parent device $hash->{CHILDOF}{NAME}";
-            delete $hash->{CHILDOF}{LASTCONN}
+        if ($hash->{CHILDOF}){
+            my $parent = $hash->{CHILDOF};           
+            delete $parent->{CONNECTHASH}{$name};
+            if ($parent->{LASTCONN} && $parent->{LASTCONN} eq $hash->{NAME}) {
+                Log3 $name, 5, "$name: Close is removing lastconn from parent device $parent->{NAME}";
+                delete $parent->{LASTCONN};
+            }
         }
+        delete $hash->{CHILDOF};                        # fix memory leak
+        delete $hash->{IODEV};
+        delete $hash->{REQUEST};
+        delete $hash->{RESPONSE};
+        delete $hash->{FRAME};
+        delete $hash->{READ};
+        delete $hash->{REMEMBER};
+        CommandDelete(undef, $name) if (!$noDelete);    # delete tcp connection device unless called from undefFn which wants to delete later
+        return;                                         # this hash is removed from %defs, attr ...
     } 
     elsif ($hash->{TCPServer} && IsOpen($hash)) {       # this is a slave or relay listening device
         Log3 $name, 4, "$name: Close TCP server socket, now look for active connections";
@@ -1713,7 +1703,7 @@ sub DoClose {
         foreach my $conn (keys %{$hash->{CONNECTHASH}}) {
             my $chash = $hash->{CONNECTHASH}{$conn};
             TcpServer_Close($chash);
-            Log3 $chash->{NAME}, 4, "$chash->{NAME}: Close TCP server connection of parent $name and delete hash";
+            Log3 $chash->{NAME}, 4, "$chash->{NAME}: Close TCP server connection of parent $name";
             RemoveInternalTimer ("stimeout:$chash->{NAME}");
             CommandDelete(undef, $chash->{NAME}) if (!$noDelete);
         }
@@ -1728,14 +1718,21 @@ sub DoClose {
         # close even if it was not open yet but on ready list (need to remove entry from readylist)
         DevIo_CloseDev($hash);
     }
-    SetStates($hash, 'disconnected') if (!$noState);
+    GoToState($hash, 'disconnected') if (!$noState);
     ResetExpect($hash);
     DropBuffer($hash);
     Profiler($hash, 'Idle');                    # set category to book following time, can be Delay, Fhem, Idle, Read, Send or Wait
-    StopQueueTimer($hash, {silent => 1});
+    delete $hash->{IODev};
+    if($keepQueue) {
+        my $qlen       = ($hash->{QUEUE} ? scalar(@{$hash->{QUEUE}}) : 0);
+        Log3 $name, 4, "$name: DoClose keeps queue with len $qlen";
+    }
+    else {
+        StopQueueTimer($hash, {silent => 1});
+        delete $hash->{QUEUE};
+    }
     RemoveInternalTimer ("timeout:$name");      # remove ResponseTimeout timer when connection is closed
     delete $hash->{nextTimeout};
-    delete $hash->{QUEUE};
     return;
 }
     
@@ -1747,11 +1744,10 @@ sub ReadyFn {
     my $hash = shift;
     my $name = $hash->{NAME};
     
-    if($hash->{STATE} eq 'disconnected') {
+    if(DevIo_getState($hash) eq 'disconnected') {
         if (IsDisabled($name)) {
             Log3 $name, 3, "$name: ready called but $name is disabled - don't try to reconnect - call DoClose";
-            DoClose($hash, 1);          # close, set Expect, clear Buffer, don't set state to disconnected (must have already been done)
-            UpdateTimer($hash, \&Modbus::GetUpdate, 'stop');
+            DoClose($hash);             # state sollte schon disabled sein, macht aber nichts.
             return;
         }
         DoOpen($hash, {READY => 1});    # reopen, dont call DevIoClose before reopening
@@ -1781,7 +1777,7 @@ sub HandleServerConnection {
     $chash->{MODBUSID}   = $hash->{MODBUSID};
     $chash->{PROTOCOL}   = $hash->{PROTOCOL};
     $chash->{MODE}       = $hash->{MODE};
-    $chash->{RELAY}      = $hash->{RELAY};
+    $chash->{RELAY}      = $hash->{RELAY};                      # name of relay master device if this is a relay 
     $chash->{CHILDOF}    = $hash;                               # point to parent device to get object definitions from there
     $chash->{IODev}      = $chash;
     $chash->{TCPConn}    = 1;
@@ -1794,14 +1790,13 @@ sub HandleServerConnection {
     $attr{$chash->{NAME}}{verbose} = $attr{$name}{verbose};     # copy verbose attr from parent
     $hash->{LASTCONN} = $chash->{NAME};                         # point from parent device to last connection device
     $hash->{CONNECTHASH}{$chash->{NAME}} = $chash;
+    weaken $hash->{CONNECTHASH}{$chash->{NAME}};
     my $room = AttrVal($name, 'connectionsRoom', 'Connections');
     if ($room !~ '[Nn]one') {
         CommandAttr(undef, "$chash->{NAME} room $room");        # set room
     }
-    
     my $to = gettimeofday() + DevInfo($hash, 'timing', 'serverTimeout', 120); 
     InternalTimer($to, \&Modbus::ServerTimeout, "stimeout:$chash->{NAME}", 0);
-
     return;
 }
 
@@ -1860,16 +1855,19 @@ sub ReadFn {
             return;
         } 
         # TCP client device connection device hash
-        Profiler($hash, 'Read');            # read from TCP socket
+        Profiler($hash, 'Read');                # read from TCP socket
         $ret = sysread($hash->{CD}, $buf, 256) if ($hash->{CD});
-        if(!defined($ret) || $ret <= 0) {   # connection closed
+        if(!defined($ret) || $ret <= 0) {       # connection closed
             Log3 $name, 3, "$name: read from TCP server connection got null -> closing";
             CommandDelete(undef, $name);
             return;
         }
-        RemoveInternalTimer ("stimeout:$name");
         my $to = $now + DevInfo($hash, 'timing', 'serverTimeout', 120); 
-        InternalTimer($to, \&Modbus::ServerTimeout, "stimeout:$name", 0);
+        my $tA = DevInfo($hash, 'timing', 'serverTimeoutAbs', 0); 
+        if (!$tA) {
+            RemoveInternalTimer ("stimeout:$name");
+            InternalTimer($to, \&Modbus::ServerTimeout, "stimeout:$name", 0);
+        }
     } 
     else {
         Profiler($hash, 'Read'); 
@@ -1897,6 +1895,26 @@ sub ReadFn {
         }    
         my $frame = $hash->{FRAME};              # is set after calling ParseFrameStart
         
+
+        # only for testing - remove later # todo: remove
+        my $attrsName = $name;
+        if ($hash->{CHILDOF}) {
+            $attrsName = $hash->{CHILDOF}{NAME};
+        }
+        my $requestDelay = AttrVal ($attrsName, 'requestDelay', 0);
+        #Log3 $name, 3, "$name: requestDelay is $requestDelay";
+        if ($requestDelay) {
+            if ($hash->{LastRequest}) {
+                if ($hash->{LastRequest} + $requestDelay > $now) {
+                    Log3 $name, 3, "$name: requestDelay causes request to be ignored";
+                    DropFrame($hash); 
+                    return;
+                }
+            }
+            $hash->{LastRequest} = $now;
+        }
+
+
         # EXPECT exists on io dev. Special case for relays:
         #     there are two io devs. receiving side and forwarding side. 
         #     read can be called when a new request comes in on receiving side (mode relay)
@@ -1948,7 +1966,7 @@ sub ReadFn {
 sub ReadAnswer {
     my $hash    = shift;                        # called with physical io device hash
     my $name    = $hash->{NAME};       
-    my $logHash = $hash->{REQUEST}{MASTERHASH}; # logical device that sent last request, stored by ProcessRequestQueue
+    my $logHash = $hash->{REQUEST}{MASTERHASH}; # logical device that sent last request, stored by ProcessRequestQueue, checked in loop ...
     my $timeout = DevInfo($logHash, 'timing', 'timeout', 2); 
     my $now     = gettimeofday();
     my $timeRest;
@@ -1976,6 +1994,11 @@ sub ReadAnswer {
         if ($timeout <= 0 || ($hash->{DeviceName} eq 'none' && !$hash->{TestInput})) {
             last READLOOP;                              # Timeout - will be logged after the loop
         }
+        if (!$hash->{REQUEST}{MASTERHASH}) {
+            Log3 $name, 5, "$name: ReadAnswer misses MASTERHASH and returns";
+            $msg = 'ReadAnswer called but MASTERHASH disappeared';
+            last READLOOP;
+        }
         if ($hash->{DeviceName} eq 'none') {            # simulate receiving
             $buf = $hash->{TestInput};
             delete $hash->{TestInput};
@@ -1996,6 +2019,7 @@ sub ReadAnswer {
             if ($nfound < 0) {
                 next if ($! == EAGAIN() || $! == EINTR() || $! == 0);
                 $msg = 'Error in ReadAnswer: $!';
+                Log3 $name, 3, "$name: ReadAnswer sets device to disconnected";
                 DevIo_Disconnected($hash);              # close, set state but put back on readyfnlist for reopening
                 last READLOOP;
             }
@@ -2045,6 +2069,7 @@ sub ReadAnswer {
     DropFrame($hash);                           # drop $hash->{FRAME} and the relevant part of $hash->{READ}{BUFFER}
     delete $hash->{nextTimeout};
     delete $hash->{REQUEST};
+    # todo: normal queue delay when closeAfterResponse 2?
     StartQueueTimer($hash, \&Modbus::ProcessRequestQueue, {delay => 0});    # call processRequestQueue at next possibility if appropriate
     return $msg;
 }
@@ -2210,8 +2235,15 @@ sub HandleResponse {
         $response->{ADR}        = $request->{ADR};          # prefill so we don't need $request in ParseResponse and it gets shorter
         $response->{LEN}        = $request->{LEN};
         $response->{OPERATION}  = $request->{OPERATION};    # for later call to ParseDataString
-        $response->{MASTERHASH} = $masterHash if ($masterHash);    
-        $response->{RELAYHASH}  = $request->{RELAYHASH} if ($request->{RELAYHASH});    # not $relayHash!
+
+        if ($masterHash) {
+            $response->{MASTERHASH} = $masterHash;
+            weaken $response->{MASTERHASH};
+        }
+        if ($request->{RELAYHASH}) {        # not $relayHash!
+            $response->{RELAYHASH}  = $request->{RELAYHASH};
+            weaken $response->{RELAYHASH};
+        }
     }   # if no request known, we will skip most of the part below
     
     # parse response and fill response hash
@@ -2244,10 +2276,6 @@ sub HandleResponse {
         RelayResponse($hash, $request, $response) if ($relayHash && $request);       # add to {ERROR} if relay device is unavailable
     }
     
-    if ($hash->{MODE} eq 'master' && AttrVal($name, 'closeAfterResponse', 0) && ($hash->{QUEUE} ? scalar(@{$hash->{QUEUE}}) : 0) == 0) {
-        Log3 $name, 4, "$name: HandleResponse will close because closeAfterResponse is set and queue is empty";
-        DoClose($hash) 
-    }
     LogFrame($hash, ($hash->{FRAME}{ERROR} ? "HandleResponse error" : 'HandleResponse done'), 4);
     Statistics($hash, 'Timeouts', 0);       # damit bei Bedarf das Reading gesetzt wird
     ResetExpect($hash);                     # for master back to 'idle', otherwise back to 'request'
@@ -2255,6 +2283,22 @@ sub HandleResponse {
     delete $hash->{REQUEST};
     delete $hash->{RESPONSE};
     RemoveInternalTimer ("timeout:$name");  # remove ResponseTimeout timer now that Response has arrived
+    
+    if ($hash->{MODE} eq 'master') {
+        if (AttrVal($name, 'closeAfterResponse', 0) && ($hash->{QUEUE} ? scalar(@{$hash->{QUEUE}}) : 0) == 0) {
+            Log3 $name, 4, "$name: HandleResponse will close because closeAfterResponse is set and queue is empty";
+            DoClose($hash);
+            return 1;
+        }
+        elsif (AttrVal($name, 'closeAfterResponse', 0) == 2) {
+            Log3 $name, 4, "$name: HandleResponse will close because closeAfterResponse is 2";
+            DoClose($hash, {KEEPQUEUE => 1});
+            StopQueueTimer($hash);      # restart with full queue delay
+            StartQueueTimer($hash, \&Modbus::ProcessRequestQueue);
+            return 1;    
+        }
+    }
+    
     StartQueueTimer($hash, \&Modbus::ProcessRequestQueue, {delay => 0});    # set  timer to call processRequestQueue asap
     return 1;                               # error or not, parsing is done.
 }
@@ -2509,7 +2553,7 @@ sub WriteObject {
         next OBJLOOP;
     }
     if (!TryCall($hash, 'ModbusReadingsFn', $reading, $val)) {    
-        Log3 $name, 4, "$name: ParseDataString assigns value $val to reading $rname of device $device";
+        Log3 $name, 4, "$name: WriteObject assigns value $val to reading $rname of device $device";
         if ($dev eq $hash) {
             readingsBulkUpdate($dev, $rname, $val);         # assign value to one of this devices readings 
         } else {
@@ -2524,6 +2568,7 @@ sub WriteObject {
 #####################################################
 # split data part in a response or write request 
 # into objects that later can be assigned to readings
+# only called from ParseDataString
 sub SplitDataString {
     my $hash      = shift;
     my $transPtr  = shift;                      # $transPtr can be response (mode master) or request (mode slave and write request)
@@ -2618,6 +2663,7 @@ sub CreateParseInfoCache {
             'rmapDefault' => ObjInfo($hash, $objCombi, 'rmapDefault'),
             'format'      => ObjInfo($hash, $objCombi, 'format'),
         };
+    
     return;
 }
 
@@ -2667,7 +2713,7 @@ sub CreateDataObjects {
         my $val = $val[0];
 
         next OBJLOOP if ($pi->{'ignoreExpr'} && EvalExpr($hash,         # ignore exp results true -> skip to next object
-            {expr => $pi->{'ignoreExpr'}, val => $val,, '@val' => \@val, 
+            {expr => $pi->{'ignoreExpr'}, val => $val, '@val' => \@val, 
              nullIfNoExp => 1, action => "ignoreExpr for $obj->{reading}"}));
 
         if ($transPtr->{OPERATION} && $transPtr->{OPERATION} =~ /^scan/) {
@@ -2698,10 +2744,9 @@ sub CreateDataObjects {
 }
 
 
-#################################################
+################################################################################
 # Parse holding / input register / coil Data
-# called from ParseResponse which is only called from HandleResponse
-# or from HandleRequest (for write requests as slave)
+# called from HandleResponse or from HandleRequest (for write requests as slave)
 # with logical device hash, data string and the object type/adr to start with
 sub ParseDataString {
     my $hash     = shift;
@@ -2793,6 +2838,7 @@ sub HandleRequest {
             }
             elsif ($hash->{MODE} eq 'relay') {        
                 $request->{RELAYHASH} = $logHash;           # remember who to pass the response to 
+                weaken $request->{RELAYHASH};
                 RelayRequest($hash, $request, $frame);      # even if unspported fCode ...
                 $hash->{EXPECT} = 'request';                # just to be safe, should already be request
             }
@@ -2963,6 +3009,7 @@ sub GetRelayIO {
         return;
     }
     $relayHash->{MASTERHASH} = $masterHash;
+    weaken $relayHash->{MASTERHASH};
     $relayHash->{RELID} = $masterHash->{MODBUSID};
     Log3 $name, 5, "$name: GetRelayIO found $masterIOHash->{NAME} as Modbus relay forward io device for $masterHash->{NAME} with id $masterHash->{MODBUSID}";
     #Log3 $name, 5, "$name: GetRelayIO set RELID of $relayHash to $relayHash->{RELID}";
@@ -3011,7 +3058,9 @@ sub RelayRequest {
     }
     
     my %fRequest = %{$request};                     # create a copy to modify and forward
+
     $fRequest{MASTERHASH} = $masterHash;
+    weaken $fRequest{MASTERHASH};
     LogFrame($hash, "RelayRequest via $reIOHash->{NAME}, Proto $reIOHash->{PROTOCOL} with id $id", 4);
     if ($reIOHash->{PROTOCOL} eq 'TCP') {           # forward as Modbus TCP?
         my $tid = int(rand(255));
@@ -3047,7 +3096,7 @@ sub RelayResponse {
         
     my $relayHash = $response->{RELAYHASH};     # hash of logical relay device that got the first request
     my $ioHash = GetIOHash($relayHash);         # the ioHash that received the original request
-    if (!$ioHash) {
+    if (!$ioHash || !$relayHash) {
         Log3 $name, 4, "$name: RelayResponse failed because slave (=server) side io device disappeared";
         return;
     }
@@ -3111,7 +3160,7 @@ sub CreateResponse {
         $response->{VALUES} = $serverId;
         Log3 $name, 3, "$name: server id requested, send $serverId";
     }
-        
+    
     Log3 $name, 5, "$name: CreateResponse calls PackFrame to prepare response pdu";
 
     $response->{FCODE} += 128 if ($response->{ERRCODE});
@@ -3193,6 +3242,7 @@ sub DoRequest {
     $request->{MASTERHASH} = $hash;                                             # logical device in charge
     $request->{TID}        = int(rand(255)) if ($hash->{PROTOCOL} eq 'TCP');    # transaction id for Modbus TCP
     $request->{FCODE}      = GetFC($hash, $request);
+    weaken $request->{MASTERHASH};
     return if (!$request->{FCODE});
 
     # check if defined unpack code matches a corresponding len and log warning if appropriate
@@ -3267,7 +3317,9 @@ sub QueueRequest {
         return;
     }
     readingsSingleUpdate($hash, 'QueueLength', ($hash->{QUEUE} ? scalar(@{$hash->{QUEUE}}) : 0), 1) if (AttrVal($name, 'enableQueueLengthReading', 0));
-    StartQueueTimer($hash, \&Modbus::ProcessRequestQueue, {delay => 0});  # process asap, after delays are over
+    
+    StartQueueTimer($hash, \&Modbus::ProcessRequestQueue, {delay => 0});    # try to open if closed
+    # process asap, after delays are over
     return;
 }   
 
@@ -4186,49 +4238,69 @@ sub CountTimeouts {
 }
 
 
-#################################################################
-# set state Reading and STATE internal 
-# call instead of setting STATE directly and when inactive / disconnected
-# when called with 
-
-# opened - set to disabled if attr disable is set (after attr IODev, disabled would not be set after successful open)
-#               set to inactive if state reading is inactive
-#               otherwise set to opened
-# disconnected - set to disabled if attr disable is set (when connection is lost or after define)
-#               set to inactive if state reading is already inactive
-#               otherwise set to disconnected
-
-# inactive - set to disabled if attr disable is set (after set inactive)
-#               otherwise set to inactive
-# active - set to disabled if attr disable is set (after set active)
-#               otherwise set to active temporarily
-#               after open state will be set again
-
-# disabled - set to disabled (while attr disable is set)
-# enabled - set to active temporarily  (when attr disable is removed)
-#               after open state will be set again
-sub SetStates {
+############################################################################
+# set state reading and take active / inactive into account
+# open / close when when switching between active and inactive/disabled
+# call instead of setting state directly 
+sub GoToState {
     my $hash     = shift;
-    my $state    = shift;
+    my $setState = shift;
     my $name     = $hash->{NAME};
-    my $newState = $state;
-
-    #Log3 $name, 5, "$name: SetState called from " . FhemCaller() . " with $state, current state reading is " . ReadingsVal($name, 'state', '');
-    if ($state ne 'disabled') {                                         # for disabled nothing else matters
-        if ($state eq 'enabled') {
-            $newState = 'active';                                       # enabled (disable removed) becomes active
-        } elsif ($state ne 'active') {
-            if (AttrVal($name, 'disable', 0)) {                         # otherweise check disable attr first
-                $newState = 'disabled';
-            } elsif (ReadingsVal($name, 'state', '') eq 'inactive') {   # and then check if inactive
-                $newState = 'inactive';
-            }
+    my $oldState = ReadingsVal($name, 'state', '');
+    my $disabled = AttrVal($name, 'disable', 0);
+    my $newState = $setState;
+    
+    Log3 $name, 5, "$name: GoToState called from " . FhemCaller() . " with $setState";
+    
+    if ($setState eq 'disabled') {
+        # nothing to be done here, newstate is already copied from setState
+    }
+    elsif ($setState eq 'enabled') {                    # attr disabled is not cleared yet here
+        $newState = 'active';                           # enabled (disable removed) becomes active
+    }
+    elsif ($setState eq 'inactive') {
+        $newState = 'disabled' if ($disabled);
+    }
+    elsif ($setState eq 'active') {
+        $newState = 'disabled' if ($disabled);
+    }
+    elsif ($setState eq 'opened') {
+        # nothing to be done, never called with open
+    }
+    elsif ($setState eq 'disconnected') {
+        $newState = 'inactive' if ($oldState eq 'inactive');
+        $newState = 'disabled' if ($disabled);
+    }
+    else {
+        Log3 $name, 5, "$name: SetState got unknown parameter $setState";
+        return;
+    }
+    
+    if ($newState =~ /inactive|disabled/) {
+        if ($hash->{TCPConn}) {             # Modbus over TCP connection
+            DoClose($hash, {NOSTATE => 1}); # close, set Expect, clear Buffer
+            UpdateTimer($hash, \&Modbus::GetUpdate, 'stop');
+        } 
+        else {                              # connection via serial io device
+            UnregAtIODev($hash);            # unregister at physical device because logical device is disabled
+        }
+        UpdateTimer($hash, \&Modbus::GetUpdate, 'stop');
+    }
+    elsif ($newState eq 'active') {
+        if ($hash->{TCPConn} && !IsOpen($hash)) {   # closed Modbus over TCP connection
+            DoOpen($hash) if !AttrVal($name, "closeAfterResponse", 0);
+        } 
+        else {
+            my $ioHash = GetIOHash($hash);  # get ioHash / check compatibility and set / register if necessary
+            Log3 $name, 3, "$name: " . ($ioHash ? "using $ioHash->{NAME}" : "no IODev") . " for communication";
+        }
+        if ($hash->{MODE} && $hash->{MODE} eq 'master') {
+            UpdateTimer($hash, \&Modbus::GetUpdate, 'start');   # set / change timer
         }
     }
-    Log3 $name, 5, "$name: SetState called from " . FhemCaller() . " with $state sets state and STATE to $newState";
-    $hash->{STATE} = $newState;
-    return if ($newState eq ReadingsVal($name, 'state', ''));
-    readingsSingleUpdate($hash, 'state', $newState, 1);
+    
+    Log3 $name, 5, "$name: SetState sets state from $oldState to $newState";
+    DevIo_setStates($hash, $newState);
     return;
 }
 
@@ -4290,7 +4362,7 @@ sub ResponseTimeout {
     if ($request && $relayHash) {                           # create an error response through the relay
 		my $origRequest = $relayHash->{REQUEST};
 		if (!$origRequest->{MODBUSID}) {
-			Log3 $name, 4, "$name: relaying error response back failed because original request is missing";
+			Log3 $name, 4, "$name: relaying error response back failed because original request is missing. Maybe master has already closed connection to relay";
 		} 
         else {
 			# adjust Modbus ID for back communication
@@ -4300,6 +4372,7 @@ sub ResponseTimeout {
 				($request->{TID} ? ", tid $request->{TID}" : '');
 		
 			my $reIoHash = GetIOHash($relayHash);      # the physical hash of the relay that received the original request
+
 			if (!$reIoHash) {
 				Log3 $name, $logLvl, "$name: sending timout response back failed because relay slave (=server) side io device disappeared";
 			} 
@@ -4382,7 +4455,10 @@ sub CheckDisable {
     my $msg;
     #Log3 $name, 5, "$name: CheckDisable called from " . FhemCaller();
     
-    if ($hash->{TYPE} eq 'Modbus' || $hash->{TCPConn}) {    # physical hash
+    if (!$hash) {
+        $msg = 'device is unavailable / hash is undef';
+    } 
+    elsif ($hash->{TYPE} eq 'Modbus' || $hash->{TCPConn}) {    # physical hash
         if (IsDisabled($name)) {
             $msg = 'device is disabled';
         }
@@ -4405,7 +4481,6 @@ sub CheckDisable {
 ################################################################
 # set the $hash->{IODev} pointer to the physical io device
 # and register there 
-#
 # check the name passed or the IODev attr or search for device
 # 
 # called from GetIOHash with the logical hash or from attr IODev
@@ -4438,13 +4513,13 @@ sub SetIODev {
     }
     if (!$ioHash) {                                 # nothing found -> give up for now
         Log3 $name, 3, "$name: SetIODev found no usable physical modbus device";
-        SetStates($hash, 'disconnected');
+        DevIo_setStates($hash, 'disconnected');     # set state
         UnregAtIODev($hash);
         delete $hash->{IODev};
         return;
     }
     RegisterAtIODev($hash, $ioHash);		        # register, set MODE and PROTOCOL
-    SetStates($hash, 'opened');                     # set initial state for logical device connected through physical serial device like DevIo would do it after open
+    DevIo_setStates($hash, 'opened');               # set initial state for logical device connected through physical serial device like DevIo would do it after open
     return $ioHash;
 }
 
@@ -4466,9 +4541,10 @@ sub GetIOHash {
     return $hash if ($hash->{TCPConn});                         # for TCP/IP connected devices ioHash = hash
     return $hash if ($hash->{TYPE} eq 'Modbus');                # this is already the physical device!
     return $hash->{IODev} if ($hash->{IODev} 
-            && IsRegisteredAtIODev($hash, $hash->{IODev}));     # $hash->{IODev} is set correctly and $hash is registerd
+            && IsRegisteredAtIODev($hash, $hash->{IODev}));     # $hash->{IODev} is set correctly and registerd
     
-    Log3 $name, 4, "$name: GetIOHash (called from " . FhemCaller() . ") did not find valid IODev hash key, calling SetIODev now";
+    Log3 $name, 4, "$name: GetIOHash (called from " . FhemCaller() . 
+        ") did not find valid IODev hash key, calling SetIODev now";
     return $hash->{IODev} if (SetIODev($hash));                 # reconstruct pointer to physical device
     #Log3 $name, 4, '$name: GetIOHash did not find IODev attribute or matching physical serial Modbus device';
     return;
@@ -4521,6 +4597,7 @@ sub CheckIOCompat {
 
 ################################################################
 # check if logical device is registered at io dev 
+# ony called from GetIOHash
 sub IsRegisteredAtIODev {
     my $hash   = shift;
     my $ioHash = shift;
@@ -4855,9 +4932,9 @@ sub ObjAttr {
 # Get Object Info from Attributes,
 # parseInfo Hash or default from deviceInfo Hash
 sub ObjInfo {
-    my $hash        = shift;
-    my $key         = shift;
-    my $oName       = shift;
+    my $hash        = shift;        # device hash
+    my $key         = shift;        # objCombi like h123
+    my $oName       = shift;        # requested 
    
     my $defName     = $attrDefaults{$oName}{devDefault};
     
@@ -4873,8 +4950,8 @@ sub ObjInfo {
         $reading = $parseInfo->{$key}{reading};
     }
     if (!defined($reading)) {
-        #Log3 $name, 5, "$name: ObjInfo could not find a reading name";
-        return (exists($attrDefaults{$oName}{default}) ? $attrDefaults{$oName}{default} : '');
+        #return (exists($attrDefaults{$oName}{default}) ? $attrDefaults{$oName}{default} : '');
+        $reading = "unnamed-$key";          # don't return default here but use key as reading name and continue
     }
     
     #Log3 $name, 5, "$name: ObjInfo now looks at attrs for oName $oName / reading $reading / $key";
@@ -4891,7 +4968,13 @@ sub ObjInfo {
     # parseInfo for object $oName if special Fhem module using parseinfoHash
     return $parseInfo->{$key}{$oName}
         if (defined($parseInfo->{$key}) && defined($parseInfo->{$key}{$oName}));
-    
+
+    # returning unnamed here creates problems because we don't know if a reading actually has been defined e.g. for a slave
+    #if ($oName eq 'reading') {
+    #    Log3 $name, 5, "$name: ObjInfo called from " . FhemCaller() . " with $key, $oName requested, no attr reading defined, use unnamed-$key instead";
+    #    return "unnamed-$key";                  # if no attr and no parseinfo matche before
+    #}
+
     # check for type entry / attr ...
     if ($oName ne 'type') {
         #Log3 $name, 5, "$name: ObjInfo checking types";
@@ -4927,6 +5010,7 @@ sub ObjInfo {
         return $devInfo->{$type}{$defName}
             if (defined($devInfo->{$type}) && defined($devInfo->{$type}{$defName}));
     }
+
     # todo: the final return expression seems redundant
     return (exists($attrDefaults{$oName}{default}) ? $attrDefaults{$oName}{default} : '');
 }

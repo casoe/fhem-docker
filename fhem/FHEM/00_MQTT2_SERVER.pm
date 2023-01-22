@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 00_MQTT2_SERVER.pm 25984 2022-04-19 17:32:19Z rudolfkoenig $
+# $Id: 00_MQTT2_SERVER.pm 26924 2022-12-29 14:35:15Z rudolfkoenig $
 package main;
 
 use strict;
@@ -47,8 +47,10 @@ MQTT2_SERVER_Initialize($)
     keepaliveFactor
     rePublish:1,0
     rawEvents
+    respectRetain:1,0
     sslVersion
     sslCertPrefix
+    topicConversion:0,1
   );
   use warnings 'qw';
   $hash->{AttrList} = join(" ", @attrList)." ".$readingFnAttributes;
@@ -212,6 +214,7 @@ MQTT2_SERVER_Set($@)
 {
   my ($hash, @a) = @_;
   my %sets = ( publish=>":textField,[-r]&nbsp;topic&nbsp;message",
+               reopen=>":noArg",
                clearRetain=>":noArg" );
   shift(@a);
 
@@ -233,11 +236,22 @@ MQTT2_SERVER_Set($@)
     MQTT2_SERVER_doPublish($hash->{CL}, $hash, $tp, $val, $retain);
 
   } elsif($a[0] eq "clearRetain") {
-    my $rname = AttrVal($hash->{NAME}, "hideRetain", 0) ? "RETAIN" : ".RETAIN";
-    delete($hash->{READINGS}{$rname});
+    delete($hash->{READINGS}{RETAIN});
+    delete($hash->{READINGS}{".RETAIN"});
     delete($hash->{retain});
     return undef;
+  
+  } elsif($a[0] eq "reopen") {
+    TcpServer_Close($hash);
+    delete($hash->{stacktrace});
+    my ($port, $global) = split("[ \t]+", $hash->{DEF});
+    my $ret = TcpServer_Open($hash, $port, $global);
+    return $ret if($ret);
+    TcpServer_SetSSL($hash) if(AttrVal($hash->{NAME}, "SSL", 0));
+    return undef;
+
   }
+
 }
 
 sub
@@ -526,12 +540,13 @@ MQTT2_SERVER_doPublish($$$$;$)
   my ($src, $server, $tp, $val, $retain) = @_;
   $val = "" if(!defined($val));
   $src = $server if(!defined($src));
+  my $now = gettimeofday();
+  my $serverName = $server->{NAME};
 
-  if($retain) {
+  if($retain && AttrVal($serverName, "respectRetain", $featurelevel <= 6.1)) {
     if(!defined($val) || $val eq "") {
       delete($server->{retain}{$tp});
     } else {
-      my $now = gettimeofday();
       my %h = ( ts=>$now, val=>$val );
       $server->{retain}{$tp} = \%h;
     }
@@ -540,20 +555,19 @@ MQTT2_SERVER_doPublish($$$$;$)
     # Save it
     my %nots = map { $_ => $server->{retain}{$_}{val} }
                keys %{$server->{retain}};
-    my $rname = AttrVal($server->{NAME}, "hideRetain", 0) ? ".RETAIN" : "RETAIN";
-    setReadingsVal($server, $rname, toJSON(\%nots), FmtDateTime(gettimeofday()));
+    my $rname = AttrVal($server->{NAME}, "hideRetain", 0) ? ".RETAIN":"RETAIN";
+    setReadingsVal($server, $rname, toJSON(\%nots),FmtDateTime($now));
   }
 
   foreach my $clName (keys %{$server->{clients}}) {
     MQTT2_SERVER_sendto($server, $defs{$clName}, $tp, $val);
   }
 
-  my $serverName = $server->{NAME};
   my $ir = AttrVal($serverName, "ignoreRegexp", undef);
   return if(defined($ir) && "$tp:$val" =~ m/$ir/);
 
   my $cid = $src->{cid};
-  $tp =~ s/:/_/g; # 96608
+  $tp =~ s/:/_/g if(AttrVal($serverName, "topicConversion", 1)); # 96608
   if(defined($cid) ||                    # "real" MQTT client
      AttrVal($serverName, "rePublish", undef)) {
     $cid = $src->{NAME} if(!defined($cid));
@@ -570,14 +584,14 @@ MQTT2_SERVER_doPublish($$$$;$)
 
   my $fl = $server->{".feedList"};
   if($fl) {
+    my $ts = sprintf("%s.%03d", FmtTime($now), 1000*($now-int($now)));
     foreach my $fwid (keys %{$fl}) {
       my $cl = $FW_id2inform{$fwid};
       if(!$cl || !$cl->{inform}{filter} || $cl->{inform}{filter} ne '^$') {
         delete($fl->{$fwid});
         next;
       }
-      FW_AsyncOutput($cl, "", 
-                  defined($cid) ? "RCVD: $tp $val<br>" : "SENT: $tp $val<br>");
+      FW_AsyncOutput($cl, "", toJSON([$ts,defined($cid)?$cid:"SENT",$tp,$val]));
     }
     delete($server->{".feedList"}) if(!keys %{$fl});
   }
@@ -786,6 +800,11 @@ MQTT2_SERVER_ReadDebug($$)
     <li>clearRetain<br>
       delete all the retained topics.
       </li>
+    <a id="MQTT2_SERVER-set-reopen"></a>
+    <li>reopen<br>
+      reopen the server port. This is an alternative to restart FHEM when
+      the SSL certificate is replaced.
+      </li>
   </ul>
   <br>
 
@@ -856,7 +875,11 @@ MQTT2_SERVER_ReadDebug($$)
     <a id="MQTT2_SERVER-attr-ignoreRegexp"></a>
     <li>ignoreRegexp<br>
       if $topic:$message matches ignoreRegexp, then it will be silently ignored.
-      </li>
+      For general purpose servers, it is a good idea to set it e.g. to
+      <ul>
+        homeassistant/[^:"]+/config|tasmota/discovery/[^/:]+/(config|sensors)
+      </ul> and also include the topics used to send commands towards your MQTT
+      clients.</li>
 
     <a id="MQTT2_SERVER-attr-keepaliveFactor"></a>
     <li>keepaliveFactor<br>
@@ -884,20 +907,37 @@ MQTT2_SERVER_ReadDebug($$)
       to the FHEM internal clients.
       </li><br>
 
+    <a id="MQTT2_SERVER-attr-respectRetain"></a>
+    <li>respectRetain [1|0]<br>
+      As storing messages with the retain flag can take up considerable space
+      and it has no use in a FHEM only environment, it is by default disabled
+      for featurelevel > 6.1. Set this attribute to 1 if you have external
+      devices relying on this feature.
+      </li>
+
     <a id="MQTT2_SERVER-attr-SSL"></a>
     <li>SSL<br>
       Enable SSL (i.e. TLS). Note: after deleting this attribute FHEM must be
       restarted.
       </li><br>
 
+    <a id="MQTT2_SERVER-attr-sslVersion"></a>
     <li>sslVersion<br>
        See the global attribute sslVersion.
        </li><br>
 
+    <a id="MQTT2_SERVER-attr-sslCertPrefix"></a>
     <li>sslCertPrefix<br>
        Set the prefix for the SSL certificate, default is certs/server-, see
        also the SSL attribute.
        </li><br>
+
+    <a id="MQTT2_SERVER-attr-topicConversion"></a>
+    <li>topicConversion [1|0]<br>
+      due to historic reasons colon (:) is converted in the topic to underscore
+      (_). Setting this attribute to 0 will disable this conversion.  Default
+      is 1.
+      </li><br>
 
   </ul>
 </ul>
