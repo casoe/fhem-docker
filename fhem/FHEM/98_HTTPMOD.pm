@@ -1,5 +1,5 @@
 #########################################################################
-# $Id: 98_HTTPMOD.pm 27034 2023-01-12 17:41:18Z StefanStrobel $
+# $Id: 98_HTTPMOD.pm 27065 2023-01-15 17:33:44Z StefanStrobel $
 # fhem Modul für Geräte mit Web-Oberfläche / Webservices
 #   
 #     This file is part of fhem.
@@ -512,7 +512,7 @@ sub AttrFn {
         } 
         elsif ($aName =~ /((get|set)[0-9]*)?[Rr]eplacement([0-9]*)Value/) {
             Log3 $name, 5, "$name: validating attr $name $aName $aVal";
-            if (AttrVal($name, "replacement${2}Mode", "text") eq "expression") {
+            if (AttrVal($name, "replacement${3}Mode", "text") eq "expression") {
                 return "Invalid Expression $aVal" if (!EvalExpr($hash, 
                             {expr => $aVal, action => "attr $aName", checkOnly => 1}));
             }

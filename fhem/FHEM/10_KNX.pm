@@ -1,5 +1,5 @@
 ## no critic (Modules::RequireVersionVar) ######################################
-# $Id: 10_KNX.pm 26962 2023-01-04 18:20:30Z erwin $  
+# $Id: 10_KNX.pm 27139 2023-01-28 17:35:57Z erwin $  
 ################################################################################
 ### changelog:
 # ABU 20180218 restructuring, removed older documentation
@@ -108,8 +108,17 @@
 #              changed not user relevant internals to {.XXXX}
 #              changed DbLog_split function
 #              disabled StateFn
-# MH 202301xx  change pattern matching for dpt1 and dptxxx
+# MH 20230104  change pattern matching for dpt1 and dptxxx
 #              fix DbLogSplitFn
+# MH 20230124  simplify DbLogSplitFn
+#              modify parsing of gadargs in define
+#              modify KNX_parse - reply msg code
+#              modify KNX_set
+#              add pulldown menu for attr IODev with vaild IO-devs
+#              KNX_scan now avail also from cmd-line
+# MH 20220129  PBP changes /ms flag
+#              syntax check on attr stateCmd & putCmd
+#              fix define parsing
 
 
 package KNX; ## no critic 'package'
@@ -124,9 +133,9 @@ use GPUtils qw(GP_Import GP_Export); # Package Helper Fn
 ### perlcritic parameters
 # these ones are NOT used! (constants,Policy::Modules::RequireFilenameMatchesPackage,NamingConventions::Capitalization)
 # these ones are NOT used! (ControlStructures::ProhibitCascadingIfElse)
+# these ones are NOT used! (RegularExpressions::RequireDotMatchAnything,RegularExpressions::RequireLineBoundaryMatching)
 ### the following percritic items will be ignored global ###
 ## no critic (ValuesAndExpressions::RequireNumberSeparators,ValuesAndExpressions::ProhibitMagicNumbers)
-## no critic (RegularExpressions::RequireDotMatchAnything,RegularExpressions::RequireLineBoundaryMatching)
 ## no critic (ControlStructures::ProhibitPostfixControls)
 ## no critic (Documentation::RequirePodSections)
 
@@ -142,7 +151,8 @@ BEGIN {
           addToDevAttrList
           AssignIoPort IOWrite
           CommandDefMod CommandModify CommandDelete
-          defs modules attr
+          defs modules attr cmds
+          perlSyntaxCheck
           FW_detail FW_wname FW_directNotify
           readingFnAttributes
           InternalTimer RemoveInternalTimer
@@ -168,7 +178,7 @@ my $STRING      = 'string';
 my $VALUE       = 'value';
 
 my $TULid       = 'C'; #identifier for KNX - extended adressing
-my $svnid       = '$Id: 10_KNX.pm 26962 2023-01-04 18:20:30Z erwin $';
+my $svnid       = '$Id: 10_KNX.pm 27139 2023-01-28 17:35:57Z erwin $';
 
 #regex patterns
 #pattern for group-adress
@@ -184,19 +194,17 @@ my $PAT_GAD_SUFFIX = 'nosuffix';
 #pattern for forbidden GAD-Names
 my $PAT_GAD_NONAME = '^(on|off|value|raw|' . $PAT_GAD_OPTIONS . q{|} . $PAT_GAD_SUFFIX . ')';
 #pattern for DPT
-#my $PAT_GAD_DPT = 'dpt\d*\.?\d*';
 my $PAT_GAD_DPT = 'dpt\d+\.?\d*';
 #pattern for dpt1 (standard)
-#my $PAT_DPT1_PAT = '(on)|(off)|(0?1)|(0?0)';
 my $PAT_DPT1_PAT = 'on|off|[01]$';
 #pattern for date
-my $PAT_DTSEP  = qr/(?:_)/ix; # date/time separator
-my $PAT_DATEdm = qr/^(3[01]|[1-2][0-9]|0?[1-9])\.(1[0-2]|0?[1-9])/ix; # day/month
-my $PAT_DATE   = qr/$PAT_DATEdm\.((?:19|20|21)[0-9]{2})/ix; # dpt19 year range: 1900-2155 ! 
-my $PAT_DATE2  = qr/$PAT_DATEdm\.(199[0-9]|20[0-8][0-9])/ix; # dpt11 year range: 1990-2089 !
+my $PAT_DTSEP  = qr/(?:_)/ixms; # date/time separator
+my $PAT_DATEdm = qr/^(3[01]|[1-2][0-9]|0?[1-9])\.(1[0-2]|0?[1-9])/ixms; # day/month
+my $PAT_DATE   = qr/$PAT_DATEdm\.((?:19|20|21)[0-9]{2})/ixms; # dpt19 year range: 1900-2155 ! 
+my $PAT_DATE2  = qr/$PAT_DATEdm\.(199[0-9]|20[0-8][0-9])/ixms; # dpt11 year range: 1990-2089 !
 #pattern for time
-my $PAT_TIME = qr/(2[0-4]|[01]{0,1}[0-9]):([0-5]{0,1}[0-9]):([0-5]{0,1}[0-9])/ix;
-my $PAT_DPT16_CLR = qr/>CLR</ix;
+my $PAT_TIME = qr/(2[0-4]|[01]{0,1}[0-9]):([0-5]{0,1}[0-9]):([0-5]{0,1}[0-9])/ixms;
+my $PAT_DPT16_CLR = qr/>CLR</ixms;
 
 #CODE is the identifier for the en- and decode algos. See encode and decode functions
 #UNIT is appended to state for a better reading
@@ -207,188 +215,188 @@ my $PAT_DPT16_CLR = qr/>CLR</ix;
 #if setlist is not supplied and min/max are given, a slider is shown for numeric values. Otherwise min/max value are shown in a list
 my %dpttypes = (
 	#Binary value
-	'dpt1'          => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT)/ix, MIN=>'off', MAX=>'on', SETLIST=>'on,off,toggle',
+	'dpt1'          => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT)/ixms, MIN=>'off', MAX=>'on', SETLIST=>'on,off,toggle',
                             DEC=>\&dec_dpt1,ENC=>\&enc_dpt1,},
-	'dpt1.000'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT)/ix, MIN=>0, MAX=>1, SETLIST=>'0,1'},
-	'dpt1.001'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT)/ix, MIN=>'off', MAX=>'on', SETLIST=>'on,off,toggle'},
-	'dpt1.002'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|true|false)/ix, MIN=>'false', MAX=>'true'},
-	'dpt1.003'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|enable|disable)/ix, MIN=>'disable', MAX=>'enable'},
-	'dpt1.004'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|no_ramp|ramp)/ix, MIN=>'no_ramp', MAX=>'ramp'},
-	'dpt1.005'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|no_alarm|alarm)/ix, MIN=>'no_alarm', MAX=>'alarm'},
-	'dpt1.006'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|low|high)/ix, MIN=>'low', MAX=>'high'},
-	'dpt1.007'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|decrease|increase)/ix, MIN=>'decrease', MAX=>'increase'},
-	'dpt1.008'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|up|down)/ix, MIN=>'up', MAX=>'down'},
-	'dpt1.009'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|closed|open)/ix, MIN=>'open', MAX=>'closed'},
-	'dpt1.010'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|start|stop)/ix, MIN=>'stop', MAX=>'start'},
-	'dpt1.011'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|inactive|active)/ix, MIN=>'inactive', MAX=>'active'},
-	'dpt1.012'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|not_inverted|inverted)/ix, MIN=>'not_inverted', MAX=>'inverted'},
-	'dpt1.013'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|start_stop|cyclically)/ix, MIN=>'start_stop', MAX=>'cyclically'},
-	'dpt1.014'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|fixed|calculated)/ix, MIN=>'fixed', MAX=>'calculated'},
-	'dpt1.015'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|no_action|reset)/ix, MIN=>'no_action', MAX=>'reset'},
-	'dpt1.016'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|no_action|acknowledge)/ix, MIN=>'no_action', MAX=>'acknowledge'},
-	'dpt1.017'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|trigger_0|trigger_1)/ix, MIN=>'trigger_0', MAX=>'trigger_1', SETLIST=>'trigger_0,trigger_1',},
-	'dpt1.018'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|not_occupied|occupied)/ix, MIN=>'not_occupied', MAX=>'occupied'},
-	'dpt1.019'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|closed|open)/ix, MIN=>'closed', MAX=>'open'},
-	'dpt1.021'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|logical_or|logical_and)/ix, MIN=>'logical_or', MAX=>'logical_and'},
-	'dpt1.022'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|scene_A|scene_B)/ix, MIN=>'scene_A', MAX=>'scene_B'},
-	'dpt1.023'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|move_(up_down|and_step_mode))/ix, MIN=>'move_up_down', MAX=>'move_and_step_mode'},
+	'dpt1.000'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT)/ixms, MIN=>0, MAX=>1, SETLIST=>'0,1'},
+	'dpt1.001'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT)/ixms, MIN=>'off', MAX=>'on', SETLIST=>'on,off,toggle'},
+	'dpt1.002'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|true|false)/ixms, MIN=>'false', MAX=>'true'},
+	'dpt1.003'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|enable|disable)/ixms, MIN=>'disable', MAX=>'enable'},
+	'dpt1.004'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|no_ramp|ramp)/ixms, MIN=>'no_ramp', MAX=>'ramp'},
+	'dpt1.005'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|no_alarm|alarm)/ixms, MIN=>'no_alarm', MAX=>'alarm'},
+	'dpt1.006'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|low|high)/ixms, MIN=>'low', MAX=>'high'},
+	'dpt1.007'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|decrease|increase)/ixms, MIN=>'decrease', MAX=>'increase'},
+	'dpt1.008'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|up|down)/ixms, MIN=>'up', MAX=>'down'},
+	'dpt1.009'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|closed|open)/ixms, MIN=>'open', MAX=>'closed'},
+	'dpt1.010'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|start|stop)/ixms, MIN=>'stop', MAX=>'start'},
+	'dpt1.011'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|inactive|active)/ixms, MIN=>'inactive', MAX=>'active'},
+	'dpt1.012'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|not_inverted|inverted)/ixms, MIN=>'not_inverted', MAX=>'inverted'},
+	'dpt1.013'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|start_stop|cyclically)/ixms, MIN=>'start_stop', MAX=>'cyclically'},
+	'dpt1.014'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|fixed|calculated)/ixms, MIN=>'fixed', MAX=>'calculated'},
+	'dpt1.015'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|no_action|reset)/ixms, MIN=>'no_action', MAX=>'reset'},
+	'dpt1.016'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|no_action|acknowledge)/ixms, MIN=>'no_action', MAX=>'acknowledge'},
+	'dpt1.017'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|trigger_0|trigger_1)/ixms, MIN=>'trigger_0', MAX=>'trigger_1', SETLIST=>'trigger_0,trigger_1',},
+	'dpt1.018'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|not_occupied|occupied)/ixms, MIN=>'not_occupied', MAX=>'occupied'},
+	'dpt1.019'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|closed|open)/ixms, MIN=>'closed', MAX=>'open'},
+	'dpt1.021'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|logical_or|logical_and)/ixms, MIN=>'logical_or', MAX=>'logical_and'},
+	'dpt1.022'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|scene_A|scene_B)/ixms, MIN=>'scene_A', MAX=>'scene_B'},
+	'dpt1.023'      => {CODE=>'dpt1', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DPT1_PAT|move_(up_down|and_step_mode))/ixms, MIN=>'move_up_down', MAX=>'move_and_step_mode'},
 
 	#Step value (two-bit)
-	'dpt2'          => {CODE=>'dpt2', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/(on|off|forceon|forceoff)/ix, MIN=>undef, MAX=>undef, SETLIST=>'on,off,forceon,forceoff',
+	'dpt2'          => {CODE=>'dpt2', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/(on|off|forceon|forceoff)/ixms, MIN=>undef, MAX=>undef, SETLIST=>'on,off,forceon,forceoff',
                             DEC=>\&dec_dpt2,ENC=>\&enc_dpt2,},
-	'dpt2.000'      => {CODE=>'dpt2', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/(0?[0-3])/ix, MIN=>0, MAX=>3, SETLIST=>'0,1,2,3'},
+	'dpt2.000'      => {CODE=>'dpt2', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/(0?[0-3])/ixms, MIN=>0, MAX=>3, SETLIST=>'0,1,2,3'},
 
 	#Step value (four-bit)
-	'dpt3'          => {CODE=>'dpt3', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>-100, MAX=>100,
+	'dpt3'          => {CODE=>'dpt3', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>-100, MAX=>100,
                             DEC=>\&dec_dpt3,ENC=>\&enc_dpt3,},
-	'dpt3.007'      => {CODE=>'dpt3', UNIT=>q{%}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>-100, MAX=>100},
-	'dpt3.008'      => {CODE=>'dpt3', UNIT=>q{%}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>-100, MAX=>100},
+	'dpt3.007'      => {CODE=>'dpt3', UNIT=>q{%}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>-100, MAX=>100},
+	'dpt3.008'      => {CODE=>'dpt3', UNIT=>q{%}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>-100, MAX=>100},
 
 	#single ascii/iso-8859-1 char
-	'dpt4'          => {CODE=>'dpt4', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/[[:ascii:]]/ix, MIN=>undef, MAX=>undef,
+	'dpt4'          => {CODE=>'dpt4', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/[[:ascii:]]/ixms, MIN=>undef, MAX=>undef,
                             DEC=>\&dec_dpt16,ENC=>\&enc_dpt4,},
-	'dpt4.001'      => {CODE=>'dpt4', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/[[:ascii:]]/ix, MIN=>undef, MAX=>undef}, # ascii
-	'dpt4.002'      => {CODE=>'dpt4', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/[\x20-\xFF].*/ix, MIN=>undef, MAX=>undef}, # iso-8859-1
+	'dpt4.001'      => {CODE=>'dpt4', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/[[:ascii:]]/ixms, MIN=>undef, MAX=>undef}, # ascii
+	'dpt4.002'      => {CODE=>'dpt4', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/[\x20-\xFF].*/ixms, MIN=>undef, MAX=>undef}, # iso-8859-1
 
 	# 1-Octet unsigned value
-	'dpt5'          => {CODE=>'dpt5', UNIT=>q{},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>0, MAX=>255,
+	'dpt5'          => {CODE=>'dpt5', UNIT=>q{},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>0, MAX=>255,
                             DEC=>\&dec_dpt5,ENC=>\&enc_dpt5,},
-	'dpt5.001'      => {CODE=>'dpt5', UNIT=>q{%}, FACTOR=>100/255, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>0, MAX=>100},  
-	'dpt5.003'      => {CODE=>'dpt5', UNIT=>q{°}, FACTOR=>360/255, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>0, MAX=>360},
-	'dpt5.004'      => {CODE=>'dpt5', UNIT=>q{%}, FACTOR=>1,       OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>0, MAX=>255},
-	'dpt5.010'      => {CODE=>'dpt5', UNIT=>q{p}, FACTOR=>1,       OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>0, MAX=>255}, # counter pulses
+	'dpt5.001'      => {CODE=>'dpt5', UNIT=>q{%}, FACTOR=>100/255, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>0, MAX=>100},  
+	'dpt5.003'      => {CODE=>'dpt5', UNIT=>q{°}, FACTOR=>360/255, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>0, MAX=>360},
+	'dpt5.004'      => {CODE=>'dpt5', UNIT=>q{%}, FACTOR=>1,       OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>0, MAX=>255},
+	'dpt5.010'      => {CODE=>'dpt5', UNIT=>q{p}, FACTOR=>1,       OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>0, MAX=>255}, # counter pulses
 
 	# 1-Octet signed value
-	'dpt6'          => {CODE=>'dpt6', UNIT=>q{},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>-128, MAX=>127,
+	'dpt6'          => {CODE=>'dpt6', UNIT=>q{},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>-128, MAX=>127,
                             DEC=>\&dec_dpt6,ENC=>\&enc_dpt6,},
-	'dpt6.001'      => {CODE=>'dpt6', UNIT=>q{%}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>0, MAX=>100},
-	'dpt6.010'      => {CODE=>'dpt6', UNIT=>q{},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>-128, MAX=>127},
+	'dpt6.001'      => {CODE=>'dpt6', UNIT=>q{%}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>0, MAX=>100},
+	'dpt6.010'      => {CODE=>'dpt6', UNIT=>q{},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>-128, MAX=>127},
 
 	# 2-Octet unsigned Value 
-	'dpt7'          => {CODE=>'dpt7', UNIT=>q{},    FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>0, MAX=>65535,
+	'dpt7'          => {CODE=>'dpt7', UNIT=>q{},    FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>0, MAX=>65535,
                             DEC=>\&dec_dpt7,ENC=>\&enc_dpt7,},
-	'dpt7.001'      => {CODE=>'dpt7', UNIT=>q{},    FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>0, MAX=>65535},
-	'dpt7.005'      => {CODE=>'dpt7', UNIT=>q{s},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>0, MAX=>65535},
-	'dpt7.006'      => {CODE=>'dpt7', UNIT=>q{m},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>0, MAX=>65535},
-	'dpt7.007'      => {CODE=>'dpt7', UNIT=>q{h},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>0, MAX=>65535},
-	'dpt7.012'      => {CODE=>'dpt7', UNIT=>q{mA},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>0, MAX=>65535},
-	'dpt7.013'      => {CODE=>'dpt7', UNIT=>q{lux}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>0, MAX=>65535},
-	'dpt7.600'      => {CODE=>'dpt7', UNIT=>q{K},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+]?\d{1,5}/ix,  MIN=>0, MAX=>12000},  # Farbtemperatur
+	'dpt7.001'      => {CODE=>'dpt7', UNIT=>q{},    FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>0, MAX=>65535},
+	'dpt7.005'      => {CODE=>'dpt7', UNIT=>q{s},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>0, MAX=>65535},
+	'dpt7.006'      => {CODE=>'dpt7', UNIT=>q{m},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>0, MAX=>65535},
+	'dpt7.007'      => {CODE=>'dpt7', UNIT=>q{h},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>0, MAX=>65535},
+	'dpt7.012'      => {CODE=>'dpt7', UNIT=>q{mA},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>0, MAX=>65535},
+	'dpt7.013'      => {CODE=>'dpt7', UNIT=>q{lux}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>0, MAX=>65535},
+	'dpt7.600'      => {CODE=>'dpt7', UNIT=>q{K},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+]?\d{1,5}/ixms,  MIN=>0, MAX=>12000},  # Farbtemperatur
 
 	# 2-Octet signed Value 
-	'dpt8'          => {CODE=>'dpt8', UNIT=>q{},      FACTOR=>1,    OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>-32768, MAX=>32767,
+	'dpt8'          => {CODE=>'dpt8', UNIT=>q{},      FACTOR=>1,    OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>-32768, MAX=>32767,
                             DEC=>\&dec_dpt8,ENC=>\&enc_dpt8,},
-	'dpt8.001'      => {CODE=>'dpt8', UNIT=>q{p},     FACTOR=>1,    OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>-32768, MAX=>32767},
-	'dpt8.003'      => {CODE=>'dpt8', UNIT=>q{s},     FACTOR=>0.01, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>-327.68, MAX=>327.67},
-	'dpt8.004'      => {CODE=>'dpt8', UNIT=>q{s},     FACTOR=>0.1,  OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>-3276.8, MAX=>3276.7},
-	'dpt8.005'      => {CODE=>'dpt8', UNIT=>q{s},     FACTOR=>1,    OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>-32768, MAX=>32767},
-	'dpt8.006'      => {CODE=>'dpt8', UNIT=>q{min},   FACTOR=>1,    OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>-32768, MAX=>32767},
-	'dpt8.007'      => {CODE=>'dpt8', UNIT=>q{h},     FACTOR=>1,    OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>-32768, MAX=>32767},
-	'dpt8.010'      => {CODE=>'dpt8', UNIT=>q{%},     FACTOR=>0.01, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>-327.68, MAX=>327.67}, # min/max
-	'dpt8.011'      => {CODE=>'dpt8', UNIT=>q{°},     FACTOR=>1,    OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ix, MIN=>-32768, MAX=>32767},
+	'dpt8.001'      => {CODE=>'dpt8', UNIT=>q{p},     FACTOR=>1,    OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>-32768, MAX=>32767},
+	'dpt8.003'      => {CODE=>'dpt8', UNIT=>q{s},     FACTOR=>0.01, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>-327.68, MAX=>327.67},
+	'dpt8.004'      => {CODE=>'dpt8', UNIT=>q{s},     FACTOR=>0.1,  OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>-3276.8, MAX=>3276.7},
+	'dpt8.005'      => {CODE=>'dpt8', UNIT=>q{s},     FACTOR=>1,    OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>-32768, MAX=>32767},
+	'dpt8.006'      => {CODE=>'dpt8', UNIT=>q{min},   FACTOR=>1,    OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>-32768, MAX=>32767},
+	'dpt8.007'      => {CODE=>'dpt8', UNIT=>q{h},     FACTOR=>1,    OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>-32768, MAX=>32767},
+	'dpt8.010'      => {CODE=>'dpt8', UNIT=>q{%},     FACTOR=>0.01, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>-327.68, MAX=>327.67}, # min/max
+	'dpt8.011'      => {CODE=>'dpt8', UNIT=>q{°},     FACTOR=>1,    OFFSET=>0, PATTERN=>qr/[+-]?\d{1,5}/ixms, MIN=>-32768, MAX=>32767},
 
 	# 2-Octet Float value
-	'dpt9'          => {CODE=>'dpt9', UNIT=>q{},     FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760,
+	'dpt9'          => {CODE=>'dpt9', UNIT=>q{},     FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760,
                             DEC=>\&dec_dpt9,ENC=>\&enc_dpt9,},
-	'dpt9.001'      => {CODE=>'dpt9', UNIT=>q{°C},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-274, MAX=>670760},
-	'dpt9.002'      => {CODE=>'dpt9', UNIT=>q{K},    FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760},
-	'dpt9.003'      => {CODE=>'dpt9', UNIT=>q{K/h},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760},
-	'dpt9.004'      => {CODE=>'dpt9', UNIT=>q{lux},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>0, MAX=>670760},
-	'dpt9.005'      => {CODE=>'dpt9', UNIT=>q{m/s},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>0, MAX=>670760},
-	'dpt9.006'      => {CODE=>'dpt9', UNIT=>q{Pa},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>0, MAX=>670760},
-	'dpt9.007'      => {CODE=>'dpt9', UNIT=>q{%},    FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>0, MAX=>670760},
-	'dpt9.008'      => {CODE=>'dpt9', UNIT=>q{ppm},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>0, MAX=>670760},
-	'dpt9.009'      => {CODE=>'dpt9', UNIT=>q{m³/h}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760},
-	'dpt9.010'      => {CODE=>'dpt9', UNIT=>q{s},    FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760},
-	'dpt9.011'      => {CODE=>'dpt9', UNIT=>q{ms},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760},
-	'dpt9.020'      => {CODE=>'dpt9', UNIT=>q{mV},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760},
-	'dpt9.021'      => {CODE=>'dpt9', UNIT=>q{mA},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760},
-	'dpt9.022'      => {CODE=>'dpt9', UNIT=>q{W/m²}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760},
-	'dpt9.023'      => {CODE=>'dpt9', UNIT=>q{K/%},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760},
-	'dpt9.024'      => {CODE=>'dpt9', UNIT=>q{kW},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760},
-	'dpt9.025'      => {CODE=>'dpt9', UNIT=>q{l/h},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760},
-	'dpt9.026'      => {CODE=>'dpt9', UNIT=>q{l/h},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760},
-	'dpt9.027'      => {CODE=>'dpt9', UNIT=>q{°F},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-459.6, MAX=>670760},
-	'dpt9.028'      => {CODE=>'dpt9', UNIT=>q{km/h}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>0, MAX=>670760},
-	'dpt9.029'      => {CODE=>'dpt9', UNIT=>q{g/m³}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760}, # Abs. Luftfeuchte
-	'dpt9.030'      => {CODE=>'dpt9', UNIT=>q{µg/m³}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>-670760, MAX=>670760}, # Dichte
+	'dpt9.001'      => {CODE=>'dpt9', UNIT=>q{°C},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-274, MAX=>670760},
+	'dpt9.002'      => {CODE=>'dpt9', UNIT=>q{K},    FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760},
+	'dpt9.003'      => {CODE=>'dpt9', UNIT=>q{K/h},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760},
+	'dpt9.004'      => {CODE=>'dpt9', UNIT=>q{lux},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>0, MAX=>670760},
+	'dpt9.005'      => {CODE=>'dpt9', UNIT=>q{m/s},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>0, MAX=>670760},
+	'dpt9.006'      => {CODE=>'dpt9', UNIT=>q{Pa},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>0, MAX=>670760},
+	'dpt9.007'      => {CODE=>'dpt9', UNIT=>q{%},    FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>0, MAX=>670760},
+	'dpt9.008'      => {CODE=>'dpt9', UNIT=>q{ppm},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>0, MAX=>670760},
+	'dpt9.009'      => {CODE=>'dpt9', UNIT=>q{m³/h}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760},
+	'dpt9.010'      => {CODE=>'dpt9', UNIT=>q{s},    FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760},
+	'dpt9.011'      => {CODE=>'dpt9', UNIT=>q{ms},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760},
+	'dpt9.020'      => {CODE=>'dpt9', UNIT=>q{mV},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760},
+	'dpt9.021'      => {CODE=>'dpt9', UNIT=>q{mA},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760},
+	'dpt9.022'      => {CODE=>'dpt9', UNIT=>q{W/m²}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760},
+	'dpt9.023'      => {CODE=>'dpt9', UNIT=>q{K/%},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760},
+	'dpt9.024'      => {CODE=>'dpt9', UNIT=>q{kW},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760},
+	'dpt9.025'      => {CODE=>'dpt9', UNIT=>q{l/h},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760},
+	'dpt9.026'      => {CODE=>'dpt9', UNIT=>q{l/h},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760},
+	'dpt9.027'      => {CODE=>'dpt9', UNIT=>q{°F},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-459.6, MAX=>670760},
+	'dpt9.028'      => {CODE=>'dpt9', UNIT=>q{km/h}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>0, MAX=>670760},
+	'dpt9.029'      => {CODE=>'dpt9', UNIT=>q{g/m³}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760}, # Abs. Luftfeuchte
+	'dpt9.030'      => {CODE=>'dpt9', UNIT=>q{µg/m³}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>-670760, MAX=>670760}, # Dichte
 
 	# Time of Day
-	'dpt10'         => {CODE=>'dpt10', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_TIME|now)/ix, MIN=>undef, MAX=>undef,
+	'dpt10'         => {CODE=>'dpt10', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_TIME|now)/ixms, MIN=>undef, MAX=>undef,
                             DEC=>\&dec_dpt10,ENC=>\&enc_dpt10,},
 
 	# Date  
-	'dpt11'         => {CODE=>'dpt11', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DATE2|now)/ix, MIN=>undef, MAX=>undef,
+	'dpt11'         => {CODE=>'dpt11', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DATE2|now)/ixms, MIN=>undef, MAX=>undef,
                             DEC=>\&dec_dpt11,ENC=>\&enc_dpt11,}, # year range 1990-2089 !
 
 	# 4-Octet unsigned value (handled as dpt7)
-	'dpt12'         => {CODE=>'dpt12', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,10}/ix, MIN=>0, MAX=>4294967295,
+	'dpt12'         => {CODE=>'dpt12', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,10}/ixms, MIN=>0, MAX=>4294967295,
                             DEC=>\&dec_dpt12,ENC=>\&enc_dpt12,},
 
 	# 4-Octet Signed Value
-	'dpt13'         => {CODE=>'dpt13', UNIT=>q{},    FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,10}/ix, MIN=>-2147483648, MAX=>2147483647,
+	'dpt13'         => {CODE=>'dpt13', UNIT=>q{},    FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,10}/ixms, MIN=>-2147483648, MAX=>2147483647,
                             DEC=>\&dec_dpt13,ENC=>\&enc_dpt13,},
-	'dpt13.010'     => {CODE=>'dpt13', UNIT=>q{Wh},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,10}/ix, MIN=>-2147483648, MAX=>2147483647},
-	'dpt13.013'     => {CODE=>'dpt13', UNIT=>q{kWh}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,10}/ix, MIN=>-2147483648, MAX=>2147483647},
+	'dpt13.010'     => {CODE=>'dpt13', UNIT=>q{Wh},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,10}/ixms, MIN=>-2147483648, MAX=>2147483647},
+	'dpt13.013'     => {CODE=>'dpt13', UNIT=>q{kWh}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,10}/ixms, MIN=>-2147483648, MAX=>2147483647},
 
 	# 4-Octet single precision float
-	'dpt14'         => {CODE=>'dpt14', UNIT=>q{},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>undef, MAX=>undef,
+	'dpt14'         => {CODE=>'dpt14', UNIT=>q{},   FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>undef, MAX=>undef,
                             DEC=>\&dec_dpt14,ENC=>\&enc_dpt14,},
-	'dpt14.007'     => {CODE=>'dpt14', UNIT=>q{p},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>undef, MAX=>undef}, # counter pulses
-	'dpt14.019'     => {CODE=>'dpt14', UNIT=>q{A},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>undef, MAX=>undef},
-	'dpt14.027'     => {CODE=>'dpt14', UNIT=>q{V},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>undef, MAX=>undef},
-	'dpt14.033'     => {CODE=>'dpt14', UNIT=>q{Hz}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>undef, MAX=>undef},
-	'dpt14.039'     => {CODE=>'dpt14', UNIT=>q{m},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>undef, MAX=>undef},
-	'dpt14.056'     => {CODE=>'dpt14', UNIT=>q{W},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>undef, MAX=>undef},
-	'dpt14.068'     => {CODE=>'dpt14', UNIT=>q{°C}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>undef, MAX=>undef},
-	'dpt14.076'     => {CODE=>'dpt14', UNIT=>q{m³}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>undef, MAX=>undef},
-	'dpt14.057'     => {CODE=>'dpt14', UNIT=>q{cosφ}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>undef, MAX=>undef},
-#	'dpt14.057'     => {CODE=>'dpt14', UNIT=>q{cos&phi;}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ix, MIN=>undef, MAX=>undef},
+	'dpt14.007'     => {CODE=>'dpt14', UNIT=>q{p},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>undef, MAX=>undef}, # counter pulses
+	'dpt14.019'     => {CODE=>'dpt14', UNIT=>q{A},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>undef, MAX=>undef},
+	'dpt14.027'     => {CODE=>'dpt14', UNIT=>q{V},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>undef, MAX=>undef},
+	'dpt14.033'     => {CODE=>'dpt14', UNIT=>q{Hz}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>undef, MAX=>undef},
+	'dpt14.039'     => {CODE=>'dpt14', UNIT=>q{m},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>undef, MAX=>undef},
+	'dpt14.056'     => {CODE=>'dpt14', UNIT=>q{W},  FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>undef, MAX=>undef},
+	'dpt14.068'     => {CODE=>'dpt14', UNIT=>q{°C}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>undef, MAX=>undef},
+	'dpt14.076'     => {CODE=>'dpt14', UNIT=>q{m³}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>undef, MAX=>undef},
+	'dpt14.057'     => {CODE=>'dpt14', UNIT=>q{cosφ}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>undef, MAX=>undef},
+#	'dpt14.057'     => {CODE=>'dpt14', UNIT=>q{cos&phi;}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[-+]?(?:\d*[\.\,])?\d+/ixms, MIN=>undef, MAX=>undef},
 
 	# Access data - receive only
-	'dpt15'         => {CODE=>'dpt15', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/noset/ix, MIN=>undef, MAX=>undef,
+	'dpt15'         => {CODE=>'dpt15', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/noset/ixms, MIN=>undef, MAX=>undef,
                             DEC=>\&dec_dpt15,},
-	'dpt15.000'     => {CODE=>'dpt15', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/noset/ix, MIN=>undef, MAX=>undef},
+	'dpt15.000'     => {CODE=>'dpt15', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/noset/ixms, MIN=>undef, MAX=>undef},
 
 	# 14-Octet String
-	'dpt16'         => {CODE=>'dpt16', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/.{1,14}/ix, MIN=>undef, MAX=>undef, SETLIST=>'multiple,>CLR<',
+	'dpt16'         => {CODE=>'dpt16', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/.{1,14}/ixms, MIN=>undef, MAX=>undef, SETLIST=>'multiple,>CLR<',
                             DEC=>\&dec_dpt16,ENC=>\&enc_dpt16,},
-	'dpt16.000'     => {CODE=>'dpt16', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/.{1,14}/ix, MIN=>undef, MAX=>undef, SETLIST=>'multiple,>CLR<'},
-	'dpt16.001'     => {CODE=>'dpt16', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/.{1,14}/ix, MIN=>undef, MAX=>undef, SETLIST=>'multiple,>CLR<'},
+	'dpt16.000'     => {CODE=>'dpt16', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/.{1,14}/ixms, MIN=>undef, MAX=>undef, SETLIST=>'multiple,>CLR<'},
+	'dpt16.001'     => {CODE=>'dpt16', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/.{1,14}/ixms, MIN=>undef, MAX=>undef, SETLIST=>'multiple,>CLR<'},
 
 	# Scene, 0-63
-	'dpt17'         => {CODE=>'dpt5', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>0, MAX=>63,
+	'dpt17'         => {CODE=>'dpt5', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>0, MAX=>63,
                             DEC=>\&dec_dpt5,ENC=>\&enc_dpt5,},
-	'dpt17.001'     => {CODE=>'dpt5', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>0, MAX=>63},
+	'dpt17.001'     => {CODE=>'dpt5', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>0, MAX=>63},
 
 	# Scene, 1-64
-	'dpt18'         => {CODE=>'dpt5', UNIT=>q{}, FACTOR=>1, OFFSET=>1, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>1, MAX=>64,
+	'dpt18'         => {CODE=>'dpt5', UNIT=>q{}, FACTOR=>1, OFFSET=>1, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>1, MAX=>64,
                             DEC=>\&dec_dpt5,ENC=>\&enc_dpt5,},
-	'dpt18.001'     => {CODE=>'dpt5', UNIT=>q{}, FACTOR=>1, OFFSET=>1, PATTERN=>qr/[+-]?\d{1,3}/ix, MIN=>1, MAX=>64},
+	'dpt18.001'     => {CODE=>'dpt5', UNIT=>q{}, FACTOR=>1, OFFSET=>1, PATTERN=>qr/[+-]?\d{1,3}/ixms, MIN=>1, MAX=>64},
 	
 	#date and time
-	'dpt19'         => {CODE=>'dpt19', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DATE$PAT_DTSEP$PAT_TIME|now)/ix, MIN=>undef, MAX=>undef,
+	'dpt19'         => {CODE=>'dpt19', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DATE$PAT_DTSEP$PAT_TIME|now)/ixms, MIN=>undef, MAX=>undef,
                             DEC=>\&dec_dpt19,ENC=>\&enc_dpt19,},
-	'dpt19.001'     => {CODE=>'dpt19', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DATE$PAT_DTSEP$PAT_TIME|now)/ix, MIN=>undef, MAX=>undef},
+	'dpt19.001'     => {CODE=>'dpt19', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/($PAT_DATE$PAT_DTSEP$PAT_TIME|now)/ixms, MIN=>undef, MAX=>undef},
 
 	# HVAC mode, 1Byte
-	'dpt20'         => {CODE=>'dpt20', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/(auto|comfort|standby|(economy|night)|(protection|frost|heat))/ix, MIN=>undef, MAX=>undef, ## no critic (RegularExpressions::ProhibitComplexRegexes)
+	'dpt20'         => {CODE=>'dpt20', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/(auto|comfort|standby|(economy|night)|(protection|frost|heat))/ixms, MIN=>undef, MAX=>undef, ## no critic (RegularExpressions::ProhibitComplexRegexes)
                             SETLIST=>'Auto,Comfort,Standby,Economy,Protection', DEC=>\&dec_dpt20,ENC=>\&enc_dpt20,},
-	'dpt20.102'     => {CODE=>'dpt20', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/(auto|comfort|standby|(economy|night)|(protection|frost|heat))/ix, MIN=>undef, MAX=>undef, ## no critic (RegularExpressions::ProhibitComplexRegexes)
+	'dpt20.102'     => {CODE=>'dpt20', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/(auto|comfort|standby|(economy|night)|(protection|frost|heat))/ixms, MIN=>undef, MAX=>undef, ## no critic (RegularExpressions::ProhibitComplexRegexes)
                             SETLIST=>'Auto,Comfort,Standby,Economy,Protection'},
 
 	# HVAC mode RHCC Status, 2Byte - receive only!!!
-	'dpt22'         => {CODE=>'dpt22', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/noset/ix, MIN=>undef, MAX=>undef,
+	'dpt22'         => {CODE=>'dpt22', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/noset/ixms, MIN=>undef, MAX=>undef,
                             DEC=>\&dec_dpt22,},
-	'dpt22.101'     => {CODE=>'dpt22', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/noset/ix, MIN=>undef, MAX=>undef},
+	'dpt22.101'     => {CODE=>'dpt22', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/noset/ixms, MIN=>undef, MAX=>undef},
 
 	# Version Info - receive only!!! for EBUSD KNX implementation
-	'dpt217'        => {CODE=>'dpt217', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/\d+\.\d+\.\d+/ix, MIN=>undef, MAX=>undef,
+	'dpt217'        => {CODE=>'dpt217', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/\d+\.\d+\.\d+/ixms, MIN=>undef, MAX=>undef,
                             DEC=>\&dec_dpt217,},
-	'dpt217.001'    => {CODE=>'dpt217', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/\d+\.\d+\.\d+/ix, MIN=>undef, MAX=>undef},
+	'dpt217.001'    => {CODE=>'dpt217', UNIT=>q{}, FACTOR=>1, OFFSET=>0, PATTERN=>qr/\d+\.\d+\.\d+/ixms, MIN=>undef, MAX=>undef},
 
 	# Color-Code
-	'dpt232'        => {CODE=>'dpt232', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/[0-9a-f]{6}/ix, MIN=>undef, MAX=>undef, SETLIST=>'colorpicker',
+	'dpt232'        => {CODE=>'dpt232', UNIT=>q{}, FACTOR=>undef, OFFSET=>undef, PATTERN=>qr/[0-9a-f]{6}/ixms, MIN=>undef, MAX=>undef, SETLIST=>'colorpicker',
                             DEC=>\&dec_dpt232,ENC=>\&enc_dpt232,}
 );
 
@@ -423,6 +431,10 @@ sub Initialize {
            "$readingFnAttributes ";       #standard attributes
 	$hash->{noAutocreatedFilelog} = 1; # autocreate devices create no FileLog
 	$hash->{AutoCreate} = {'KNX_.*'  => { ATTR => 'disable:1'} }; #autocreate devices are disabled by default
+
+	# register KNX_scan cmd (use from cmd-line)
+	$cmds{KNX_scan} = { Fn  => "KNX_scancmd", Hlp => ' <devspec>, get values from KNX-devices',};
+
 	return;
 }
 
@@ -432,11 +444,11 @@ sub KNX_Define {
 	my $hash = shift // return;
 	my $def = shift;
 
-	my @a = split(/[ \t\n]+/x, $def); #enable newline within define with \
+	my @a = split(/[ \t\n]+/xms, $def); #enable newline within define with \
 	my $name = $a[0];
 	$hash->{NAME} = $name;
 
-	$svnid =~ s/.*\.pm\s(.+)Z.*/$1/ix;
+	$svnid =~ s/.*\.pm\s(.+)Z.*/$1/ixms;
 	$hash->{'.SVN'} = $svnid; # store svn info in dev hash
 
 	my $logtxt = qq{KNX_define ($name): }; # leading txt
@@ -446,10 +458,10 @@ sub KNX_Define {
 	#too less arguments or no valid 1st gad
 	return ($logtxt . q{wrong syntax or wrong group-format (0-31/0-7/0-255)} . 
                qq{\n} . q{  "define <name> KNX <group:model[:GAD-name][:set|get|listenonly][:nosuffix]> } .
-               q{[<group:model[:GAD-name][:set|get|listenonly][:nosuffix]>]"}) if (int(@a) < 3 || $a[2] !~ m/^(?:$PAT_GAD|$PAT_GAD_HEX)/ix);
+               q{[<group:model[:GAD-name][:set|get|listenonly][:nosuffix]>]"}) if (int(@a) < 3 || $a[2] !~ m/^(?:$PAT_GAD|$PAT_GAD_HEX)/ixms);
 
 	# check if the last arg matches any IO-Device - and discard it !
-	if ( $a[int(@a) - 1] !~ m/^(?:$PAT_GAD|$PAT_GAD_HEX)/ix ) {
+	if ( $a[int(@a) - 1] !~ m/^(?:$PAT_GAD|$PAT_GAD_HEX)/ixms ) {
 		my $iodevCandidate = pop(@a); # remove from array, but do nothing with it!
 		my $logtxtIO = qq{$logtxt specifying IODev $iodevCandidate is deprecated in define } .
                                qq{- use "attr $name IODev $iodevCandidate"};
@@ -457,7 +469,6 @@ sub KNX_Define {
 		return $logtxtIO if ($init_done); # allow durin start
 	}
 
-### new wait for initdone...
 	$hash->{'.DEFLINE'} = join(q{ },@a); # temp store defs for define2...
 	return InternalTimer(gettimeofday() + 5.0,\&KNX_Define2,$hash) if (! $init_done);
 	return KNX_Define2($hash);
@@ -470,11 +481,16 @@ sub KNX_Define2 {
 	my $name = $hash->{NAME};
 	my $def  = $hash->{'.DEFLINE'};
 	delete $hash->{'.DEFLINE'}; 
-	my @a = split(/\s+/x, $def);
+	my @a = split(/\s+/xms, $def);
 	RemoveInternalTimer($hash);
 
 	my $logtxt = qq{KNX_define2 ($name): }; # leading txt
-### end new
+
+	# Add pulldown for attr IODev
+	my $attrList = $modules{KNX}->{AttrList}; #get Attrlist from Module def
+	my $IODevs = KNX_chkIODev($hash); # get list of valid IO's
+	$attrList =~ s/\bIODev\b([:]select[^\s]*)?/IODev:select,$IODevs/xms;
+	$modules{KNX}->{AttrList} = $attrList;
 
 	AssignIoPort($hash); # AssignIoPort will take device from $attr{$name}{IODev} if defined
 
@@ -496,12 +512,12 @@ sub KNX_Define2 {
 
 		Log3 ($name, 5, $logtxt . qq{gadNr= $gadNo def-string= $a[$i]});
 
-		my ($gad, $gadModel, @gadArgs) = split(/:/x, $a[$i]);
+		my ($gad, $gadModel, @gadArgs) = split(/:/xms, $a[$i]);
 		$gadCode = $gad // return $logtxt . qq{GAD not defined for group-number $gadNo};
 		return ($logtxt . qq{wrong GA format in group-number $gadNo} . 
-                       ': specify as 0-31/0-7/0-255 or as hex-notation') if ($gad !~ m/^(?:$PAT_GAD|$PAT_GAD_HEX)$/ix);
+                       ': specify as 0-31/0-7/0-255 or as hex-notation') if ($gad !~ m/^(?:$PAT_GAD|$PAT_GAD_HEX)$/ixms);
 
-		$gad = KNX_hexToName ($gad) if ($gad =~ m/^$PAT_GAD_HEX$/ix);
+		$gad = KNX_hexToName ($gad) if ($gad =~ m/^$PAT_GAD_HEX$/ixms);
 		$gadCode = KNX_nameToHex ($gad); #convert it vice-versa, just to be sure
 
 		return ($logtxt . qq{no model defined for group-number $gadNo}) if(! defined($gadModel));
@@ -515,24 +531,17 @@ sub KNX_Define2 {
                                '. Please consult commandref - avaliable DPT for correct model definition.';
 		}
 		elsif ($gadNo == 1) { # gadModel ok
-			$hash->{model} = lc($gadModel) =~ s/^(dpt[\d]+)\..*/$1/rx; # use first gad as mdl reference for fheminfo
+			$hash->{model} = lc($gadModel) =~ s/^(dpt[\d]+)\..*/$1/rxms; # use first gad as mdl reference for fheminfo
 		}
 
-		if (@gadArgs) {
-			if ($gadArgs[0] =~ m/^($PAT_GAD_OPTIONS|$PAT_GAD_SUFFIX)$/ix) { # no gadname given
-				unshift ( @gadArgs , 'dummy' ); # shift option up in array
-			}
-			elsif ($gadArgs[0] =~ m/^$PAT_GAD_NONAME$/ix) { # check for forbidden names forum #122582
-				return $logtxt . qq{forbidden gad-name: $gadArgs[0]};
-			}
-			else {
-				$gadName = $gadArgs[0]; # new syntax
-			}
+		if (scalar(@gadArgs)) {
+			$gadNoSuffix = pop(@gadArgs) if ($gadArgs[-1] =~ /$PAT_GAD_SUFFIX/ixms);
+			$gadOption   = pop(@gadArgs) if (@gadArgs && $gadArgs[-1] =~ /^($PAT_GAD_OPTIONS)$/ixms);
+			$gadName     = pop(@gadArgs) if (@gadArgs);
 
-			$gadOption = $gadArgs[1] if(defined($gadArgs[1]) && $gadArgs[1] =~ m/($PAT_GAD_OPTIONS)/ix);
-			$gadNoSuffix = $PAT_GAD_SUFFIX if (join(q{ },@gadArgs) =~ m/($PAT_GAD_SUFFIX)/ix);
-			return ($logtxt . qq{invalid option for group-number $gadNo. Use one of: $PAT_GAD_OPTIONS}) if (defined($gadOption) && ($gadOption !~ m/^(?:$PAT_GAD_OPTIONS)$/ix));
-			return ($logtxt . qq{invalid suffix for group-number $gadNo. Use $PAT_GAD_SUFFIX}) if (defined($gadNoSuffix) && ($gadNoSuffix !~ m/$PAT_GAD_SUFFIX/ix));
+			return $logtxt . qq{forbidden gad-name: $gadName} if ($gadName =~ /$PAT_GAD_NONAME$/ixms);
+			return ($logtxt . qq{invalid option for group-number $gadNo. Use one of: $PAT_GAD_OPTIONS}) if (defined($gadOption) && ($gadOption !~ m/^(?:$PAT_GAD_OPTIONS)$/ixms));
+			return ($logtxt . qq{invalid suffix for group-number $gadNo. Use $PAT_GAD_SUFFIX}) if (defined($gadNoSuffix) && ($gadNoSuffix !~ m/$PAT_GAD_SUFFIX/ixms));
 		}
 
 		###GADTABLE
@@ -607,7 +616,7 @@ sub KNX_Define2 {
 			#no set-command for get or listenonly
 			my $option = $hash->{GADDETAILS}->{$key}->{OPTION};
 			if ((defined($option) && $option eq 'set') || (! defined($option))) {
-					$setString .= 'on:noArg off:noArg ' if (($hash->{GADDETAILS}->{$key}->{NO} == 1) && ($hash->{GADDETAILS}->{$key}->{MODEL} =~ /^(dpt1|dpt1.001)$/x));
+					$setString .= 'on:noArg off:noArg ' if (($hash->{GADDETAILS}->{$key}->{NO} == 1) && ($hash->{GADDETAILS}->{$key}->{MODEL} =~ /^(dpt1|dpt1.001)$/xms));
 					$setString .= $key . $hash->{GADDETAILS}->{$key}->{SETLIST} . q{ };
 			}
 		}
@@ -646,15 +655,15 @@ sub KNX_Get {
 	Log3 ($name, 3, qq{KNX_Get ($name): too much arguments. Only one argument allowed (gadName). Other Arguments are discarded.}) if (defined(shift));
 
 	#FHEM asks with a ? at startup - no action, no log - if dev is disabled: no SET/GET pulldown !
-	if ($gadName  =~ m/\?/x) {
+	if ($gadName  =~ m/\?/xms) {
 		my $getter = q{};
 		foreach my $key (keys %{$hash->{GADDETAILS}}) {
 			last if (! defined($key));
 			my $option = $hash->{GADDETAILS}->{$key}->{OPTION};
-			next if (defined($option) && $option =~ /(?:set|listenonly)/ix);
+			next if (defined($option) && $option =~ /(?:set|listenonly)/ixms);
 			$getter .= q{ } . $key . ':noArg';
 		}
-		$getter =~ s/^\s+//gix; #trim leading blank
+		$getter =~ s/^\s+//gixms; #trim leading blank
 		$getter = q{} if (IsDisabled($name) == 1);
 
 		return qq{unknown argument $gadName choose one of $getter};
@@ -671,13 +680,13 @@ sub KNX_Get {
 	my $option = $hash->{GADDETAILS}->{$gadName}->{OPTION};
 
 	#exit if get is prohibited
-	return qq{KNX_Get ($name): did not request a value - "set" or "listenonly" option is defined.} if (defined ($option) and ($option =~ m/(set|listenonly)/ix));
+	return qq{KNX_Get ($name): did not request a value - "set" or "listenonly" option is defined.} if (defined ($option) and ($option =~ m/(set|listenonly)/ixms));
 
 	Log3 ($name, 5, qq{KNX_Get ($name): request value for GAD: $group GAD-NAME: $gadName});
 
 	IOWrite($hash, $TULid, 'r' . $groupc); #send read-request to the bus
 
-	FW_directNotify('FILTER=' . $FW_detail, '#FHEMWEB:' . $FW_wname, 'FW_errmsg(" current value for ' . $name . ' - ' . $group . ' requested",5000)', qq{}) if (defined($FW_wname));
+	FW_directNotify('#FHEMWEB:' . $FW_wname, 'FW_errmsg(" value for ' . $name . ' - ' . $group . ' requested",5000)', qq{}) if (defined($FW_wname));
 
 	return;
 }
@@ -685,28 +694,29 @@ sub KNX_Get {
 #Does something according the given cmd...
 #############################
 sub KNX_Set {
-	my ($hash, $name, $cmd, @arg) = @_;
+	my ($hash, $name, $targetGadName, @arg) = @_;
 
 	my @ca = caller(0); #identify this sub
-	my $thisSub = $ca[3] =~ s/.+[:]+//grx;
+	my $thisSub = $ca[3] =~ s/.+[:]+//grxms;
 	$thisSub .= qq{ ($name): };
 
 	#FHEM asks with a "?" at startup or any reload of the device-detail-view - if dev is disabled: no SET/GET pulldown !
-	if(defined($cmd) && ($cmd =~ m/\?/x)) {
+	if(defined($targetGadName) && ($targetGadName =~ m/\?/xms)) {
 		my $setter = exists($hash->{'.SETSTRING'})?$hash->{'.SETSTRING'}:q{};
 		$setter = q{} if (IsDisabled($name) == 1);
-		return qq{unknown argument $cmd choose one of $setter};
+		return qq{unknown argument $targetGadName choose one of $setter};
 	}
 
 	return $thisSub . 'is disabled' if (IsDisabled($name) == 1);
-	return $thisSub . 'no parameter(s) specified for set cmd' if((!defined($cmd)) || ($cmd eq q{})); #return, if no cmd specified
+	return $thisSub . 'no parameter(s) specified for set cmd' if((!defined($targetGadName)) || ($targetGadName eq q{})); #return, if no cmd specified
 
-	Log3 ($name, 5, $thisSub . qq{-enter: $cmd } . join(q{ }, @arg));
+	Log3 ($name, 5, $thisSub . qq{-enter: $targetGadName } . join(q{ }, @arg));
 
-	my $targetGadName = $cmd =~ s/^\s+|\s+$//girx; # gad-name or cmd (in old syntax)
+	$targetGadName =~ s/^\s+|\s+$//gxms; # gad-name or cmd (in old syntax)
+	my $cmd = undef;
 
 	if (defined ($hash->{GADDETAILS}->{$targetGadName})) { # #new syntax, if first arg is a valid gadName
-		$cmd = shift(@arg); #shift backup args as with newsyntax $a[2] is cmd
+		$cmd = shift(@arg); #shift args as with newsyntax $arg[0] is cmd
 		return $thisSub . 'no cmd found' if(!defined($cmd));
 	}
 	else {
@@ -722,14 +732,14 @@ sub KNX_Set {
 	my $rdName    = $hash->{GADDETAILS}->{$targetGadName}->{RDNAMESET};
 	my $model     = $hash->{GADDETAILS}->{$targetGadName}->{MODEL}; 
 
-	return $thisSub . q{did not set a value - "get" or "listenonly" option is defined.} if (defined ($option) and ($option =~ m/(?:get|listenonly)/ix));
+	return $thisSub . q{did not set a value - "get" or "listenonly" option is defined.} if (defined ($option) and ($option =~ m/(?:get|listenonly)/ixms));
 
 	my $value = $cmd; #process set command with $value as output
 	#Text neads special treatment - additional args may be blanked words
-	$value .= q{ } . join (q{ }, @arg) if (($model =~ m/^dpt16/ix) and (scalar (@arg) > 0));
+	$value .= q{ } . join (q{ }, @arg) if (($model =~ m/^dpt16/ixms) && (scalar (@arg) > 0));
 
 	#Special commands for dpt1 and dpt1.001
-	if ($model =~ m/^(?:dpt1|dpt1.001)$/ix) {
+	if ($model =~ m/^(?:dpt1|dpt1.001)$/ixms) {
 		(my $err, $value) = KNX_Set_dpt1($hash, $targetGadName, $cmd, @arg);
 		return $err if defined($err);
 	}
@@ -745,7 +755,7 @@ sub KNX_Set {
 	Log3 ($name, 4, $thisSub . qq{cmd= $cmd , value= $value , translated= $transvale});
 
 	# decode again for values that have been changed in encode process
-	$transval = KNX_decodeByDpt($hash, $transvale, $targetGadName) if ($model =~ m/^(?:dpt3|dpt10|dpt11|dpt19)/ix);
+	$transval = KNX_decodeByDpt($hash, $transvale, $targetGadName) if ($model =~ m/^(?:dpt3|dpt10|dpt11|dpt19)/ixms);
 
 	#apply post processing for state and set all readings
 	KNX_SetReadings($hash, $targetGadName, $transval, $rdName, undef); 
@@ -758,22 +768,23 @@ sub KNX_Set {
 # calling param: $hash, $cmd, arg array
 # returns ($err, targetgadname, $cmd)
 sub KNX_Set_oldsyntax {
-	my ($hash, $cmd, @a) = @_;
-	my $name = $hash->{NAME};
+	my ($hash, $cmd, @arg) = @_;
 
-	my $na = scalar(@a);
+	my $name = $hash->{NAME};
+	my $na = scalar(@arg);
 	my $targetGadName = undef; #contains gadNames to process
 	my $groupnr = 1; #default group
+
 	#select another group, if the last arg starts with a g
-	if($na >= 1 && $a[$na - 1] =~ m/$PAT_GNO/ix) {
-		$groupnr = pop (@a);
-		Log3 ($name, 3, qq{KNX_Set_syntax2 ($name): you are still using old syntax, pls. change to "set $name $groupnr $cmd } . join(q{ },@a) . q{"});
-		$groupnr =~ s/^g//gix; #remove "g"
+	if($na >= 1 && $arg[$na - 1] =~ m/$PAT_GNO/ixms) {
+		$groupnr = pop (@arg);
+		Log3 ($name, 3, qq{KNX_Set_syntax2 ($name): you are still using old syntax, pls. change to "set $name $groupnr $cmd } . join(q{ },@arg) . q{"});
+		$groupnr =~ s/^g//gixms; #remove "g"
 	}
 
 	# if cmd contains g1: the check for valid gadnames failed !
 	# this is NOT oldsyntax, but a user-error!
-	if ($cmd =~ /^g[\d]/ix) {
+	if ($cmd =~ /^g[\d]/ixms) {
 		Log3 ($name, 2, qq{KNX_Set_syntax2 ($name): an invalid gadName: $cmd was used in set-cmd});
 		return qq{an invalid gadName: $cmd was used in set-cmd};
 	}
@@ -782,32 +793,32 @@ sub KNX_Set_oldsyntax {
 	return qq{gadName not found for $groupnr} if(!defined($targetGadName));
 
 	# all of the following cmd's need at least 1 Argument (or more)
-	return (undef, $targetGadName, $cmd) if (scalar(@a) <= 0);
+	return (undef, $targetGadName, $cmd) if (scalar(@arg) <= 0);
 
 	my $code = $hash->{GADDETAILS}->{$targetGadName}->{MODEL};
 	my $value = $cmd;
 
-	if ($cmd =~ m/$RAW/ix) {
+	if ($cmd =~ m/$RAW/ixms) {
 		#check for 1-16 hex-digits
-		return q{"raw" } . $a[0] . ' has wrong syntax. Use hex-format only.' if ($a[0] !~ m/[0-9A-F]{1,16}/ix);
-		$value = $a[0];
+		return q{"raw" } . $arg[0] . ' has wrong syntax. Use hex-format only.' if ($arg[0] !~ m/[0-9A-F]{1,16}/ixms);
+		$value = $arg[0];
 	}
-	elsif ($cmd =~ m/$VALUE/ix) {
-		return q{"value" not allowed for dpt1, dpt16 and dpt232} if ($code =~ m/(dpt1$)|(dpt16$)|(dpt232$)/ix);
-		$value = $a[0];
-		$value =~ s/,/\./gx;
+	elsif ($cmd =~ m/$VALUE/ixms) {
+		return q{"value" not allowed for dpt1, dpt16 and dpt232} if ($code =~ m/(dpt1$)|(dpt16$)|(dpt232$)/ixms);
+		$value = $arg[0];
+		$value =~ s/,/\./gxms;
 	}
 	#set string <val1 val2 valn>
-	elsif ($cmd =~ m/$STRING/ix) {
-		return q{"string" only allowed for dpt16} if ($code !~ m/dpt16/ix);
+	elsif ($cmd =~ m/$STRING/ixms) {
+		return q{"string" only allowed for dpt16} if ($code !~ m/dpt16/ixms);
 		$value = q{}; # will be joined in KNX_Set
 	}
 	#set RGB <RRGGBB>
-	elsif ($cmd =~ m/$RGB/ix) {
-		return q{"rgb" only allowed for dpt232} if ($code !~ m/dpt232$/ix);
+	elsif ($cmd =~ m/$RGB/ixms) {
+		return q{"rgb" only allowed for dpt232} if ($code !~ m/dpt232$/ixms);
 		#check for 6 hex-digits
-		return q{"rgb" } . $a[0] . q{ has wrong syntax. Use 6 hex-digits only.} if ($a[0] !~ m/[0-9A-F]{6}/ix);
-		$value = lc($a[0]);
+		return q{"rgb" } . $arg[0] . q{ has wrong syntax. Use 6 hex-digits only.} if ($arg[0] !~ m/[0-9A-F]{6}/ixms);
+		$value = lc($arg[0]);
 	}
 
 	return (undef, $targetGadName, $value);
@@ -818,6 +829,7 @@ sub KNX_Set_oldsyntax {
 # return: $err, $value
 sub KNX_Set_dpt1 {
 	my ($hash, $targetGadName, $cmd, @arg) = @_;
+
 	my $name = $hash->{NAME};
 	my $groupCode = $hash->{GADDETAILS}->{$targetGadName}->{CODE};
 
@@ -829,15 +841,15 @@ sub KNX_Set_dpt1 {
 
 	my $value = 'off'; # default
 	my $tvalue = 'on'; # default reversed value for timer ops
-	if ($cmd =~ m/(^on|1)/ix) {
+	if ($cmd =~ m/(^on|1)/ixms) {
 		$value = 'on';
 		$tvalue = 'off';
 	}
 
-	return (undef,$value) if ($cmd =~ m/(?:on|off)$/ix); # shortcut
+	return (undef,$value) if ($cmd =~ m/(?:on|off)$/ixms); # shortcut
 
 	#set on-for-timer / off-for-timer
-	if ($cmd =~ m/(?:(on|off)-for-timer)$/ix) {
+	if ($cmd =~ m/(?:(on|off)-for-timer)$/ixms) {
 		#get duration
 		my $duration = sprintf('%02d:%02d:%02d', $arg[0]/3600, ($arg[0]%3600)/60, $arg[0]%60);
 		Log3 ($name, 5, qq{KNX_Set_dpt1 ($name): $cmd $duration});
@@ -847,7 +859,7 @@ sub KNX_Set_dpt1 {
 		CommandDefMod(undef, '-temporary ' .  $name . qq{_TIMER_$groupCode at +$duration set $name $targetGadName $tvalue});
 	}
 	#set on-until / off-until
-	elsif ($cmd =~ m/(?:(on|off)-until)$/ix) {
+	elsif ($cmd =~ m/(?:(on|off)-until)$/ixms) {
 		#get off-time
 		my ($err, $hr, $min, $sec, $fn) = GetTimeSpec($arg[0]); # fhem.pl
 		return qq{KNX_Set_dpt1 ($name): Error trying to parse timespec for $arg[0] : $err} if (defined($err));
@@ -861,10 +873,10 @@ sub KNX_Set_dpt1 {
 		CommandDefMod(undef, '-temporary ' . $name . qq{_TIMER_$groupCode at $hms_til set $name $targetGadName $tvalue});
 	}
 	#toggle
-	elsif ($cmd =~ m/$TOGGLE/ix) {
+	elsif ($cmd =~ m/$TOGGLE/ixms) {
 		my $toggleOldVal = 'dontknow';
 
-		my ($tDev, $togglereading) = split(qr/:/x,AttrVal($name,'KNX_toggle',$name));
+		my ($tDev, $togglereading) = split(qr/:/xms,AttrVal($name,'KNX_toggle',$name));
 		if (defined($togglereading)) { # prio1: use Attr. KNX_toggle: format: <device>:<reading>
 			$tDev = $name if ($tDev eq '$self');
 			$toggleOldVal = ReadingsVal($tDev, $togglereading, 'dontknow'); # switch off in case of non existent reading
@@ -879,11 +891,11 @@ sub KNX_Set_dpt1 {
 		}
 
 		Log3 ($name, 3, qq{KNX_Set_dpt1 ($name): current value for "set $name $targetGadName TOGGLE" is not "on" or "off" - } . 
-                                qq{$targetGadName will be switched off}) if ($toggleOldVal !~ /^(?:on|off)/ix);
-		$value = q{on} if ($toggleOldVal =~ m/^off/ix); # value off is default
+                                qq{$targetGadName will be switched off}) if ($toggleOldVal !~ /^(?:on|off)/ixms);
+		$value = q{on} if ($toggleOldVal =~ m/^off/ixms); # value off is default
 	}
 	#blink - implemented with timer & toggle
-	elsif ($cmd =~ m/$BLINK/ix) {
+	elsif ($cmd =~ m/$BLINK/ixms) {
 		my $count = ($arg[0])?$arg[0] * 2 -1:1;
 		$count = 1 if ($count < 1);
 		my $dur = ($arg[1])?$arg[1]:1;
@@ -897,28 +909,8 @@ sub KNX_Set_dpt1 {
 	return (undef,$value);
 }
 
-#In case setstate is executed, a readingsupdate is initiated
 #############################
 sub KNX_State {
-=pod
-	my $hash    = shift;
-	my $time    = shift;
-	my $reading = shift // return;
-	my $value   = shift // return;
-
-	my $name = $hash->{NAME};
-	#remove whitespaces
-	$value =~ s/^\s+|\s+$//gix;
-	$reading =~ s/^\s+|\s+$//gix;
-
-	#workaround for STATE in capitol letters (caused by unknown external function)
-	$reading = 'state' if ($reading eq 'STATE');
-	
-	Log3 ($name, 5, qq{KNX_State ($name): update $reading with value= $value});
-
-	#write value and update reading
-	readingsSingleUpdate($hash, $reading, $value, 1);
-=cut
 	return;
 }
 
@@ -926,50 +918,45 @@ sub KNX_State {
 #############################
 sub KNX_Attr {
 	my ($cmd,$name,$aName,$aVal) = @_;
-	my $hash = $defs{$name};
 
+	my $hash = $defs{$name};
 	my $value = undef;
+
 	if ($cmd eq 'set') {
-		return qq{KNX_Attr ($name): Attribute "$aName" is not supported/have no function at all, pls. check cmdref for equivalent function.} if ($aName =~ m/(listenonly|readonly|slider)/ix);
+		return qq{KNX_Attr ($name): Attribute "$aName" is not supported/have no function at all, pls. check cmdref for equivalent function.} if ($aName =~ m/(listenonly|readonly|slider)/ixms);
 
 		if ($aName eq 'KNX_toggle') { # validate device/reading
-			my ($srcDev,$srcReading) = split(qr/:/x,$aVal); # format: <device>:<reading>
+			my ($srcDev,$srcReading) = split(qr/:/xms,$aVal); # format: <device>:<reading>
 			$srcDev = $name if ($srcDev eq '$self');
 			return 'no valid device for attr: KNX_toggle' if (!IsDevice($srcDev));
 			$value = ReadingsVal($srcDev,$srcReading,undef) if (defined($srcReading)); #test for value  
-			return 'no valid device/reading value for attr: KNX_toggle' if (!defined($value) && $init_done); # maybe device/reading not defined during starrtup
+			return 'no valid device/reading value for attr: KNX_toggle' if (!defined($value) && $init_done); # maybe device/reading not defined during start
 		}
 
 		# check valid IODev
 		elsif ($aName eq 'IODev' && $init_done) {
 			return KNX_chkIODev($hash,$aVal);
 		}
+
+		elsif ($aName =~ /(?:stateCmd|putCmd)/xms ) { # test for syntax errors
+			my %specials = ( '%hash' => $hash, '%name' => $name, '%gadName' => $name, '%state' => $name, );
+			my $err = perlSyntaxCheck($aVal, %specials);
+			return qq{syntax check failed for $aName: \n $err} if($err);
+		}
 =pod
-		# force @set for widgetoverride
-		# new function introduced 12/2022 by Rudi
-		elsif ($aName eq 'widgetOverride' ) {
-			my @overrides = split(/\s/ix,$aVal);
-			foreach my $overr (@overrides) {
-###				$overr =~ s/([^\@^\:]+)(?:@.*?)?:([^ ]+)?[\s]?/$1\@set:$2 /ixg; # add @set to each wgoverride
-				$overr =~ /([^\@^\:]+)(?:\@(?:set|get|attr))?:?([^ ]+)?[\s]?/ixg;
-				if (exists($hash->{GADDETAILS}->{$1}) && defined($2)) { # only for existing gadNames
-					$value .= qq{$1\@set:$2 };
-				}
-				else {
-					$value .= $overr . q{ }; # append original 
-				}
-			}
-			@_[3] = $value; # change $aVal in caller
+		elsif ($aName eq 'stateRegex') { # test for syntax errors
+			my $err = eval { "HALLO" =~ m/$aVal/xms };
+			return qq{syntax check failed for $aName: \n $@} if ($@); ## no critic (Variables::ProhibitPunctuationVars)
 		}
 =cut
 	} # /set
 
 	if ($cmd eq 'del') {
 		if ($aName eq 'disable') {
-			my @defentries = split(/\s/ix,$hash->{DEF});
+			my @defentries = split(/\s/ixms,$hash->{DEF});
 			foreach my $def (@defentries) { # check all entries
 				next if ($def eq ReadingsVal($name,'IODev',undef)); # deprecated IOdev
-				next if ($def =~ /:dpt\d+/ix); 
+				next if ($def =~ /:dpt\d+/ixms); 
 
 				Log3 ($name, 2, qq{KNX_Attr ($name): Attribut "disable" cannot be deleted for this device until you specify a valid dpt!});
 				return qq{Attribut "disable" cannot be deleted for device $name until you specify a valid dpt!};
@@ -983,27 +970,26 @@ sub KNX_Attr {
 #Split reading for DBLOG
 #############################
 sub KNX_DbLog_split {
-	my ($event, $device) = @_;
+	my $event  = shift;
+	my $device = shift;
 
-	my $unit = q{}; # default
+	my $reading = 'state'; # default
+	my $unit    = q{}; # default
 
-	# split event into reading & value
-	my ($reading,$value) = ($event =~ /^([^\s]+)[:]\s(.*)/x );
-#	my ($reading, $value) = split(/:\s/x, $event, 2);
-	if (! defined($reading)) {
-		$reading = 'state';
-		$value   = $event;
-	} 
-
-	# split value
-	my @strings = split(/\s/x, $value);
+	# split event into pieces
+	$event =~ s/^\s?//xms; # remove leading blank if any
+	my @strings = split (/[\s]+/xms, $event);
+	if ($strings[0] =~ /.+[:]$/xms) {
+		$reading = shift(@strings);
+		$reading =~ s/[:]$//xms;
+	}
 	$strings[0] = q{} if (! defined($strings[0]));
 	
 	#numeric value? and last value non numeric? - assume unit
 	if (looks_like_number($strings[0]) && (! looks_like_number($strings[scalar(@strings)-1]))) {
-		$value = join(q{ },@strings[0 .. (scalar(@strings)-2)]);
-		$unit = $strings[scalar(@strings)-1];
+		$unit = pop(@strings);
 	}
+	my $value = join(q{ },@strings);
 	$unit = q{} if (!defined($unit));
 
 	Log3 ($device, 5, qq{KNX_DbLog_Split ($device): EVENT= $event READING= $reading VALUE= $value UNIT= $unit});
@@ -1020,7 +1006,7 @@ sub KNX_Parse {
 	return q{} if ((IsDisabled($ioName) == 1) || IsDummy($ioName)); # IO - device is disabled or dummy
 
 	#Msg format: C<src>[wrp]<group><value> i.e. Cw00000101
-	my ($src,$cmd,$gadCode,$val) = $msg =~ m/^$TULid([0-9a-f]{5})([prw])([0-9a-f]{5})(.*)$/ix; 
+	my ($src,$cmd,$gadCode,$val) = $msg =~ m/^$TULid([0-9a-f]{5})([prw])([0-9a-f]{5})(.*)$/ixms; 
 	my @foundMsgs;
 
 	Log3 ($ioName, 4, qq{KNX_Parse -enter: IO-name=$ioName src=} . KNX_hexToName2($src) . q{ dest=} . KNX_hexToName($gadCode) . qq{ msg=$msg});
@@ -1048,7 +1034,7 @@ sub KNX_Parse {
 		Log3 ($deviceName, 4, qq{KNX_Parse ($deviceName): -process gadName=$gadName cmd= $cmd});
 
 		#handle write and reply messages
-		if ($cmd =~ /[w|p]/ix) {
+		if ($cmd =~ /[w|p]/ixms) {
 			#decode message
 			my $getName = $deviceHash->{GADDETAILS}->{$gadName}->{RDNAMEGET};
 			my $transval = KNX_decodeByDpt ($deviceHash, $val, $gadName);
@@ -1065,22 +1051,11 @@ sub KNX_Parse {
 		}
 
 		#handle read messages
-		elsif ($cmd =~ /[r]/ix) {
+		elsif ($cmd =~ /[r]/ixms) {
 			my $putName = $deviceHash->{GADDETAILS}->{$gadName}->{RDNAMEPUT};
 			Log3 ($deviceName, 5, qq{KNX_Parse_r ($deviceName): GET});
 
-			#answer "old school"
 			my $value = undef;
-			if (AttrVal($deviceName, 'answerReading', 0) != 0) {
-				my $putVal = ReadingsVal($deviceName, $putName, undef);
-				if (defined($putVal) && ($putVal ne q{})) {
-					$value = $putVal; #medium priority, overwrite $value
-				}
-				else {
-					$value = ReadingsVal($deviceName, 'state', undef); #lowest priority - use state!
-				}
-			}
-
 			#high priority - eval
 			my $cmdAttr = AttrVal($deviceName, 'putCmd', undef);
 			if ((defined($cmdAttr)) && ($cmdAttr ne q{})) {
@@ -1093,6 +1068,16 @@ sub KNX_Parse {
 					Log3 ($deviceName, 5, qq{KNX_Parse_r ($deviceName): gadName=$gadName - no reply sent!});
 					$value = undef; # dont send !
 				} 
+			}
+			# medium / low priority
+			elsif (AttrVal($deviceName, 'answerReading', 0) != 0) {
+				my $putVal = ReadingsVal($deviceName, $putName, undef);
+				if (defined($putVal) && ($putVal ne q{})) {
+					$value = $putVal; #medium priority, overwrite $value
+				}
+				else {
+					$value = ReadingsVal($deviceName, 'state', undef); #lowest priority - use state!
+				}
 			}
 
 			#send transval
@@ -1109,7 +1094,7 @@ sub KNX_Parse {
 
 ########## begin of private functions ##########
 
-# KNX_autoCreate 
+### KNX_autoCreate 
 # check wether we must do autocreate...
 # on entry: $iohash, $gadcode
 # on exit: return string for autocreate
@@ -1118,7 +1103,7 @@ sub KNX_autoCreate {
 	my $gadCode = shift;
 
 	my $gad = KNX_hexToName($gadCode); #format gad
-	my $newDevName = sprintf('KNX_%.2d%.2d%.3d',split (/\//x, $gad)); #create name
+	my $newDevName = sprintf('KNX_%.2d%.2d%.3d',split (/\//xms, $gad)); #create name
 
 	# check if any autocreate device has ignoretype "KNX..." set
 	my @acList = devspec2array('TYPE=autocreate');
@@ -1126,12 +1111,12 @@ sub KNX_autoCreate {
 		next unless $acdev;
 		next if (! $defs{$acdev});
 		my $igntypes = AttrVal($acdev,'ignoreTypes',q{});
-		return q{} if($newDevName =~ /$igntypes/x);
+		return q{} if($newDevName =~ /$igntypes/xms);
 	}
 	return qq{UNDEFINED $newDevName KNX $gad} . q{:} . $MODELERR;
 } 
 
-# KNX_SetReadings is called from KNX_Set and KNX_Parse
+### KNX_SetReadings is called from KNX_Set and KNX_Parse
 # calling param: $hash, $gadName, $transval, $rdName, caller (set/parse)
 sub KNX_SetReadings {
 	my ($hash, $gadName, $transval, $rdName, $src) = @_;
@@ -1165,7 +1150,7 @@ sub KNX_SetReadings {
 
 		if ((defined($cmdAttr)) && ($cmdAttr ne q{})) {
 			my $newstate = KNX_eval ($hash, $gadName, $state, $cmdAttr);
-			if (defined($newstate) && ($newstate ne q{}) && ($newstate !~ m/ERROR/ix)) {
+			if (defined($newstate) && ($newstate ne q{}) && ($newstate !~ m/ERROR/ixms)) {
 				$state = $newstate;
 				Log3 ($name, 5, qq{KNX_SetReadings ($name): state replaced via stateCmd $cmdAttr - state: $state});
 			}
@@ -1179,12 +1164,14 @@ sub KNX_SetReadings {
 	return;
 }
 
-#check for valid IODev
-#called from define & Attr
+### check for valid IODev
+# called from define & Attr
 # returns undef on success , error msg on failure
+# returns list of IODevs if $iocandidate is undef on entry
 sub KNX_chkIODev {
 	my $hash = shift;
-	my $iocandidate = shift;
+	my $iocandidate = shift // 'undefined';
+
 	my $name = $hash->{NAME};
 
 	my @IOList = devspec2array('TYPE=(TUL|KNXTUL|KNXIO|FHEM2FHEM)');
@@ -1192,22 +1179,25 @@ sub KNX_chkIODev {
 	foreach my $iodev (@IOList) {
 		next unless $iodev;
 		next if ((IsDisabled($iodev) == 1) || IsDummy($iodev)); # IO - device is disabled or dummy
+		my $iohash = $defs{$iodev};
+		next if ($iohash->{TYPE} eq 'KNXIO' && exists($iohash->{model}) && $iohash->{model} eq 'X'); # exclude dummy dev
 		push(@IOList2,$iodev);
 		next if ($iodev ne $iocandidate);
-		return if ($defs{$iodev}->{TYPE} ne 'FHEM2FHEM'); # ok for std io-dev
+		return if ($iohash->{TYPE} ne 'FHEM2FHEM'); # ok for std io-dev
 
 		# add support for fhem2fhem as io-dev
-		my $rawdef = $defs{$iodev}->{rawDevice}; #name of fake local IO-dev or remote IO-dev
+		my $rawdef = $iohash->{rawDevice}; #name of fake local IO-dev or remote IO-dev
 		if (defined($rawdef)) {
 			return if (exists($defs{$rawdef}) && $defs{$rawdef}->{TYPE} eq 'KNXIO' && $defs{$rawdef}->{model} eq 'X'); # only if model of fake device eq 'X'
-			return if (exists($defs{$iodev}->{'.RTYPE'}) && $defs{$iodev}->{'.RTYPE'} eq 'KNXIO'); # remote TYPE is KNXIO ( need patched FHEM2FHEM module)
+			return if (exists($iohash->{'.RTYPE'}) && $iohash->{'.RTYPE'} eq 'KNXIO'); # remote TYPE is KNXIO ( need patched FHEM2FHEM module)
 		}
 	}
+	return join(q{,}, @IOList2) if ($iocandidate eq 'undefined');
 	return $iocandidate . ' is not a valid IO-device or disabled/dummy for ' . qq{$name \n} .
                'Valid IO-devices are: ' . join(q{, }, @IOList2);
 }
 
-# delete all defptr entries for this device
+### delete all defptr entries for this device
 # used in undefine & define (avoid defmod problem) 09-02-2021
 # calling param: $hash
 # return param:  none
@@ -1233,7 +1223,7 @@ sub KNX_delete_defptr {
 	return;
 }
 
-# convert GAD from hex to readable version
+### convert GAD from hex to readable version
 sub KNX_hexToName {
 	my $v = shift;
 	
@@ -1244,25 +1234,26 @@ sub KNX_hexToName {
 	return sprintf('%d/%d/%d', $p1,$p2,$p3);
 }
 
-# convert PHY from hex to readable version
+### convert PHY from hex to readable version
 sub KNX_hexToName2 {
 	my $v = KNX_hexToName(shift);
-	$v =~ s/\//\./gx;
+	$v =~ s/\//\./gxms;
 	return $v;
 }
 
-# convert GAD from readable version to hex
+### convert GAD from readable version to hex
 sub KNX_nameToHex {
 	my $v = shift;
 	my $r = $v;
 
-	if($v =~ /^([0-9]{1,2})\/([0-9]{1,2})\/([0-9]{1,3})$/x) {
+	if($v =~ /^([0-9]{1,2})\/([0-9]{1,2})\/([0-9]{1,3})$/xms) {
 		$r = sprintf('%02x%01x%02x',$1,$2,$3);
 	}
 	return $r;
 }
 
-# clean input string according DPT
+### clean input string according DPT
+# return undef on error
 sub KNX_checkAndClean {
 	my ($hash, $value, $gadName) = @_;
 	my $name = $hash->{NAME};
@@ -1276,14 +1267,14 @@ sub KNX_checkAndClean {
 	my $pattern = $dpttypes{$model}->{PATTERN};
 
 	#trim whitespaces at the end
-	$value =~ s/^\s+|\s+$//gix;
-	$value .= ':00' if ($model eq 'dpt10' && $value =~ /^[\d]{2}:[\d]{2}$/gix); # compatibility with widgetoverride :time
+	$value =~ s/^\s+|\s+$//gixms;
+	$value .= ':00' if ($model eq 'dpt10' && $value =~ /^[\d]{2}:[\d]{2}$/gixms); # compatibility with widgetoverride :time
 
 #new code: match against model pattern -to be tested!!!
 #	my $pattern = $dpttypes{$model}->{PATTERN});
 #	return if ($value !~ m/$pattern/ix);
 
-	my @tmp = ($value =~ m/$pattern/gix);
+	my @tmp = ($value =~ m/$pattern/gixms);
 	#loop through results
 	my $found = 0;
 	foreach my $str (@tmp) {
@@ -1302,7 +1293,7 @@ sub KNX_checkAndClean {
 	return $value;
 }
 
-# replace state-values by Attr stateRegex
+### replace state-values by Attr stateRegex
 sub KNX_replaceByRegex {
 	my ($hash, $rdName, $input) = @_;
 	my $name = $hash->{NAME};
@@ -1314,20 +1305,20 @@ sub KNX_replaceByRegex {
 
 	#execute regex, if defined
 	#get array of given attributes
-	my @reg = split(/\s\//x, $regAttr);
+	my @reg = split(/\s\//xms, $regAttr);
 
 	my $tempVal = $rdName . q{:} . $input;
 
 	#loop over all regex
 	foreach my $regex (@reg) {
 		#trim leading and trailing slashes
-		$regex =~ s/^\/|\/$//gix;
+		$regex =~ s/^\/|\/$//gixms;
 		#get pairs
-		my @regPair = split(/\//x, $regex);
+		my @regPair = split(/\//xms, $regex);
 		next if ((not defined($regPair[0])) || ($regPair[0] eq q{}));
 
 		#skip if first part of regex not match readingName
-		my $regName = $regPair[0] =~ s/^([^:]+).*/$1/irx; # extract rd-name
+		my $regName = $regPair[0] =~ s/^([^:]+).*/$1/irxms; # extract rd-name
 		next if ($rdName ne $regName); # must match completely!
 
 		if (not defined ($regPair[1])) { # cut value
@@ -1336,12 +1327,12 @@ sub KNX_replaceByRegex {
 		elsif ($regPair[0] eq $tempVal) { # complete match
 			$retVal = $regPair[1];
 		}
-		elsif (($input !~ /$regPair[0]/x) && ($regPair[0] =~ /[:]/x)) { # value dont match!
+		elsif (($input !~ /$regPair[0]/xms) && ($regPair[0] =~ /[:]/xms)) { # value dont match!
 			next;
 		}
 		else { #replace value
-			$tempVal =~ s/$regPair[0]/$regPair[1]/gix;
-			($retVal = $tempVal) =~ s/[:]/ /x;
+			$tempVal =~ s/$regPair[0]/$regPair[1]/gixms;
+			($retVal = $tempVal) =~ s/[:]/ /xms;
 		}
 		last;
 	}
@@ -1349,7 +1340,9 @@ sub KNX_replaceByRegex {
 	return ($retVal eq 'undefined')?undef:$retVal;
 }
 
-# limit numeric values. Valid directions: encode, decode
+### limit numeric values. Valid directions: encode, decode
+# called from: _encodeByDpt, _decodeByDpt
+# returns: limited value
 sub KNX_limit {
 	my ($hash, $value, $model, $direction) = @_;
 
@@ -1368,7 +1361,7 @@ sub KNX_limit {
 	my $max = $dpttypes{$model}->{MAX};
 
 	#determine direction of scaling, do only if defined
-	if ($direction =~ m/^encode/ix) {
+	if ($direction =~ m/^encode/ixms) {
 		#limitValue
 		$retVal = $min if (defined ($min) && ($value < $min));
 		$retVal = $max if (defined ($max) && ($value > $max));
@@ -1376,7 +1369,7 @@ sub KNX_limit {
 		$retVal /= $factor if (defined ($factor));
 		$retVal -= $offset if (defined ($offset));
 	}
-	elsif ($direction =~ m/^decode/ix) {
+	elsif ($direction =~ m/^decode/ixms) {
 		#correct value
 		$retVal += $offset if (defined ($offset));
 		$retVal *= $factor if (defined ($factor));
@@ -1390,7 +1383,7 @@ sub KNX_limit {
 	return $retVal;
 }
 
-# process attributes stateCmd & putCmd
+### process attributes stateCmd & putCmd
 sub KNX_eval {
 	my ($hash, $gadName, $state, $evalString) = @_;
 	my $name = $hash->{NAME};
@@ -1400,35 +1393,33 @@ sub KNX_eval {
 	$retVal =  AnalyzeCommandChain(undef, $code);
 	$retVal = 'ERROR' if (not defined ($retVal));
 
-	if ($retVal =~ /(^Forbidden|error)/ix) { # eval error or forbidden by Authorize
+	if ($retVal =~ /(^Forbidden|error)/ixms) { # eval error or forbidden by Authorize
 		Log3 ($name, 2, qq{KNX_Eval-error ($name): gadName= $gadName evalString= $evalString result= $retVal});
 		$retVal = 'ERROR';
 	}
 	return $retVal;
 }
 
-# encode KNX-Message according DPT
+### encode KNX-Message according DPT
+# on return: hex string to be sent to bus / undef on error
 sub KNX_encodeByDpt {
-	my ($hash, $value, $gadName) = @_;
-	my $name = $hash->{NAME};
+	my $hash    = shift;
+	my $value   = shift;
+	my $gadName = shift;
 
+	my $name = $hash->{NAME};
 	my $model = $hash->{GADDETAILS}->{$gadName}->{MODEL}; 
 	my $code = $dpttypes{$model}->{CODE};
 
-	#return unchecked, if this is a autocreate-device
-	return if ($model eq $MODELERR);
+	return if ($model eq $MODELERR); #return unchecked, if this is a autocreate-device
 
-	#this one stores the translated hex-value
-	my $hexval = undef;
-
-	my $ivalue = $value; # save for compare
-	$value = KNX_limit ($hash, $value, $model, 'ENCODE');
-	Log3 ($name, 4, qq{KNX_limit ($name): gadName= $gadName modified... Input= $ivalue Output= $value Model= $model}) if ($ivalue ne $value);
+	my $lvalue = KNX_limit ($hash, $value, $model, 'ENCODE');
+	Log3 ($name, 4, qq{KNX_limit ($name): gadName= $gadName modified... Input= $value Output= $lvalue Model= $model}) if ($value ne $lvalue);
 
 	if (ref($dpttypes{$code}->{ENC}) eq 'CODE') {
-		$hexval = $dpttypes{$code}->{ENC}->($value, $model);
+		my $hexval = $dpttypes{$code}->{ENC}->($lvalue, $model);
 		Log3 ($name, 5, qq{KNX_encodeByDpt ($name): gadName= $gadName model= $model code= $code } . 
-                                qq{in-Value= $ivalue out-value= $value out-hexval= $hexval});
+                                qq{in-Value= $value out-value= $lvalue out-hexval= $hexval});
 		return $hexval;
 	}
 	else {
@@ -1437,23 +1428,21 @@ sub KNX_encodeByDpt {
 	return;
 }
 
-# decode KNX-Message according DPT
+### decode KNX-Message according DPT
+# on return: decoded value from bus / on error: undef
 sub KNX_decodeByDpt {
-	my ($hash, $value, $gadName) = @_;
-	my $name = $hash->{NAME};
+	my $hash    = shift;
+	my $value   = shift;
+	my $gadName = shift;
 
-	#get model
+	my $name = $hash->{NAME};
 	my $model = $hash->{GADDETAILS}->{$gadName}->{MODEL};
 	my $code = $dpttypes{$model}->{CODE};
 
-	#return unchecked, if this is a autocreate-device
-	return if ($model eq $MODELERR);
-
-	#this one contains the return-value
-	my $state = undef;
+	return if ($model eq $MODELERR); #return unchecked, if this is a autocreate-device
 
 	if (ref($dpttypes{$code}->{DEC}) eq 'CODE') {
-		$state = $dpttypes{$code}->{DEC}->($value, $model, $hash);
+		my $state = $dpttypes{$code}->{DEC}->($value, $model, $hash);
 		Log3 ($name, 5, qq{KNX_decodeByDpt ($name): gadName= $gadName model= $model code= $code value= $value length-value= } . 
                                 length($value) . qq{ state= $state});
 		return $state;
@@ -1470,7 +1459,7 @@ sub enc_dpt1 { #Binary value
 	my $value = shift;
 	my $model = shift;
 	my $numval = 0; #default
-	$numval = 1 if ($value =~ m/(1|on)$/ix);
+	$numval = 1 if ($value =~ m/(1|on)$/ixms);
 	$numval = 1 if ($value eq $dpttypes{$model}->{MAX}); # dpt1.011 problem
 	return sprintf('%.2x',$numval);
 }
@@ -1479,7 +1468,7 @@ sub enc_dpt2 { #Step value (two-bit)
 	my $value = shift;
 	my $dpt2list = {off => 0, on => 1, forceoff => 2, forceon =>3};
 	my $numval = $dpt2list->{lc($value)};
-	$numval = $value if ($value =~ m/^0?[0-3]$/ix); # JoeALLb request
+	$numval = $value if ($value =~ m/^0?[0-3]$/ixms); # JoeALLb request
 	return sprintf('%.2x',$numval);
 }
 
@@ -1501,7 +1490,7 @@ sub enc_dpt4 { #single ascii or iso-8859-1 char
 	my $value = shift;
 	my $model = shift;
 	my $numval = encode('iso-8859-1', decode('utf8', $value)); #always convert to latin-1
-	$numval =~ s/[\x80-\xff]/?/gx if ($model eq 'dpt4.001'); #replace values >= 0x80 if ascii
+	$numval =~ s/[\x80-\xff]/?/gxms if ($model eq 'dpt4.001'); #replace values >= 0x80 if ascii
 	#convert to hex-string
 	my $dat = unpack('H*', $numval);
 	return sprintf('00%s',$dat);
@@ -1544,8 +1533,8 @@ sub enc_dpt10 { #Time of Day
 	my $value = shift;
 	my $numval = 0;
 	my ($secs,$mins,$hours,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time); # default now
-	if ($value =~ /$PAT_TIME/ix) {
-		($hours,$mins,$secs) = split(/[:]/ix,$value);
+	if ($value =~ /$PAT_TIME/ixms) {
+		($hours,$mins,$secs) = split(/[:]/ixms,$value);
 		my $ts = fhemTimeLocal($secs, $mins, $hours, $mday, $mon, $year);
 		($secs,$mins,$hours,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($ts);
 	}
@@ -1563,7 +1552,7 @@ sub enc_dpt10 { #Time of Day
 sub enc_dpt11 { #Date year range is 1990-2089 {0 => 2000 , 89 => 2089, 90 => 1990}
 	my $value = shift;
 	my $numval = 0;
-	if ($value =~ m/now/ix) {
+	if ($value =~ m/now/ixms) {
 		#get actual time
 		my ($secs,$mins,$hours,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 		#add offsets
@@ -1574,7 +1563,7 @@ sub enc_dpt11 { #Date year range is 1990-2089 {0 => 2000 , 89 => 2089, 90 => 199
 		$numval = ($year - 2000) + ($mon << 8) + ($mday << 16);
 	}
 	else {
-		my ($dd, $mm, $yyyy) = split (/\./x, $value);
+		my ($dd, $mm, $yyyy) = split (/\./xms, $value);
 		$yyyy -= 2000;
 		$yyyy += 100 if ($yyyy < 0);
 		$numval = ($yyyy) + ($mm << 8) + ($dd << 16);
@@ -1601,13 +1590,13 @@ sub enc_dpt16 { #14-Octet String
 	my $value = shift;
 	my $model = shift;
 	my $numval = encode('iso-8859-1', decode('utf8', $value)); #always convert to latin-1
-	$numval =~ s/[\x80-\xff]/?/gx if ($model =~ /dpt16\.000/ix); #replace values >= 0x80 if ascii 
+	$numval =~ s/[\x80-\xff]/?/gxms if ($model =~ /dpt16\.000/ixms); #replace values >= 0x80 if ascii 
 	#convert to hex-string
 	my $dat = unpack('H*', $numval);
-	$dat = '00' if ($value =~ /^$PAT_DPT16_CLR/ix); # send all zero string if "clear line string"
+	$dat = '00' if ($value =~ /^$PAT_DPT16_CLR/ixms); # send all zero string if "clear line string"
 	#format for 14-byte-length and replace trailing blanks with zeros
 	my $hexval = sprintf('00%-28s',$dat);
-	$hexval =~ s/\s/0/gx;
+	$hexval =~ s/\s/0/gxms;
 	return $hexval;
 }
 
@@ -1615,7 +1604,7 @@ sub enc_dpt19 { #DateTime
 	my $value = shift;
 	my $ts = time; # default or when "now" is given
 	# if no match we assume now and use current date/time
-	if ($value =~ m/^$PAT_DATE$PAT_DTSEP$PAT_TIME/x) {
+	if ($value =~ m/^$PAT_DATE$PAT_DTSEP$PAT_TIME/xms) {
 		$ts = fhemTimeLocal($6, $5, $4, $1, $2-1, $3 - 1900);
 	}
 	my ($secs,$mins,$hours,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($ts);
@@ -1681,7 +1670,7 @@ sub dec_dpt5 { #1-Octet unsigned value / also used for dpt17, dpt18
 	my $numval = hex (shift);
 	my $model = shift;
 	my $hash = shift;
-	$numval = ($numval & 0x3F) if ($model =~ /^(dpt17|dpt18)/ix);
+	$numval = ($numval & 0x3F) if ($model =~ /^(dpt17|dpt18)/ixms);
 	my $state = KNX_limit ($hash, $numval, $model, 'DECODE');
 	return sprintf ('%.0f', $state);
 }
@@ -1789,12 +1778,12 @@ sub dec_dpt16 { #14-Octet String or dpt4: single Char string
 	my $value = shift;
 	my $model = shift;
 	my $numval = 0;
-	$value =~ s/\s*$//gx; # strip trailing blanks
+	$value =~ s/\s*$//gxms; # strip trailing blanks
 	my $state = pack('H*',$value);
 	#convert from latin-1
-	$state = encode ('utf8', decode('iso-8859-1',$state)) if ($model !~ m/^dpt(?:16.000|4.001)$/x);
-	$state = q{} if ($state =~ m/^[\x00]/ix); # case all zeros received
-	$state =~ s/[\x00-\x1F]+//gx; # remove non printable chars
+	$state = encode ('utf8', decode('iso-8859-1',$state)) if ($model !~ m/^dpt(?:16.000|4.001)$/xms);
+	$state = q{} if ($state =~ m/^[\x00]/ixms); # case all zeros received
+	$state =~ s/[\x00-\x1F]+//gxms; # remove non printable chars
 	return $state;
 }
 
@@ -1845,12 +1834,12 @@ sub dec_dpt232 { #RGB-Code
 }
 
 ### lookup gadname by gadnumber
-### called from: KNX_Get, KNX_setOldsyntax
-### entry: $hash, desired gadNO
-### return: undef on error / gadName
+# called from: KNX_Get, KNX_setOldsyntax
+# entry: $hash, desired gadNO
+# return: undef on error / gadName
 sub KNX_gadNameByNO {
 	my $hash = shift;
-	my $groupnr  = shift // 1; # default: seaarch for g1
+	my $groupnr  = shift // 1; # default: search for g1
 
 	my $targetGadName = undef;
 	foreach my $key (keys %{$hash->{GADDETAILS}}) {
@@ -1863,22 +1852,27 @@ sub KNX_gadNameByNO {
 }
 
 ########## public utility functions ##########
+# when called from FHEM cmd-line
+sub main::KNX_scancmd {
+	my $cl = shift;
+	my $devs = shift;
+	$devs = undef if ($devs eq q{});
+	return main::KNX_scan($devs);
+}
 
 ### get state of devices from KNX_Hardware
-### called with devspec as argument
-### e.g : KNX_scan() / KNX_scan('device1') / KNX_scan('device1, dev2,dev3,...' / KNX_scan('room=Kueche'), ...
-### returns number of "gets" executed
+# called with devspec as argument
+# e.g : KNX_scan() / KNX_scan('device1') / KNX_scan('device1, dev2,dev3,...' / KNX_scan('room=Kueche'), ...
+# returns number of "gets" executed
 sub main::KNX_scan {
 	my $devs = shift // 'TYPE=KNX'; # select all if nothing defined
-
-	my @devlist = ();
 
 	if (! $init_done) { # avoid scan before init complete
 		Log3 (undef, 2,'KNX_scan command rejected during FHEM-startup!');
 		return 0;
 	}
 
-	@devlist = devspec2array($devs);
+	my @devlist = devspec2array($devs);
 
 	my $i = 0; #counter devices
 	my $j = 0; #counter devices with get
@@ -1889,7 +1883,7 @@ sub main::KNX_scan {
 		next unless $knxdef;
 		next if($knxdef eq $devs && !$defs{$knxdef});
 		my $devhash = $defs{$knxdef};
-		next if ((! defined($devhash)) || ($devhash->{TYPE} ne 'KNX') || $devhash->{DEF} =~ /$MODELERR/ix);
+		next if ((! defined($devhash)) || ($devhash->{TYPE} ne 'KNX') || $devhash->{DEF} =~ /$MODELERR/ixms);
 
 		#check if IO-device is ready
 		my $iodev = $devhash->{IODev}->{NAME};
@@ -1902,20 +1896,20 @@ sub main::KNX_scan {
 		foreach my $key (keys %{$devhash->{GADDETAILS}}) {
 			last if (! defined($key));
 			my $option = $devhash->{GADDETAILS}->{$key}->{OPTION};
-			next if (defined($option) && $option =~ /(?:set|listenonly)/ix);
+			next if (defined($option) && $option =~ /(?:set|listenonly)/ixms);
 			$k++;
 			$getsarr .= $knxdef . q{ } . $key . q{,};
 		}
 		$j++ if ($k > $k0);
 	}
-	Log3 (undef, 3, qq{KNX_scan: $i devices selected / $j devices with get / $k "gets" executing...});
+	Log3 (undef, 3, qq{KNX_scan: $i devices selected (regex= $devs) / $j devices with get / $k "gets" executing...});
 	doKNX_scan($getsarr) if ($k > 0);
 	return $k;
 }
 
 ### issue all get cmd's - each one delayed by InternalTimer
 sub doKNX_scan {
-	my ($devgad, $arr) = split(/,/x,shift,2);
+	my ($devgad, $arr) = split(/,/xms,shift,2);
 	main::fhem("get $devgad");
 	return if (! defined($arr) || $arr eq q{});
 	return InternalTimer(gettimeofday() + 0.2,\&doKNX_scan,$arr); # does not support array-> use string...
@@ -1993,14 +1987,14 @@ The reading &lt;state&gt; will be updated with the last sent or received value.&
 <a id="KNX-define"></a>
 <p><strong>Define</strong></p>
 <p><code>define &lt;name&gt; KNX &lt;group&gt;:&lt;dpt&gt;[:[gadName]:[set|get|listenonly]:[nosuffix]] [&lt;group&gt;:&lt;dpt&gt; ..] <del>[IODev]</del></code></p>
-<p><strong>Important:&nbsp;a KNX device needs at least one&nbsp;concrete DPT.</strong> Please refer to <a href="#KNX-dpt">avaliable DPT</a>.
+<p><strong>Important:&nbsp;a KNX device needs at least one&nbsp;valid DPT.</strong> Please refer to <a href="#KNX-dpt">avaliable DPT</a>.
  Otherwise the system cannot en- or decode messages.<br />
 <strong>Devices defined by autocreate have to be reworked with the suitable dpt and the disable attribute cleared. Otherwise they won't do anything.</strong></p>
 
 <p>The &lt;group&gt; parameter is either a group name notation (0-31/0-7/0-255) or the hex representation of it ([00-1f][0-7][00-ff]) (5 digits). 
  All of the defined groups can be used for bus-communication. 
  It is not allowed to have the same group-address more then once in one device. You can have multiple devices containing the same group-adresses.<br /> 
-As described above the parameter &lt;DPT&gt; must contain the corresponding DPT.<br /> 
+As described above the parameter &lt;DPT&gt; must contain the corresponding DPT - matching the dpt-spec of the KNX-Hardware..<br /> 
 The optional parameteter [gadName] may contain an alias for the GAD. The following gadNames are <b>not allowed:</b> on, off, on-for-timer,
  on-until, off-for-timer, off-until, toggle, raw, rgb, string, value, set, get, listenonly, nosuffix -  because of conflict with cmds &amp; parameters.<br />
 Especially if attribute <a href="#KNX-attr-answerReading">answerReading</a> is set to 1, it might be useful to modifiy the behaviour of single GADs. If you want to restrict the GAD,
@@ -2008,10 +2002,10 @@ Especially if attribute <a href="#KNX-attr-answerReading">answerReading</a> is s
 <b>Specifying an IO-Device in define is now deprecated!</b> Use attribute <a href="#KNX-attr-IODev">IODev</a> instead, but only if absolutely required!</p>
 <p>The GAD's are per default named with "g&lt;number&gt;". The corresponding reading-names are getG&lt;number&gt;, setG&lt;number&gt; and putG&lt;number&gt;.<br /> 
 If you supply &lt;gadName&gt; this name is used instead. The readings are &lt;gadName&gt;-get, &lt;gadName&gt;-set and &lt;gadName&gt;-put. 
-We will use the synonyms &lt;getName&gt;, &lt;setName&gt; and &lt;putName&gt; in this documentation.
+The synonyms &lt;getName&gt;, &lt;setName&gt; and &lt;putName&gt; are used in this documentation.
 If you add the option "nosuffix", &lt;getName&gt;, &lt;setName&gt; and &lt;putName&gt; have the identical name - only &lt;gadName&gt;.</p>
 <p>The first group is used for sending by default. If you want to send to a different group, you have to address it. E.g: <code>set &lt;name&gt; &lt;gadName&gt; &lt;value&gt; </code></p>
-<p>Without further attributes, all incoming and outgoing messages are in addition copied into reading &lt;state&gt;.</p>
+<p>Without additional attributes, all incoming and outgoing messages are in addition copied into reading &lt;state&gt;.</p>
 <p>If enabled, the module <a href="#autocreate">autocreate</a> is creating a new definition for any unknown group-address. However, the new device will be disabled
  until you added a DPT to the definition and clear the disabled attribute. The name will be KNX_nnmmooo where nn is the line adress, mm the area and ooo the device.
  No FileLog or SVG definition is created for KNX-devices by autocreate. Use for example <code>define &lt;name&gt; FileLog &lt;filename&gt; KNX_.*</code> 
@@ -2021,13 +2015,13 @@ If you add the option "nosuffix", &lt;getName&gt;, &lt;setName&gt; and &lt;putNa
 
 <p>Examples:</p>
 <ul>
-<code>define lamp1 KNX 0/10/11:dpt1:listenonly</code><br/>
+<code>define lamp1 KNX 0/10/11:dpt1</code><br/>
 <code>attr lamp1 webCmd on:off</code><br/>
-<code>attr lamp1 devStateIcon on::off off::on</code><br/>
+<code>attr lamp1 devStateIcon on:li_wht_on:off off:li_wht_off:on</code><br/>
 <br/>
-<code>define lamp2 KNX 0/10/12:dpt1:steuern 0/10/13:dpt1.001:status</code><br/>
+<code>define lamp2 KNX 0/10/12:dpt1:steuern:set 0/10/13:dpt1.001:status:listenonly</code><br/>
 <br/>
-<code>define lamp3 KNX 00A0D:dpt1.003</code><br/>
+<code>define lamp3 KNX 00A0D:dpt1.001</code><br/>
 </ul>
 
 <a id="KNX-set"></a>
@@ -2046,17 +2040,17 @@ If you add the option "nosuffix", &lt;getName&gt;, &lt;setName&gt; and &lt;putNa
 <ul>
 <code>set lamp2 on # gadName omitted</code><br/>
 <code>set lamp2 off # gadName omitted</code><br/>
-<code>set lamp2 g1 on</code><br/>
-<code>set lamp2 g1 off</code><br/>
-<code>set lamp2 g1 on-for-timer 10</code><br/>
-<code>set lamp2 g1 on-until 13:15:00</code><br/>
-<code>set lamp3 steuern on-until 13:15:00</code><br/>
-<code>set lamp3 steuern toogle    # lamp3 change state</code><br/>
-<code>set lamp3 steuern blink 2 4 # lamp3 on for 4 seconds, off for 4 seconds, 2 repeats</code><br/>
+<code>set lamp2 steuern on</code><br/>
+<code>set lamp2 steuern off</code><br/>
+<code>set lamp2 steuern on-for-timer 10</code><br/>
+<code>set lamp2 steuern on-until 13:15:00</code><br/>
+<code>set lamp3 g1 on-until 13:15:00</code><br/>
+<code>set lamp3 g1 toogle    # lamp3 change state</code><br/>
+<code>set lamp3 g1 blink 2 4 # lamp3 on for 4 seconds, off for 4 seconds, 2 repeats</code><br/>
 <br/>
 <code>set myThermoDev g1 23.44</code><br/>
 <br/>
-<code>set myMessageDev g1 Hallo Welt # dpt16 def</code><br/>
+<code>set myMessageDev g1 Hello World! # dpt16 def</code><br/>
 <p><b>More complex examples </b>can be found on the (german) <a href="http://www.fhemwiki.de/wiki/KNX_Device_Definition_-_Beispiele">Wiki</a></p>
 </ul>
 
@@ -2285,19 +2279,27 @@ The result of the "get" cmd  will be stored in the respective readings - same as
 Returns number of "get's" issued.<br/>
 <br/>Examples:
 <pre>
-<code>KNX_scan()                    - scan all possible devices</code>
-<code>KNX_scan('dev-A')             - scan device-A only</code>
-<code>KNX_scan('dev-A,dev-B,dev-C') - scan device-A, device-B, device-C</code>
-<code>KNX_scan('room=Kueche')       - scan all KNX-devices in room Kueche</code>
-<code>{KNX_scan('device')}          - syntax when used from FHEM-cmdline</code>
-<code>knxscan device                - syntax when used from FHEM-cmdline via cmd-alias definition, see below</code>
+<code>syntax when used as perl-function (eg. in at, notify,...)</code>
+<code>   KNX_scan()                    - scan all possible devices</code>
+<code>   KNX_scan('dev-A')             - scan device-A only</code>
+<code>   KNX_scan('dev-A,dev-B,dev-C') - scan device-A, device-B, device-C</code>
+<code>   KNX_scan('room=Kueche')       - scan all KNX-devices in room Kueche</code>
+<code>   KNX_scan('EG_.*')             - scan all KNX-devices where device-names begin with EG_</code> 
+<code>syntax when used from FHEM-cmdline</code>
+<code>   KNX_scan                      - scan all possible devices</code>
+<code>   KNX_scan dev-A                - scan device-A only</code>
+<code>   KNX_scan dev-A,dev-B,dev-C    - scan device-A, device-B, device-C</code>
+<code>   KNX_scan room=Kueche          - scan all KNX-devices in room Kueche</code>
+<code>   KNX_scan EG_.*                - scan all KNX-devices where device-names begin with EG_</code>
 </pre>
-When using KNX_scan() or any 'set|get &lt;device&gt; ...' in a global:INITIALIZED notify, pls. ensure to have some delay in processing the cmd's by using <b>fhem sleep</b>.
+When using KNX_scan or any 'set or get &lt;device&gt; ...' in a global:INITIALIZED notify, pls. ensure to have some delay in processing the cmd's by using <b>fhem sleep</b>.
 <br/>Example:<br/>
-<code>defmod initialized_nf notify global:INITIALIZED sleep 10 quiet;; set KNX_date now;; set KNX_time now;; {KNX_scan();;}</code>
+<code>defmod initialized_nf notify global:INITIALIZED sleep 10 quiet;; set KNX_date now;; set KNX_time now;; KNX_scan;;</code>
 <br/>This avoids sending requests while the KNX-Gateway has not finished its initial handshake-procedure with FHEM (the KNX-IO-device).  
+<!--
 <br/><br/>If you want to use this function as a FHEM cmd, define a cmdalias-device, e.g:<br/>
 <code>defmod cmd_KNXscan cmdalias knxscan .* AS { my $res = KNX_scan($EVTPART0);; return 'Number of GAs scanned: '. $res;; }</code>
+-->
 <br/>
 </li>
 </ul>

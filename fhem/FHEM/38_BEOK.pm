@@ -1,6 +1,6 @@
 ################################################################
 #
-#  $Id: 38_BEOK.pm 24877 2021-08-26 18:03:14Z Wzut $
+#  $Id: 38_BEOK.pm 27280 2023-02-28 09:35:15Z Wzut $
 #
 #  (c) 2019 Copyright: Wzut
 #  All rights reserved
@@ -140,7 +140,7 @@ sub Define {
     $hash->{ERRORCOUNT}  = 0;
     $hash->{weekprofile} = 'none';
     $hash->{'skipError'} = 0;
-    $hash->{SVN}         = (qw($Id: 38_BEOK.pm 24877 2021-08-26 18:03:14Z Wzut $))[2];
+    $hash->{SVN}         = (qw($Id: 38_BEOK.pm 27280 2023-02-28 09:35:15Z Wzut $))[2];
 
     # wird mit dem ersten Full Status überschrieben
     $hash->{helper}{temp_manual} = 0;
@@ -947,9 +947,12 @@ sub UpdateStatus {
 
 sub getCipher {
 
-  my $hash = shift;
+    my $hash = shift;
+    # Version von Crypt::CBC feststellen , Forum -> https://forum.fhem.de/index.php/topic,80703.msg1264423.html#msg1264423
+    # THX to clumsy
+    my $version = $Crypt::CBC::VERSION // 2;
 
-  return Crypt::CBC->new(
+    return Crypt::CBC->new(
 			-key         => $hash->{'.key'},
 			-cipher      => 'Crypt::OpenSSL::AES',
 			-header      => 'none',
@@ -957,7 +960,17 @@ sub getCipher {
 			-literal_key => 1,
 			-keysize     => 16,
 			-padding     => 'space'
-			);
+			) if ($version < 3);
+
+    return Crypt::CBC->new(
+                        -pass        => $hash->{'.key'},
+                        -cipher      => 'Crypt::OpenSSL::AES',
+                        -header      => 'none',
+                        -iv          => $hash->{'.iv'},
+                        -pbkdf       => 'none',
+                        -keysize     => 16,
+                        -padding     => 'none'
+                        ) ;
 }
 
 sub send_packet {

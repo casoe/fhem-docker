@@ -1,5 +1,5 @@
 ###############################################################################
-# $Id: 75_MSG.pm 26965 2023-01-05 06:32:17Z CoolTux $
+# $Id: 75_MSG.pm 27086 2023-01-19 19:51:21Z CoolTux $
 #
 #TODO
 # - be able to use type "default" to let read from attr
@@ -1244,7 +1244,7 @@ m/^@?([A-Za-z0-9._]+):([A-Za-z0-9._\-\/@+]*):?([A-Za-z0-9._\-\/@+]*)$/
                         foreach my $gatewayDev ( split /,/, $gatewayDevOr ) {
 
                             if ( $gatewayDev =~
-m/^@?([A-Za-z0-9._]+):([A-Za-z0-9._\-\/@+]*):?([A-Za-z0-9._\-\/@+]*)$/
+m/^@?([A-Za-z0-9._]+):([A-Za-z0-9._\-\/@+\#]*):?([A-Za-z0-9._\-\/@+]*)$/
                               )
                             {
                                 $gatewayDev    = $1;

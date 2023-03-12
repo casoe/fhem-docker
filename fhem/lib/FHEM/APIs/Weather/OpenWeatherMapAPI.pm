@@ -1,4 +1,4 @@
-# $Id: OpenWeatherMapAPI.pm 27004 2023-01-08 16:21:07Z CoolTux $
+# $Id: OpenWeatherMapAPI.pm 27146 2023-01-29 15:27:02Z CoolTux $
 ###############################################################################
 #
 # Developed with VSCodium and richterger perl plugin
@@ -951,7 +951,7 @@ sub _CallWeatherCallbackFn {
 
     #     print 'Dumperausgabe: ' . Dumper $self;
     ### Aufruf der callbackFn
-    return ::Weather_RetrieveCallbackFn( $self->{devName} );
+    return FHEM::Core::Weather::RetrieveCallbackFn( $self->{devName} );
 }
 
 sub _ErrorHandling {

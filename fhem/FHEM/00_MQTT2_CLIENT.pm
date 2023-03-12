@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 00_MQTT2_CLIENT.pm 26925 2022-12-29 14:37:54Z rudolfkoenig $
+# $Id: 00_MQTT2_CLIENT.pm 27269 2023-02-24 20:13:35Z rudolfkoenig $
 package main;
 
 use strict;
@@ -43,10 +43,12 @@ MQTT2_CLIENT_Initialize($)
     disable:1,0
     disabledForIntervals
     disconnectAfter
+    httpHeader
     ignoreRegexp
     lwt
     lwtRetain
     keepaliveTimeout
+    maxNrConnects
     msgAfterConnect
     msgBeforeDisconnect
     mqttVersion:3.1.1,3.1
@@ -93,6 +95,7 @@ MQTT2_CLIENT_Define($$)
   $hash->{DeviceName} = $host;
   $hash->{clientId} = AttrVal($hash->{NAME}, "clientId", $hash->{NAME});
   $hash->{connecting} = 1;
+  $hash->{nrConnects} = 0;
 
   InternalTimer(1, "MQTT2_CLIENT_connect", $hash, 0); # need attributes
   return undef;
@@ -102,11 +105,23 @@ sub
 MQTT2_CLIENT_connect($)
 {
   my ($hash) = @_;
-  return if($hash->{authError} || AttrVal($hash->{NAME}, "disable", 0));
+  my $me = $hash->{NAME};
+  return if($hash->{authError} || AttrVal($me, "disable", 0));
+  my $mc = AttrVal($me, "maxNrConnects", -1);
+  if($mc ne -1 && $hash->{nrConnects} >= $mc) {
+    Log3 $me, 2, "maxNrConnects ($mc) reached, no more reconnect attemtps";
+    delete($readyfnlist{"$me.".$hash->{DeviceName}}); # Source of retry
+    return;
+  }
   my $disco = (DevIo_getState($hash) eq "disconnected");
   $hash->{connecting} = 1 if($disco && !$hash->{connecting});
   $hash->{nextOpenDelay} = 5;
   $hash->{BUF}="";
+  if($hash->{DeviceName} =~ m/^wss?:/) {
+    $hash->{binary} = 1;
+    $hash->{header}{"Sec-WebSocket-Protocol"} = "mqtt";
+  }
+  $hash->{nrConnects}++;
   return DevIo_OpenDev($hash, $disco, "MQTT2_CLIENT_doinit", sub(){})
                 if($hash->{connecting});
 }
@@ -311,6 +326,14 @@ MQTT2_CLIENT_Attr(@)
     for my $kv (split(" ",$param[0])) {
       my ($k, $v) = split(":", $kv, 2);
       $hash->{sslargs}{$k} = $v;
+    }
+  }
+
+  if($attrName eq "httpHeader") {
+    $hash->{header} = {};
+    for my $kv (split(" ",$param[0])) {
+      my ($k, $v) = split(":", $kv, 2);
+      $hash->{header}{$k} = $v;
     }
   }
 
@@ -618,7 +641,7 @@ MQTT2_CLIENT_send($$;$$)
   }
   return if(!$doSend);
 
-  if($immediate) {
+  if($immediate || $hash->{WEBSOCKET}) {
     DevIo_SimpleWrite($hash, $msg, 0);
   } else {
     addToWritebuffer($hash, $msg, undef, 1); # nolimit
@@ -859,6 +882,15 @@ MQTT2_CLIENT_feedTheList($$$)
       necessary for some MQTT servers in robotic vacuum cleaners.
       </li></br>
 
+    <a id="MQTT2_CLIENT-attr-maxNrConnects"></a>
+    <li>maxNrConnects &lt;number&gt;<br>
+      maximum number of established connections. Useful when experimenting with
+      public server, where repeatedly failing connection attempts lead to
+      temporary suspension of the account. The counter is increased after the
+      TCP connection is established, before the MQTT handshake. Reset the
+      counter with the modify or defmod command.
+      </li></br>
+
     <li><a href="#disable">disable</a><br>
       disable the connection to the server.
       </li><br>
@@ -873,6 +905,13 @@ MQTT2_CLIENT_feedTheList($$$)
       if set, the connection will be closed after &lt;seconds&gt; of
       inactivity, and will be automatically reopened when sending a command.
       </li><br>
+
+    <a id="MQTT2_CLIENT-attr-httpHeader"></a>
+    <li>header<br>
+      a list of space separated tuples of key:value, used to set the HTTP
+      header when MQTT is used over websocket.
+      </li><br>
+
 
     <a id="MQTT2_CLIENT-attr-ignoreRegexp"></a>
     <li>ignoreRegexp<br>

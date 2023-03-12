@@ -1,5 +1,5 @@
 ##############################################
-# $Id: HttpUtils.pm 27022 2023-01-11 07:51:42Z rudolfkoenig $
+# $Id: HttpUtils.pm 27255 2023-02-20 12:21:24Z rudolfkoenig $
 package main;
 
 use strict;
@@ -659,7 +659,12 @@ HttpUtils_Connect2($)
   if(defined($hash->{header})) {
     if( ref($hash->{header}) eq 'HASH' ) {
       $hash->{header} = join("\r\n",
-        map(($_.': '.$hash->{header}{$_}), keys %{$hash->{header}}));
+        map { my $v = $hash->{header}{$_};
+              if($v =~ m/^{.+}$/){ #111959
+                $v = eval $v;
+                Log3 $hash, 1, "$hash->{NAME} httpHeader $v: $@" if($@);
+              }
+              "$_: $v" } keys %{$hash->{header}});
     }
   }
 
@@ -1052,7 +1057,7 @@ HttpUtils_ParseAnswer($)
 #    compress(1)
 #    data("")             # sending data via POST
 #    forceEncoding(undef) # Encode received data with this charset
-#    header("" or {})
+#    header("" or {})     # in the {} form value is evaluated if enclosed in {}
 #    hideurl(0)           # hide the url in the logs
 #    httpversion("1.0")
 #    ignoreredirects(0)

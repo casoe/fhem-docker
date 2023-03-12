@@ -5,7 +5,7 @@
 # e-mail: omega at online dot de
 #
 ##############################################
-# $Id: 02_RSS.pm 25063 2021-10-11 10:55:33Z neubert $
+# $Id: 02_RSS.pm 27258 2023-02-21 06:27:00Z neubert $
 
 package main;
 use strict;
@@ -204,13 +204,15 @@ sub RSS_getURL($) {
 # list all RSS devices
 sub RSS_Overview {
 
-    my ( $name, $url );
+    my ( $name, $url, $alias );
     my $html = RSS_HTMLHead( "RSS Overview", undef ) . "<body>\n";
     foreach my $def ( sort keys %defs ) {
         if ( $defs{$def}{TYPE} eq "RSS" ) {
             $name = $defs{$def}{NAME};
+            $alias = AttrVal($name, 'alias', '');
+            $alias = $alias ne '' ? qq( &#040;$alias&#041;) : '' ;
             $url  = RSS_getURL($name);
-            $html .= "$name<br>\n<ul>";
+            $html .= "$name$alias<br>\n<ul>";
             $html .=
               "<a href='$url/rss/$name.rss' target='_blank' >RSS</a><br>\n";
             $html .=

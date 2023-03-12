@@ -1,4 +1,4 @@
-# $Id: wundergroundAPI.pm 26996 2023-01-07 21:22:20Z CoolTux $
+# $Id: wundergroundAPI.pm 27146 2023-01-29 15:27:02Z CoolTux $
 package FHEM::APIs::Weather::wundergroundAPI;
 use strict;
 use warnings;
@@ -733,7 +733,7 @@ sub _CallWeatherCallbackFn {
     my $self = shift;
 
     #     ## Aufruf der callbackFn
-    return ::Weather_RetrieveCallbackFn( $self->{devName} );
+    return FHEM::Core::Weather::RetrieveCallbackFn( $self->{devName} );
 }
 
 sub _ErrorHandling {

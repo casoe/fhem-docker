@@ -1,5 +1,5 @@
 ########################################################################################################################
-# $Id: 49_SSCamSTRM.pm 27045 2023-01-13 15:41:24Z DS_Starter $
+# $Id: 49_SSCamSTRM.pm 27054 2023-01-14 13:10:58Z DS_Starter $
 #########################################################################################################################
 #       49_SSCamSTRM.pm
 #
@@ -91,6 +91,7 @@ BEGIN {
 
 # Versions History intern
 my %vNotesIntern = (
+  "2.15.4" => "14.01.2023  change ptzButtonSize, ptzButtonSizeFTUI starting with 10 ",
   "2.15.3" => "13.01.2023  change behavior of hideDisplayName, hideDisplayNameFTUI if device is disabled ",
   "2.15.2" => "01.01.2022  minor code change in _setpopupStream ",
   "2.15.1" => "15.10.2021  fix warnings 'my variable masks earlier' ",
@@ -206,8 +207,8 @@ sub Initialize {
                                 "popupWindowSize ".
                                 "popupStreamFW:$fwd ".
                                 "popupStreamTo:OK,1,2,3,4,5,6,7,8,9,10,15,20,25,30,40,50,60 ".
-                                "ptzButtonSize:selectnumbers,50,5,100,0,lin ".
-                                "ptzButtonSizeFTUI:selectnumbers,50,5,200,0,lin ".
+                                "ptzButtonSize:selectnumbers,10,5,100,0,lin ".
+                                "ptzButtonSizeFTUI:selectnumbers,10,5,200,0,lin ".
                                 $readingFnAttributes;
   $hash->{RenameFn}           = \&Rename;
   $hash->{CopyFn}             = \&Copy;
@@ -795,12 +796,12 @@ sub setVersionInfo {
   if($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {
       # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;                                                     # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{SSCamSTRM}{META}}
-      if($modules{$type}{META}{x_version}) {                                                       # {x_version} ( nur gesetzt wenn $Id: 49_SSCamSTRM.pm 27045 2023-01-13 15:41:24Z DS_Starter $ im Kopf komplett! vorhanden )
+      if($modules{$type}{META}{x_version}) {                                                       # {x_version} ( nur gesetzt wenn $Id: 49_SSCamSTRM.pm 27054 2023-01-14 13:10:58Z DS_Starter $ im Kopf komplett! vorhanden )
           $modules{$type}{META}{x_version} =~ s/1\.1\.1/$v/gx;
       } else {
           $modules{$type}{META}{x_version} = $v; 
       }
-      return $@ unless (FHEM::Meta::SetInternals($hash));                                          # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 49_SSCamSTRM.pm 27045 2023-01-13 15:41:24Z DS_Starter $ im Kopf komplett! vorhanden )
+      return $@ unless (FHEM::Meta::SetInternals($hash));                                          # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 49_SSCamSTRM.pm 27054 2023-01-14 13:10:58Z DS_Starter $ im Kopf komplett! vorhanden )
       if(__PACKAGE__ eq "FHEM::$type" || __PACKAGE__ eq $type) {
           # es wird mit Packages gearbeitet -> Perl übliche Modulversion setzen
           # mit {<Modul>->VERSION()} im FHEMWEB kann Modulversion abgefragt werden

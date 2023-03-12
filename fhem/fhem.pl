@@ -4,7 +4,7 @@
 #
 #  Copyright notice
 #
-#  (c) 2005-2022
+#  (c) 2005-2023
 #  Copyright: Rudolf Koenig (rudolf dot koenig at fhem dot de)
 #  All rights reserved
 #
@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 26868 2022-12-18 10:35:06Z rudolfkoenig $
+# $Id: fhem.pl 27302 2023-03-05 17:57:23Z fhemupdate $
 
 
 use strict;
@@ -279,7 +279,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 26868 2022-12-18 10:35:06Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 27302 2023-03-05 17:57:23Z fhemupdate $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -312,7 +312,7 @@ my $readytimeout = ($^O eq "MSWin32") ? 0.1 : 5.0;
 
 $init_done = 0;
 $lastDefChange = 0;
-$featurelevel = 6.1; # see also GlobalAttr
+$featurelevel = 6.2; # see also GlobalAttr
 $numCPUs = `grep -c ^processor /proc/cpuinfo 2>&1` if($^O eq "linux");
 $numCPUs = ($numCPUs && $numCPUs =~ m/(\d+)/ ? $1 : 1);
 
@@ -1022,7 +1022,7 @@ Log3($$$)
   no strict "refs";
   foreach my $li (keys %logInform) {
     if($defs{$li}) {    # Function wont be called for WARNING, don't know why
-      &{$logInform{$li}}($li, "$tim $loglevel : $text");
+      &{$logInform{$li}}($li, "$tim $loglevel: $text");
     } else {
       delete $logInform{$li};
     }
@@ -2918,7 +2918,7 @@ GlobalAttr($$$$)
   if($type eq "del") {
     my %noDel = ( modpath=>1, verbose=>1, logfile=>1, configfile=>1, encoding=>1 );
     return "The global attribute $name cannot be deleted" if($noDel{$name});
-    $featurelevel = 6.1 if($name eq "featurelevel");
+    $featurelevel = 6.2 if($name eq "featurelevel");
     $haveInet6    = 0   if($name eq "useInet6"); # IPv6
     delete($defs{global}{ignoreRegexpObj}) if($name eq "ignoreRegexp");
     return undef;
@@ -3697,7 +3697,9 @@ ResolveDateWildcards($@)
   return $f if($f !~ m/%/);     # Be fast if there is no wildcard
   my $logdir = Logdir();
   $f =~ s/%L/$logdir/g;
-  return strftime($f,@t);
+  my $ret = strftime($f,@t);    # converts from UTF-8 to WideChar
+  $ret = Encode::encode("UTF-8", $ret) if(!$unicodeEncoding);
+  return $ret;
 }
 
 sub

@@ -1,4 +1,4 @@
-# $Id: DarkSkyAPI.pm 27019 2023-01-10 15:22:40Z CoolTux $
+# $Id: DarkSkyAPI.pm 27146 2023-01-29 15:27:02Z CoolTux $
 ###############################################################################
 #
 # Developed with VSCodium and richterger perl plugin
@@ -699,7 +699,7 @@ sub _CallWeatherCallbackFn {
     my $self = shift;
 
     #     ## Aufruf der callbackFn
-    return ::Weather_RetrieveCallbackFn( $self->{devName} );
+    return FHEM::Core::Weather::RetrieveCallbackFn( $self->{devName} );
 }
 
 sub _ErrorHandling {

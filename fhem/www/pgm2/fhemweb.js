@@ -1,6 +1,6 @@
 "use strict";
 var FW_version={};
-FW_version["fhemweb.js"] = "$Id: fhemweb.js 26803 2022-12-06 18:18:56Z rudolfkoenig $";
+FW_version["fhemweb.js"] = "$Id: fhemweb.js 27117 2023-01-25 09:13:32Z rudolfkoenig $";
 
 var FW_serverGenerated;
 var FW_jsLog;
@@ -245,7 +245,7 @@ FW_jqueryReadyFn()
             $(sel).append('<option value="'+attrName+'">'+attrName+'</option>');
           $(sel).val(attrName);
           FW_detailSelect(sel, true);
-          $(sel).trigger("change");
+          $(sel).trigger("change").focus();
         });
     });
 
@@ -1157,7 +1157,8 @@ FW_treeMenu()
         if(!ma[nxt]) {
           $(tr).before("<tr class='menuTree closed level"+i1+"' "+
               "data-mTree='"+lst+"' data-nxt='"+nxt+"'>"+
-              "<td><div><a href='#'>"+ta[i1]+"</a><div></div></div></td></tr>");
+              "<td><div><a href='#' onclick='return false;'>"+ta[i1]+
+                "</a><div></div></div></td></tr>");
         }
         ma[nxt] = true;
         lst = nxt;
