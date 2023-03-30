@@ -1,5 +1,21 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - change:  10_KNX: syntax check on Attr., internal code improvement 
+ - change:  00_KNXIO: rework logging & duplicate msg detection
+ - bugfx: 72_FRITZBOX: Fehler bei leerem Ereignislog FB bereinigt
+ - feature: 72_FRITZBOX: Neu: box_upnp, box_upnp_control_activated
+            box_fon_logNewest
+ - feature: 72_FRITZBOX: Neu: get <name> fritzLog <hash | table> <...>
+            Umbennung von Readings
+            Forum: #topic,118150
+ - bugfix: 98_todoist: title by params 
+ - feature: 72_FRITZBOX: IP/URL um reinen DNS (ohne Domain) erweitert
+ - bugfix:  93_DbRep: fix Perl Warnings
+ - bugfix: 72_FRITZBOX: Pruefung Attr FritzBoxIP um URL erweitert
+                        Umlaute auf HTML Namen umgestellt
+                        get <name> tr064Command gehärtet
+ - bugfix:  93_DBLog: fix using https in configCheck after SVN server change
+ - change: SVN is moved to a new server (same hostname, different IP)
  - bugfix: 72_FRITZBOX: Zeilenumbruch bei Attr entfernt
  - bugfix: 72_FRITZBOX: Fehler bereinigt
  - feature: 72_FRITZBOX: telnet/WEBCM entfernt

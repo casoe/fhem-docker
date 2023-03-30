@@ -1,5 +1,5 @@
 ﻿##############################################
-# $Id: 98_todoist.pm 26953 2023-01-03 12:58:56Z marvin78 $
+# $Id: 98_todoist.pm 27353 2023-03-24 08:12:59Z marvin78 $
 
 
 package main;
@@ -17,7 +17,7 @@ eval "use Date::Parse;1" or $missingModule .= "Date::Parse ";
 
 #######################
 # Global variables
-my $version = "1.3.15";
+my $version = "1.3.18";
 my $apiUrl = "https://api.todoist.com/sync/v9/";
 
 my $srandUsed;
@@ -383,9 +383,10 @@ sub todoist_UpdateTask($$$) {
   my $method;
   my $taskId=0;
   my $title;
+  my $tid;
   
   ## get Task-ID
-  my $tid = @$a[0];
+  $tid = @$a[0];
   
   ## check if ID is todoist ID (ID:.*) or title (TITLE:.*)
   my @temp=split(":",$tid);
@@ -399,7 +400,10 @@ sub todoist_UpdateTask($$$) {
   ## use task content
   elsif (@temp && $temp[0] =~ /title/i) {
     $title = encode_utf8($temp[1]);
-    $title = $h->{"title"} if ($h->{"title"});
+    $taskId = $hash->{helper}{"TITLES"}{$title} if ($hash->{helper}{"TITLES"});
+  }
+  elsif (defined($h->{"title"}) || defined($h->{"TITLE"}) || defined($h->{"Title"})) {
+	$title = $h->{"title"} if ($h->{"title"});
     $title = $h->{"TITLE"} if ($h->{"TITLE"});
     $title = $h->{"Title"} if ($h->{"Title"});
     $taskId = $hash->{helper}{"TITLES"}{$title} if ($hash->{helper}{"TITLES"});
