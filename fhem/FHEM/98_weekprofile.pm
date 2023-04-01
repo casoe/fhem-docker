@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 98_weekprofile.pm 26594 2022-10-26 20:01:40Z Risiko $
+# $Id: 98_weekprofile.pm 27006 2023-01-08 18:50:53Z Risiko $
 #
 # Usage
 #
@@ -1409,6 +1409,9 @@ sub weekprofile_Attr($$$)
 sub weekprofile_createTempMap($;$) {
     my ($hash, $attrMap) = @_;
     my $me = $hash->{NAME};
+    
+    #clear map
+    %{$hash->{TEMPMAP}} = ();
     
     my $tempOn = AttrVal($me,"tempON", undef);
     if (defined($tempOn)) {

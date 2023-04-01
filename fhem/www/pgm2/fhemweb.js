@@ -1,6 +1,6 @@
 "use strict";
 var FW_version={};
-FW_version["fhemweb.js"] = "$Id: fhemweb.js 26617 2022-10-29 11:17:51Z rudolfkoenig $";
+FW_version["fhemweb.js"] = "$Id: fhemweb.js 27117 2023-01-25 09:13:32Z rudolfkoenig $";
 
 var FW_serverGenerated;
 var FW_jsLog;
@@ -245,7 +245,7 @@ FW_jqueryReadyFn()
             $(sel).append('<option value="'+attrName+'">'+attrName+'</option>');
           $(sel).val(attrName);
           FW_detailSelect(sel, true);
-          $(sel).trigger("change");
+          $(sel).trigger("change").focus();
         });
     });
 
@@ -372,6 +372,14 @@ FW_displayHelp(devName, sel, selType, val, group)
         $(sel).closest("div[cmd='"+selType+"']")
            .after('<div class="makeTable" id="devSpecHelp"></div>')
         $("#devSpecHelp").html($(liTag).html());
+        $("#devSpecHelp a").each(function(){ // #130694
+          var href = $(this).attr("href");
+          if(href && href.indexOf("#") == 0) {
+            $(this).attr("target", "_blank");
+            $(this).attr("href",
+                addcsrf(FW_root+"/docs/commandref.html"+$(this).attr("href")));
+          }
+        });
       }
     }
     wb.remove();
@@ -501,7 +509,7 @@ FW_confirmDelete()
     if(!ma || ma.length != 2)
       return;
     FW_removeLink(this);
-    $(this).click(function(e){ FW_delete(ma[1], ma[0]) });
+    $(this).click(function(e){ FW_delete(ma[1], ma[0]); return false; });
   });
 }
 
@@ -509,7 +517,8 @@ function
 FW_renameDevice(dev)
 {
   var div = $("<div>");
-  $(div).html('Rename '+dev+' to:<br><br><input type="text" size="30">');
+  $(div).html('Rename '+dev+
+        ' to:<br><br><input type="text" size="30" value="'+dev+'">');
   $("body").append(div);
 
   $(div).dialog({
@@ -520,7 +529,7 @@ FW_renameDevice(dev)
         var nn = $(div).find("input").val();
         if(!nn.match(/^[a-z0-9._]*$/i))
           return FW_okDialog("Illegal characters in the new name");
-        location.href = addcsrf(FW_root+"?cmd=rename "+dev+" "+nn);
+        location.href=addcsrf(FW_root+"?cmd=rename "+dev+" "+nn+"&detail="+nn);
       }},
       {text:"Cancel", click:doClose} ],
     close: doClose
@@ -870,7 +879,8 @@ FW_inlineModify()       // Do not generate a new HTML page upon pressing modify
     }
     });
 
-  if(!$("body").attr("data-hiddenroom").match(/\binput\b/)) {
+  var hr = $("body").attr("data-hiddenroom");
+  if(!hr || !hr.match(/\binput\b/)) {
     $("table.internals div.dname").each(function(){
       if($(this).text() == "NAME") {
         var dev = $(this).attr("data-name");
@@ -992,12 +1002,17 @@ FW_detLink()
 
     } else if(cmd == "forumCopy") {
       FW_cmd(FW_root+"?cmd=list -r -i "+dev+"&XHR=1", function(data) {
-        var ta = document.createElement("textarea");
+        var ta = document.createElement("textarea"), at="";
+        if(data.length > 50*1000) {
+          data = data.substr(0,50*1000)+
+                  "\n# ... truncated to 50k, original length "+data.length;
+          at = "<br><br>Text truncated to 50k due to forum restrictions.";
+        }
         ta.value = '[code]'+data+'[/code]';
         document.body.appendChild(ta);
         ta.select();
         if(document.execCommand('copy'))
-          FW_okDialog('"forum ready" definition copied to the clipboard.');
+          FW_okDialog('"forum ready" definition copied to the clipboard.'+at);
          else
           FW_okDialog('Could not copy');
         document.body.removeChild(ta);
@@ -1142,7 +1157,8 @@ FW_treeMenu()
         if(!ma[nxt]) {
           $(tr).before("<tr class='menuTree closed level"+i1+"' "+
               "data-mTree='"+lst+"' data-nxt='"+nxt+"'>"+
-              "<td><div><a href='#'>"+ta[i1]+"</a><div></div></div></td></tr>");
+              "<td><div><a href='#' onclick='return false;'>"+ta[i1]+
+                "</a><div></div></div></td></tr>");
         }
         ma[nxt] = true;
         lst = nxt;

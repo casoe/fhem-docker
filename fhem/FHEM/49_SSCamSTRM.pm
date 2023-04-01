@@ -1,9 +1,9 @@
 ########################################################################################################################
-# $Id: 49_SSCamSTRM.pm 25406 2022-01-01 17:39:52Z DS_Starter $
+# $Id: 49_SSCamSTRM.pm 27054 2023-01-14 13:10:58Z DS_Starter $
 #########################################################################################################################
 #       49_SSCamSTRM.pm
 #
-#       (c) 2018-2022 by Heiko Maaz
+#       (c) 2018-2023 by Heiko Maaz
 #       forked from 98_weblink.pm by Rudolf König
 #       e-mail: Heiko dot Maaz at t-online dot de
 #
@@ -91,6 +91,8 @@ BEGIN {
 
 # Versions History intern
 my %vNotesIntern = (
+  "2.15.4" => "14.01.2023  change ptzButtonSize, ptzButtonSizeFTUI starting with 10 ",
+  "2.15.3" => "13.01.2023  change behavior of hideDisplayName, hideDisplayNameFTUI if device is disabled ",
   "2.15.2" => "01.01.2022  minor code change in _setpopupStream ",
   "2.15.1" => "15.10.2021  fix warnings 'my variable masks earlier' ",
   "2.15.0" => "27.09.2021  model lastsnap: add setter snap ",
@@ -205,8 +207,8 @@ sub Initialize {
                                 "popupWindowSize ".
                                 "popupStreamFW:$fwd ".
                                 "popupStreamTo:OK,1,2,3,4,5,6,7,8,9,10,15,20,25,30,40,50,60 ".
-                                "ptzButtonSize:selectnumbers,50,5,100,0,lin ".
-                                "ptzButtonSizeFTUI:selectnumbers,50,5,200,0,lin ".
+                                "ptzButtonSize:selectnumbers,10,5,100,0,lin ".
+                                "ptzButtonSizeFTUI:selectnumbers,10,5,200,0,lin ".
                                 $readingFnAttributes;
   $hash->{RenameFn}           = \&Rename;
   $hash->{CopyFn}             = \&Copy;
@@ -239,8 +241,7 @@ sub Define {
   
   $hash->{HELPER}{MODMETAABSENT} = 1 if($modMetaAbsent);                           # Modul Meta.pm nicht vorhanden
   
-  # Versionsinformationen setzen
-  setVersionInfo($hash);
+  setVersionInfo($hash);                                                           # Versionsinformationen setzen
   
   my @r;
   push @r, "adoptSubset:--reset--" if(IsModelMaster($hash));                       # Init für FTUI Subset wenn benutzt (Attr adoptSubset)
@@ -316,7 +317,7 @@ sub Set {
   }
   else {
       my $as  = "--reset--,".allStreamDevs();
-      my $sd  = AttrVal($name, "adoptSubset", $as);
+      my $sd  = AttrVal($name, 'adoptSubset', $as);
       $sd     =~ s/\s+/#/gx;      
       
       my $rsd = $as;
@@ -584,7 +585,7 @@ sub Get {
  } 
  
  if ($cmd eq "ftui") {
-     return streamAsHtml($hash,"ftui");
+     return streamAsHtml($hash, 'ftui');
  }
  
 return;
@@ -677,21 +678,24 @@ sub FwFn {
   my $ret = "";
   
   if(IsModelMaster($hash) && $clink) {
-      my $alias = AttrVal($name, "alias", $name);                                                         # Linktext als Aliasname oder Devicename setzen
-      my $lang  = AttrVal("global", "language", "EN");
+      my $alias = AttrVal ($name, 'alias', $name);                                                         # Linktext als Aliasname oder Devicename setzen
+      my $lang  = AttrVal ('global', 'language', 'EN');
       my $txt   = "is Streaming master of";
       $txt      = "ist Streaming Master von " if($lang eq "DE");
       my $dlink = "<a href=\"/fhem?detail=$name\">$alias</a> $txt ";
       $dlink    = "$alias $txt " if(AttrVal($name, "noLink", 0));                                         # keine Links im Stream-Dev generieren
-      $ret     .= "<span align=\"center\">$dlink </span>"   if(!AttrVal($name,"hideDisplayName",0));
+      
+      if(!AttrVal ($name, 'hideDisplayName', 0) && !IsDisabled($name)) {
+          $ret .= "<span align=\"center\">$dlink </span>";
+      }
   }
   
   if(IsDisabled($name)) {
-      if(AttrVal($name, "hideDisplayName", 0)) {
-          $ret .= "Stream-device <a href=\"/fhem?detail=$name\">$name</a> is disabled";
+      if(AttrVal($name, 'hideDisplayName', 0)) {
+          $ret .= "Stream-device is disabled";
       } 
       else {
-          $ret .= "<html>Stream-device is disabled</html>";
+          $ret .= "Stream-device <a href=\"/fhem?detail=$name\">$name</a> is disabled";
       } 
   } 
   else {
@@ -699,7 +703,7 @@ sub FwFn {
       $ret .= sDevsWidget($name) if(IsModelMaster($hash)); 
   }
    
-  my $al = AttrVal($name, "autoRefresh", 0);                                                             # Autorefresh nur des aufrufenden FHEMWEB-Devices
+  my $al = AttrVal ($name, 'autoRefresh', 0);                                                             # Autorefresh nur des aufrufenden FHEMWEB-Devices
   
   if($al) {  
       InternalTimer(gettimeofday()+$al, "FHEM::SSCamSTRM::webRefresh", $hash, 0);
@@ -792,12 +796,12 @@ sub setVersionInfo {
   if($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {
       # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;                                                     # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{SSCamSTRM}{META}}
-      if($modules{$type}{META}{x_version}) {                                                       # {x_version} ( nur gesetzt wenn $Id: 49_SSCamSTRM.pm 25406 2022-01-01 17:39:52Z DS_Starter $ im Kopf komplett! vorhanden )
+      if($modules{$type}{META}{x_version}) {                                                       # {x_version} ( nur gesetzt wenn $Id: 49_SSCamSTRM.pm 27054 2023-01-14 13:10:58Z DS_Starter $ im Kopf komplett! vorhanden )
           $modules{$type}{META}{x_version} =~ s/1\.1\.1/$v/gx;
       } else {
           $modules{$type}{META}{x_version} = $v; 
       }
-      return $@ unless (FHEM::Meta::SetInternals($hash));                                          # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 49_SSCamSTRM.pm 25406 2022-01-01 17:39:52Z DS_Starter $ im Kopf komplett! vorhanden )
+      return $@ unless (FHEM::Meta::SetInternals($hash));                                          # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 49_SSCamSTRM.pm 27054 2023-01-14 13:10:58Z DS_Starter $ im Kopf komplett! vorhanden )
       if(__PACKAGE__ eq "FHEM::$type" || __PACKAGE__ eq $type) {
           # es wird mit Packages gearbeitet -> Perl übliche Modulversion setzen
           # mit {<Modul>->VERSION()} im FHEMWEB kann Modulversion abgefragt werden
@@ -821,11 +825,12 @@ sub streamAsHtml {
   
   if($ftui && $ftui eq "ftui") {
       $ftui = 1;
-  } else {
+  } 
+  else {
       $ftui = 0; 
   }
   
-  my $clink = ReadingsVal($name, "clientLink", "");
+  my $clink = ReadingsVal ($name, 'clientLink', '');
   
   explodeLinkData ($hash, $clink, 0);
     
@@ -844,10 +849,14 @@ sub streamAsHtml {
   
   my $ret = "<html>";
   if(IsDisabled($name)) {  
-      if(AttrVal($name,"hideDisplayName",0)) {
-          $ret .= "Stream-device <a href=\"/fhem?detail=$name\">$name</a> is disabled";
-      } else {
+      if (!$ftui && AttrVal ($name, 'hideDisplayName', 0)) {
           $ret .= "Stream-device is disabled";
+      }
+      elsif ($ftui && AttrVal ($name, 'hideDisplayNameFTUI', 0)) {
+          $ret .= "Stream-device is disabled";
+      }  
+      else {
+          $ret .= "Stream-device <a href=\"/fhem?detail=$name\">$name</a> is disabled";
       }
 
   } else {
@@ -976,8 +985,9 @@ sub sDevsWidget {
   my $ret        = "";
   my $cmdAdopt   = "adopt";
   my $as         = "--reset--,".allStreamDevs();
-  my $valAdopts  = AttrVal($name, "adoptSubset", $as);
+  my $valAdopts  = ">blank<,".AttrVal ($name, 'adoptSubset', $as);
   $valAdopts     =~ s/\s+/#/gx;
+  $valAdopts     =~ s/>blank</#/gx;
   
   for my $fn (sort keys %{$data{webCmdFn}}) {
       next if($data{webCmdFn}{$fn} ne "FW_widgetFallbackFn");

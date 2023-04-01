@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 13_KS300.pm 20008 2019-08-17 10:24:14Z rudolfkoenig $
+# $Id: 13_KS300.pm 26863 2022-12-16 13:54:35Z rudolfkoenig $
 #
 # modified: 2014-02-16 - betateilchen
 #           - added new reading for windIndex (bft)
@@ -210,6 +210,7 @@ KS300_Parse($$)
     $v[7] = $a[16];
     $v[8] = $a[17];
     $v[9] = KS300_windIndex($v[2]);
+    $v[4] = -$v[4] if(hex($v[8]) & 8); # Negative temp
 
     my $std = AttrVal($name, "strangeTempDiff", 0);
     if($std) {
@@ -220,8 +221,6 @@ KS300_Parse($$)
       }
     }
     
-    # Negative temp
-    $v[4] = -$v[4] if(hex($v[8]) & 8);
 
     Log3 $def, 4, "KS300 $dev: $msg";
 

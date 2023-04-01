@@ -2,7 +2,7 @@
 #
 # Developed with VSCodium and richterger perl plugin
 #
-#  (c) 2018-2022 Copyright: Marko Oldenburg (fhemdevelopment at cooltux dot net)
+#  (c) 2018-2023 Copyright: Marko Oldenburg (fhemdevelopment at cooltux dot net)
 #  All rights reserved
 #
 #   Special thanks goes to:
@@ -33,7 +33,7 @@
 #  GNU General Public License for more details.
 #
 #
-# $Id: EventProcessingFunctions.pm 26357 2022-08-29 08:57:14Z CoolTux $
+# $Id: EventProcessingFunctions.pm 26950 2023-01-03 07:09:44Z CoolTux $
 #
 ###############################################################################
 
@@ -47,8 +47,8 @@ use utf8;
 
 use Data::Dumper;    #only for Debugging
 
-use FHEM::Automation::ShuttersControl::Helper qw (:ALL);
-use FHEM::Automation::ShuttersControl::Shading qw (:ALL);
+use FHEM::Automation::ShuttersControl::Helper         qw (:ALL);
+use FHEM::Automation::ShuttersControl::Shading        qw (:ALL);
 use FHEM::Automation::ShuttersControl::Rainprotection qw (:ALL);
 
 require Exporter;
@@ -68,7 +68,7 @@ our %EXPORT_TAGS = (
           EventProcessingGeneral
           EventProcessingShutters
           EventProcessingAdvShuttersClose
-          )
+        )
     ],
 );
 
@@ -144,7 +144,7 @@ sub EventProcessingGeneral {
                 |ASC_twilightDevice)
              \s(.*)$}xms
           )
-        {     # wurde den Attributen unserer Rolläden ein Wert zugewiesen ?
+        {    # wurde den Attributen unserer Rolläden ein Wert zugewiesen ?
             FHEM::Automation::ShuttersControl::AddNotifyDev( $hash, $3, $1, $2 )
               if ( $3 ne 'none' );
             ::Log3( $name, 4,

@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_ZWave.pm 25913 2022-04-02 12:14:17Z rudolfkoenig $
+# $Id: 10_ZWave.pm 27158 2023-02-01 15:57:54Z rudolfkoenig $
 # See ZWDongle.pm for inspiration
 package main;
 
@@ -196,7 +196,8 @@ my %zwave_class = (
   METER_TBL_PUSH           => { id => '3e' },
   PREPAYMENT               => { id => '3f' },
   THERMOSTAT_MODE          => { id => '40',
-    set   => { tmOff       => "0100",
+    set   => { thermostatMode => 'ZWave_tmSet("%s")', #112955
+               tmOff       => "0100",
                tmHeating   => "0101",
                tmCooling   => "0102",
                tmAuto      => "0103",
@@ -660,6 +661,9 @@ my %zwave_cmdArgs = (
     rgb          => "colorpicker,RGB",
     configRGBLedColorForTesting => "colorpicker,RGB", # Aeon SmartSwitch 6
     "desired-temp" => "slider,7,1,28,1",
+    thermostatMode => "Off,Heating,Cooling,Auto,Auxiliary,Resume,Fan,Furnace,".
+                      "DryAir,MoistAir,AutoChange,EnergySaveHeating,".
+                      "EnergySaveCooling,Away,FullPower,Manual"
   },
   get => {
   },
@@ -1246,7 +1250,7 @@ ZWave_SCmd($$@)
   if($hash->{secInProgress} && !(@a < 2 || $a[1] eq "?")) {
     my %h = ( T => $type, A => \@a, CL => $hash->{CL} );
     push @{$hash->{secStack}}, \%h;
-    return ($type eq "get" ?
+    return ($type eq "get" && $hash->{CL} ?
             "Secure operation in progress, executing in background" : "");
   }
   return ZWave_Cmd($type, $hash, @a);
@@ -5858,7 +5862,7 @@ ZWave_fhemwebFn($$$$)
    "var zwd='$d', FW_tp='$FW_tp';" . <<'JSEND'
     $(document).ready(function() {
       $("div#ZWHelp").insertBefore("div.makeTable.internals"); // Move
-      $("div.detLink.ZWPepper").insertAfter("div.detLink.devSpecHelp");
+      $("div.detLink.ZWPepper").insertAfter("div#detLink div.detLink:last");
       if(FW_tp) $("div.img.ZWPepper").appendTo("div#menu");
       $("select.set,select.get").each(function(){
         var ss = $(this).get(0);
@@ -6249,6 +6253,32 @@ ZWave_entryControlParse($$)
   $data = pack("H*", $data) if($dt eq "ASCII");
 
   return "entry_control:sequence $seq dataType $dt eventType $et data $data"
+}
+
+sub
+ZWave_tmSet($)
+{
+  my ($p) = @_;
+  my %par = (
+     Off       => "0100",
+     Heating   => "0101",
+     Cooling   => "0102",
+     Auto      => "0103",
+     Auxiliary => "0104",
+     Resume    => "0105",
+     Fan       => "0106",
+     Furnace   => "0107",
+     DryAir    => "0108",
+     MoistAir  => "0109",
+     AutoChange=> "010a",
+     EnergySaveHeating => "010b",
+     EnergySaveCooling => "010c",
+     Away      => "010d",
+     FullPower => "010f",
+     Manual    => "011f" 
+  );
+  return ("", $par{$p}) if($par{$p});
+  return "Unknown parameter $p";
 }
 1;
 
@@ -6817,6 +6847,10 @@ ZWave_entryControlParse($$)
   <li>tmFullPower</li>
   <li>tmManual<br>
     set the thermostat mode.</li>
+  <li>thermostatMode {Off|Heating|Cooling|...}<br>
+    just like the above, but in combination with the setReadingOnAck ZWDongle
+    attribute it produces an easier way to check the current state.
+    </li>
 
   <br><br><b>Class THERMOSTAT_SETPOINT</b>
   <li>setpointHeating value<br>

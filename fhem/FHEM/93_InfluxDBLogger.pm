@@ -1,4 +1,4 @@
-﻿# $Id: 93_InfluxDBLogger.pm 25650 2022-02-07 19:39:46Z timmib $
+﻿# $Id: 93_InfluxDBLogger.pm 27204 2023-02-11 20:33:46Z timmib $
 # 93_InfluxDBLogger.pm
 #
 package main;
@@ -372,7 +372,7 @@ sub InfluxDBLogger_Map($$$$)
     }
 
     $map->{$deviceName}->{$readingName}->{"value"} = $readingValue;
-    $map->{$deviceName}->{$readingName}->{"numeric"} = $readingValue =~ /^[0-9,.E-]+$/;
+    $map->{$deviceName}->{$readingName}->{"numeric"} = $readingValue =~ /^[-+]?[0-9]*[\.\,]?[0-9]+([eE][-+]?[0-9]+)?$/;
 }
 sub InfluxDBLogger_HttpCallback($$$)
 {

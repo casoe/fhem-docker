@@ -1,5 +1,5 @@
 ﻿##############################################
-# $Id: 98_livetracking.pm 26280 2022-08-02 16:04:23Z moises $$$ 2018-11-01
+# $Id: 98_livetracking.pm 26834 2022-12-10 23:57:20Z moises $$$ 2018-11-01
 #
 #  98_livetracking.pm
 #
@@ -195,7 +195,7 @@ sub livetracking_Set($$@) {
   elsif($command eq "BootstrapLife360")
   {
     $hash->{helper}{life360_script} = "";
-    $hash->{helper}{life360_secret} = "";
+    #$hash->{helper}{life360_secret} = "";
     $hash->{helper}{life360_token} = "";
     livetracking_BootstrapLife360($hash);
   }
@@ -414,7 +414,7 @@ sub livetracking_GetLife360($) {
   my $circle = $attr{$name}{life360_circle};
   my $userid = $attr{$name}{life360_userid};
 
-  my $url = "https://www.life360.com/v3/circles/".$circle."/members/".$userid."/history?time=".int($lastupdate);
+  my $url = "https://api-cloudfront.life360.com/v3/circles/".$circle."/members/history";
 
     HttpUtils_NonblockingGet({
       url => $url,
@@ -493,6 +493,7 @@ sub livetracking_ParseLife360($$) {
 
   foreach my $dataset (reverse(@{$json->{locations}}))
   {
+    next if($dataset->{userId} ne $attr{$name}{life360_userid});
     next if(!defined($dataset->{latitude}));
 
     if(defined($dataset->{battery}) && defined($dataset->{endTimestamp}))
@@ -502,6 +503,7 @@ sub livetracking_ParseLife360($$) {
       $tst = $dataset->{endTimestamp};
     }
 
+    $lastreading = 0 if($dataset->{endTimestamp} && $lastreading < $dataset->{endTimestamp});
     next if($lastreading > $dataset->{startTimestamp});
 
     Log3 ($name, 6, "$name new l360 data: /n".Dumper($dataset));
@@ -566,6 +568,12 @@ sub livetracking_ParseLife360($$) {
       readingsBulkUpdate($hash, "batteryState", (int($dataset->{battery}) <= int(AttrVal($name, "batteryWarning" , "20")))?"low":"ok");
       $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{endTimestamp});
       readingsBulkUpdate($hash, "batteryCharge", ($charge == -1)?"unknown":($charge == 1)?"charge":"discharge");
+      $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{endTimestamp});
+    }
+
+    if(defined($dataset->{wifiState}))
+    {
+      readingsBulkUpdate($hash, "connection", (($dataset->{wifiState})?'wifi':'mobile'));
       $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($dataset->{endTimestamp});
     }
 
@@ -1081,43 +1089,61 @@ sub livetracking_BootstrapLife360($)
     return undef;
   }
 
-  if(!defined($hash->{helper}{life360_script}) or $hash->{helper}{life360_script} eq "")
-  {
-    my $url = "https://www.life360.com/circles/#/";
-
-    HttpUtils_NonblockingGet({
-      url => $url,
-      noshutdown => 1,
-      hash => $hash,
-      type => 'scriptdata',
-      callback => \&livetracking_bootstrap,
-    });
-    return undef;
-  }
-
-  if(!defined($hash->{helper}{life360_secret}) or $hash->{helper}{life360_secret} eq "")
-  {
-    my $url = "https://www.life360.com/circles/scripts/".$hash->{helper}{life360_script}.".scripts.js";
-
-    HttpUtils_NonblockingGet({
-      url => $url,
-      noshutdown => 1,
-      hash => $hash,
-      type => 'secretdata',
-      callback => \&livetracking_bootstrap,
-    });
-    return undef;
-  }
+  # if(!defined($hash->{helper}{life360_script}) or $hash->{helper}{life360_script} eq "")
+  # {
+  #   my $url = "https://api-cloudfront.life360.com/circles/#/";
+  #
+  #   HttpUtils_NonblockingGet({
+  #     url => $url,
+  #     noshutdown => 1,
+  #     hash => $hash,
+  #     type => 'scriptdata',
+  #     callback => \&livetracking_bootstrap,
+  #   });
+  #   return undef;
+  # }
+  #
+  # if(!defined($hash->{helper}{life360_secret}) or $hash->{helper}{life360_secret} eq "")
+  # {
+  #   my $url = "https://www.life360.com/circles/scripts/".$hash->{helper}{life360_script}.".scripts.js";
+  #
+  #   HttpUtils_NonblockingGet({
+  #     url => $url,
+  #     noshutdown => 1,
+  #     hash => $hash,
+  #     type => 'secretdata',
+  #     callback => \&livetracking_bootstrap,
+  #   });
+  #   return undef;
+  # }
+  #
+  # if(!defined($hash->{helper}{life360_token}) or !defined($attr{$name}{life360_userid}) or $hash->{helper}{life360_token} eq "" or $attr{$name}{life360_userid} eq "")
+  # {
+  #   my $url = "https://www.life360.com/v3/oauth2/token.json";
+  #
+  #   HttpUtils_NonblockingGet({
+  #     url => $url,
+  #     method => "POST",
+  #     header => "Content-Type: application/x-www-form-urlencoded\r\nAuthorization: Basic ".$hash->{helper}{life360_secret},
+  #     data => "countryCode=1&password=".uri_escape($hash->{helper}{life360_pass})."&username=".uri_escape($hash->{helper}{life360_user})."&persist=true&grant_type=password",
+  #     noshutdown => 1,
+  #     hash => $hash,
+  #     type => 'tokendata',
+  #     callback => \&livetracking_bootstrap,
+  #   });
+  #
+  #   return undef;
+  # }
 
   if(!defined($hash->{helper}{life360_token}) or !defined($attr{$name}{life360_userid}) or $hash->{helper}{life360_token} eq "" or $attr{$name}{life360_userid} eq "")
   {
-    my $url = "https://www.life360.com/v3/oauth2/token.json";
+    my $url = "https://api-cloudfront.life360.com/v3/oauth2/token.json";
 
     HttpUtils_NonblockingGet({
       url => $url,
       method => "POST",
-      header => "Content-Type: application/x-www-form-urlencoded\r\nAuthorization: Basic ".$hash->{helper}{life360_secret},
-      data => "countryCode=1&password=".uri_escape($hash->{helper}{life360_pass})."&username=".uri_escape($hash->{helper}{life360_user})."&persist=true&grant_type=password",
+      header => "Content-Type: application/json\r\nAuthorization: Basic YnJ1czR0ZXZhcHV0UmVadWNydUJSVXdVYnJFTUVDN1VYZTJlUEhhYjpSdUt1cHJBQ3JhbWVzV1UydVRyZVF1bXVtYTdhemFtQQ==",
+      data => '{"username":"'.$hash->{helper}{life360_user}.'","password":"'.$hash->{helper}{life360_pass}.'","grant_type":"password","countryCode":1}',
       noshutdown => 1,
       hash => $hash,
       type => 'tokendata',
@@ -1129,7 +1155,7 @@ sub livetracking_BootstrapLife360($)
 
   if(!defined($attr{$name}{life360_circle}) or $attr{$name}{life360_circle} eq "")
   {
-    my $url = "https://www.life360.com/v3/circles";
+    my $url = "https://api-cloudfront.life360.com/v3/circles";
 
     HttpUtils_NonblockingGet({
       url => $url,
@@ -1161,27 +1187,28 @@ sub livetracking_bootstrap($$$)
     Log3 $name, 5, "$name: $data";
 
 
-    if( $param->{type} eq 'scriptdata' )
-    {
-      if ($data =~ /\bscripts\/\b(.*?)\b.scripts.js\b/)
-      {
-        $hash->{helper}{life360_script} = $1;
-        Log3 $name, 4, "$name: life360 script ".$hash->{helper}{life360_script};
-        InternalTimer( gettimeofday() + 1, "livetracking_BootstrapLife360", $hash, 0);
-      }
-      return undef;
-    }
-    elsif( $param->{type} eq 'secretdata' )
-    {
-      if ($data =~ /CLIENT_SECRET = "(.*?)";/)
-      {
-        $hash->{helper}{life360_secret} = $1;
-        Log3 $name, 4, "$name: life360 secret ".$hash->{helper}{life360_secret};
-        InternalTimer( gettimeofday() + 1, "livetracking_BootstrapLife360", $hash, 0);
-      }
-      return undef;
-    }
-    elsif( $param->{type} eq 'tokendata' )
+    # if( $param->{type} eq 'scriptdata' )
+    # {
+    #   if ($data =~ /\bscripts\/\b(.*?)\b.scripts.js\b/)
+    #   {
+    #     $hash->{helper}{life360_script} = $1;
+    #     Log3 $name, 4, "$name: life360 script ".$hash->{helper}{life360_script};
+    #     InternalTimer( gettimeofday() + 1, "livetracking_BootstrapLife360", $hash, 0);
+    #   }
+    #   return undef;
+    # }
+    # elsif( $param->{type} eq 'secretdata' )
+    # {
+    #   if ($data =~ /CLIENT_SECRET = "(.*?)";/)
+    #   {
+    #     $hash->{helper}{life360_secret} = $1;
+    #     Log3 $name, 4, "$name: life360 secret ".$hash->{helper}{life360_secret};
+    #     InternalTimer( gettimeofday() + 1, "livetracking_BootstrapLife360", $hash, 0);
+    #   }
+    #   return undef;
+    # }
+    #els
+    if( $param->{type} eq 'tokendata' )
     {
       my $json = eval { JSON->new->utf8(0)->decode($data) };
       if($@)
@@ -1211,7 +1238,7 @@ sub livetracking_bootstrap($$$)
       foreach my $dataset (@{$json->{circles}})
       {
         Log3 $name, 5, "$name: Life360 Circle: ".$dataset->{name}.", ID: ".$dataset->{id};
-        my $url = "https://www.life360.com/v3/circles/".$dataset->{id};
+        my $url = "https://api-cloudfront.life360.com/v3/circles/".$dataset->{id};
 
         HttpUtils_NonblockingGet({
           url => $url,

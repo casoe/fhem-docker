@@ -1,5 +1,5 @@
 #########################################################################
-# $Id: 98_vitoconnect.pm 25061 2021-10-10 14:13:07Z andreas13 $
+# $Id: 98_vitoconnect.pm 26738 2022-11-23 00:22:25Z mcp $
 # fhem Modul für Viessmann API. Based on investigation of "thetrueavatar"
 # (https://github.com/thetrueavatar/Viessmann-Api)
 #
@@ -1529,6 +1529,8 @@ sub vitoconnect_getCodeCallback {
         readingsSingleUpdate( $hash, "state",
             "Login failure. Check password and apiKey", 1 );
         Log3 $name, 1, "$name - Login failure. Check password and apiKey";
+        InternalTimer( gettimeofday() + $hash->{intervall},
+            "vitoconnect_GetUpdate", $hash );	# Forum: #880
     }
     return;
 }

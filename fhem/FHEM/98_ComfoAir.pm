@@ -1,5 +1,5 @@
 ##########################################################################
-# $Id: 98_ComfoAir.pm 24283 2021-04-19 17:29:06Z StefanStrobel $
+# $Id: 98_ComfoAir.pm 27160 2023-02-01 19:05:36Z StefanStrobel $
 #
 # fhem Modul für ComfoAir Lüftungsanlagen von Zehnder mit 
 # serieller Schnittstelle (RS232) sowie dazu kompatible Anlagen wie 
@@ -368,7 +368,7 @@ sub Initialize {
         'queueDelay ' .
         'timeout ' .
         'queueMax ' . 
-        'alignTime' .
+        'alignTime ' .
         join (" ", @pollList) . " " .                               # Def der zyklisch abzufragenden Nachrichten
         $main::readingFnAttributes;
     return;
@@ -827,9 +827,11 @@ sub ReadyFn {
 
     # This is relevant for windows/USB only
     my $po = $hash->{USBDev};
-    my ($BlockingFlags, $InBytes, $OutBytes, $ErrorFlags) = $po->status;
-  
-    return ($InBytes>0);
+    if ($po) {
+        my ($BlockingFlags, $InBytes, $OutBytes, $ErrorFlags) = $po->status;
+        return ($InBytes>0);
+    }
+    return;
 }
 
 

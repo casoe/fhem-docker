@@ -1,4 +1,4 @@
-# $Id: 98_configdb.pm 26446 2022-09-26 08:03:12Z betateilchen $
+# $Id: 98_configdb.pm 27183 2023-02-05 17:31:57Z betateilchen $
 #
 
 package main;
@@ -21,8 +21,24 @@ sub configdb_Initialize {
   $cmds{configdb} = \%hash;
 }
 
+
+
 sub CommandConfigdb {
 	my ($cl, $param) = @_;
+
+	sub makeFilename{
+		my $f = shift;
+		my $filename = "";
+		$f =~ s/^["']//; # fix pah strange ideas
+		$f =~ s/["']$//; # dto.
+		if($f =~ m,^[./],) {
+			$filename = $f;
+		} else {
+			$filename  = $attr{global}{modpath};
+			$filename .= "/$f";
+		}
+		return $filename;
+	}
 
 	my @a = split("[ \t][ \t]*", $param);
 	my ($cmd, $param1, $param2) = @a;
@@ -88,13 +104,7 @@ sub CommandConfigdb {
 
 		when ('filedelete') {
 			return "\n Syntax: configdb filedelete <pathToFile>" if @a != 2;
-			my $filename;
-			if($param1 =~ m,^[./],) {
-				$filename = $param1;
-			} else {
-				$filename  = $attr{global}{modpath};
-				$filename .= "/$param1";
-			}
+			my $filename = makeFilename($param1);
 			$ret  = "File $filename ";
 			$ret .= defined(_cfgDB_Filedelete($filename)) ? "deleted from" : "not found in";
 			$ret .= " database.";
@@ -103,13 +113,7 @@ sub CommandConfigdb {
 		when ('fileexport') {
 			return "\n Syntax: configdb fileexport <pathToFile>" if @a != 2;
 			if ($param1 ne 'all') {
-				my $filename;
-				if($param1 =~ m,^[./],) {
-					$filename = $param1;
-				} else {
-					$filename  = $attr{global}{modpath};
-					$filename .= "/$param1";
-				}
+				my $filename = makeFilename($param1);
 				$ret = _cfgDB_Fileexport $filename;
 			} else { # start export all
 				my $flist    = _cfgDB_Filelist(1);
@@ -128,13 +132,7 @@ sub CommandConfigdb {
 
 		when ('fileimport') {
 			return "\n Syntax: configdb fileimport <pathToFile>" if @a != 2;
-			my $filename;
-			if($param1 =~ m,^[./],) {
-				$filename = $param1;
-			} else {
-				$filename  = $attr{global}{modpath};
-				$filename .= "/$param1";
-			}
+			my $filename = makeFilename($param1);
 			if ( -r $filename ) {
 				my $filesize = -s $filename;
 				$ret = _cfgDB_binFileimport($filename,$filesize);
@@ -151,13 +149,7 @@ sub CommandConfigdb {
 
 		when ('filemove') {
 			return "\n Syntax: configdb filemove <pathToFile>" if @a != 2;
-			my $filename;
-			if($param1 =~ m,^[./],) {
-				$filename = $param1;
-			} else {
-				$filename  = $attr{global}{modpath};
-				$filename .= "/$param1";
-			}
+			my $filename = makeFilename($param1);
 			if ( -r $filename ) {
 				my $filesize = -s $filename;
 				$ret  = _cfgDB_binFileimport ($filename,$filesize,1);
@@ -177,8 +169,9 @@ sub CommandConfigdb {
 		}
 
 		when ('info') {
+			my $raw = lc($param1) eq 'raw' ? 1 : 0;
 			Log3('configdb', 4, "info requested.");
-			$ret = _cfgDB_Info('$Id: 98_configdb.pm 26446 2022-09-26 08:03:12Z betateilchen $');
+			$ret = _cfgDB_Info('$Id: 98_configdb.pm 27183 2023-02-05 17:31:57Z betateilchen $',$raw);
 		}
 
 		when ('list') {
@@ -192,6 +185,7 @@ sub CommandConfigdb {
 
 		when ('migrate') {
 			return "\n Migration not possible. Already running with configDB!" if $configfile eq 'configDB';
+			$data{cfgDB_debug} = 1 if (lc($param1) eq 'debug');
 			Log3('configdb', 4, "configdb: migration requested.");
 			$ret = _cfgDB_Migrate;
 		}
@@ -209,6 +203,15 @@ sub CommandConfigdb {
 				unless looks_like_number($param1);
 			Log3('configdb', 4, "configdb: recover for version $param1 requested.");
 			$ret = _cfgDB_Recover($param1);
+		}
+
+		when ('renum') {
+			Log3('configdb', 4, "configdb: renum requested for device: $param1.");
+			return "Unknown device $param1" if !defined $defs{$param1};
+			my $oldnum = $defs{$param1}{NR};
+			$defs{$param1}{NR} = 2;
+			$ret  = "configdb: renum requested for device: $param1 \n";
+			$ret .= "use 'save config' and 'shutdown restart' to make changes persistant.";
 		}
 
 		when ('reorg') {
@@ -530,8 +533,9 @@ compare device: telnetPort in current version 0 (left) to version: 1 (right)
 			<br/>
 <br/>
 
-		<li><code>configdb info</code></li><br/>
+		<li><code>configdb info [raw]</code></li><br/>
 			Returns some database statistics<br/>
+			if optional "raw" selected, version infos will be returned as json"<br/>
 <pre>
 --------------------------------------------------------------------------------
  configDB Database Information

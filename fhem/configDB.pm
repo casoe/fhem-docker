@@ -1,4 +1,4 @@
-# $Id: configDB.pm 26522 2022-10-11 13:45:39Z betateilchen $
+# $Id: configDB.pm 27183 2023-02-05 17:31:57Z betateilchen $
 
 =for comment (License)
 
@@ -179,6 +179,8 @@
 # 2022-03-14 - fixed     statefile problems with POSTGRESQL
 # 2022-08-06 - added     attribute shortinfo for use with configdb info
 # 2022-08-07 - added     log a message if more than 20 versions stored
+#
+# 2022-12-06 - added     add raw json output in configdb info
 #
 ##############################################################################
 =cut
@@ -523,6 +525,7 @@ sub cfgDB_SaveCfg { ## prototype used in fhem.pl
 	$t = localtime;
 	$out = "#created $t";
 	push @rowList, $out;
+    Debug "\n".join("\n",@rowList) if defined($data{cfgDB_debug});
     return @rowList if defined($data{cfgDB_rawList});
 
 # Insert @rowList into database table
@@ -689,7 +692,7 @@ sub cfgDB_MigrationImport {
 
 # return SVN Id, called by fhem's CommandVersion
 sub cfgDB_svnId { 
-	return "# ".'$Id: configDB.pm 26522 2022-10-11 13:45:39Z betateilchen $' 
+	return "# ".'$Id: configDB.pm 27183 2023-02-05 17:31:57Z betateilchen $' 
 }
 
 # return filelist depending on directory and regexp
@@ -749,6 +752,7 @@ sub _cfgDB_Connect {
 # add configuration entry into fhemconfig
 sub _cfgDB_InsertLine {
 	my ($fhem_dbh, $uuid, $line, $counter) = @_;
+	Log 0, "configDB: $line" if defined($data{cfgDB_debug});
 	my ($c,$d,$p1,$p2) = split(/ /, $line, 4);
 	my $sth = $fhem_dbh->prepare('INSERT INTO fhemconfig values (?, ?, ?, ?, ?, ?)');
 	$sth->execute($c, $d, $p1, $p2, $counter, $uuid);
@@ -913,8 +917,9 @@ sub _cfgDB_Migrate {
 
 # show database statistics
 sub _cfgDB_Info {
-	my ($info2) = @_;
+	my ($info2,$raw) = @_;
 	$info2 //= 'unknown';
+	$raw //= 0;
 	my ($l, @r, $f);
 	for my $i (1..65){ $l .= '-';}
 
@@ -942,7 +947,7 @@ sub _cfgDB_Info {
 	push @r, $l;
 	push @r, " loaded:       ".$configDB{loaded};
 	my $fhem_dbh = _cfgDB_Connect;
-	my ($sql, $sth, @line, $row);
+	my ($sql, $sth, @line, $row, $countDef, $countAttr, @raw);
 
 # read versions table statistics
 
@@ -963,13 +968,13 @@ sub _cfgDB_Info {
 		$sth = $fhem_dbh->prepare( $sql );
 		$sth->execute();
 		while (@line = $sth->fetchrow_array()) {
-			$line[3] = "" unless defined $line[3];
-			$row	 = " Ver $line[6] saved: $line[1] $line[2] $line[3] def: ".
-					$fhem_dbh->selectrow_array("SELECT COUNT(*) from fhemconfig where COMMAND = 'define' and VERSIONUUID = '$line[5]'");
-			$row	.= " attr: ".
-					$fhem_dbh->selectrow_array("SELECT COUNT(*) from fhemconfig where COMMAND = 'attr' and VERSIONUUID = '$line[5]'");
-			$row    .= " tag: ".$line[8] if $line[8];
+			$line[3]   = "" unless defined $line[3];
+			$countDef  = $fhem_dbh->selectrow_array("SELECT COUNT(*) from fhemconfig where COMMAND = 'define' and VERSIONUUID = '$line[5]'");
+			$countAttr = $fhem_dbh->selectrow_array("SELECT COUNT(*) from fhemconfig where COMMAND = 'attr' and VERSIONUUID = '$line[5]'");
+			$row  = " Ver $line[6] saved: $line[1] $line[2] $line[3] def: $countDef attr: $countAttr";
+			$row .= " tag: ".$line[8] if $line[8];
 			push @r, $row;
+			push @raw, {version => $line[6], saved => "$line[1] $line[2] $line[3]", def => $countDef, attr => $countAttr};
 		}
     } else {
     	my $count;
@@ -987,9 +992,9 @@ sub _cfgDB_Info {
 	$row = " filesave: $count file$f stored in database";
 	push @r, $row;
 	push @r, $l;
-
 	$fhem_dbh->disconnect();
 
+	return toJSON \@raw if $raw;
 	return join("\n", @r);
 }
 

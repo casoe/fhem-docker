@@ -1,4 +1,4 @@
-# $Id: 55_InfoPanel.pm 23677 2021-02-04 20:02:42Z betateilchen $
+# $Id: 55_InfoPanel.pm 27257 2023-02-20 19:21:25Z betateilchen $
 
 =for comment
 ##############################################
@@ -61,7 +61,7 @@
 # 2016-09-04 - 12114 - added:   movecalculated
 #
 # 2018-05-06 - 16695 - changed: check plotName exists
-# 2018-05-28 - $Rev: 23677 $ - changed: remove misleading link in commandref
+# 2018-05-28 - $Rev: 27257 $ - changed: remove misleading link in commandref
 #
 ##############################################
 =cut
@@ -1471,8 +1471,10 @@ sub btIP_Overview {
   foreach my $def (sort keys %defs) {
     if($defs{$def}{TYPE} eq "InfoPanel") {
         $name= $defs{$def}{NAME};
+        my $alias = ' ('.AttrVal($name,'alias','').')';
+        $alias = '' if $alias eq ' ()';
         $url= btIP_getURL();
-        $html.= "$name<br>\n<ul>";
+        $html.= "$name$alias<br>\n<ul>";
         $html.= "<a href='$url/btip/$name.html' target='_blank'>HTML</a><br>\n";
         $html.= "</ul>\n<p>\n";
         }

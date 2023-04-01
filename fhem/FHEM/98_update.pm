@@ -1,5 +1,5 @@
 ################################################################
-# $Id: 98_update.pm 25724 2022-02-21 17:12:17Z rudolfkoenig $
+# $Id: 98_update.pm 26986 2023-01-06 17:15:47Z rudolfkoenig $
 
 package main;
 use strict;
@@ -249,6 +249,7 @@ doUpdate($$$$)
   my ($basePath, $ctrlFileName);
   $src =~ s'^http://fhem\.de'https://fhem.de' if($upd_hasSSL);
   $src =~ s'^https://'http://' if(!$upd_wantSSL);
+  uLog 1, "";
   uLog 1, "Downloading $src";
   if($src !~ m,^(.*)/([^/]*)$,) {
     uLog 1, "Cannot parse $src, probably not a valid http control file";
@@ -271,7 +272,6 @@ doUpdate($$$$)
   }
 
   if($max != 1) {
-    uLog 1, "";
     uLog 1, $srcName;
   }
 

@@ -1,5 +1,5 @@
 "use strict";
-// $Id: fhemdoc_modular.js 24575 2021-06-03 09:52:42Z rudolfkoenig $
+// $Id: fhemdoc_modular.js 27337 2023-03-17 16:44:19Z rudolfkoenig $
 
 var fd_loadedHash={}, fd_loadedList=[], fd_all={}, fd_allCnt, fd_progress=0, 
     fd_lang, fd_offsets=[], fd_scrolled=0, fd_modLinks={}, csrfToken="X",
@@ -103,7 +103,7 @@ loadOneDoc(mname, lang)
     ret = ret.replace(/Keine deutsche Hilfe gefunden!<br\/>/,'');
     ret = '<div id="FD_'+mname+'">'+ret+'</div>';
     ret = ret.replace(/target="_blank"/g, '');  // revert help URL rewrite
-    ret = ret.replace(/href=".*?commandref.*?.html#/g, 'href="#');
+    ret = ret.replace(/href="[^"]*commandref[^"]*.html#/g, 'href="#');
 
     if(fd_loadedHash[mname])
       $("div#FD_"+mname).remove();
@@ -204,7 +204,6 @@ fd_csrfRefresh(callback)
 {
   if(fd_mode != "FHEM")
     return;
-  console.log("fd_csrfRefresh");
   $.ajax({
     url:location.pathname.replace(/docs.*/,'')+"?XHR=1",
     success: function(data, textStatus, request){
@@ -265,8 +264,15 @@ $(document).ready(function(){
   for(var i1 in fd_otherSrc)
     fd_modLinks[i1] = fd_otherSrc[i1];
 
-  if(location.hash && location.hash.length > 1)
-    loadOneDoc(location.hash.substr(1), fd_lang);
+  if(location.hash && location.hash.length > 1) {
+    var h = location.hash.substr(1);
+    var m = h.match(/(.*)(&fwcsrf=.*)$/);
+    if(m) {
+      h = m[1];
+      csrfToken = m[2];
+    }
+    loadOneDoc(h, fd_lang);
+  }
 
   $(window).bind('hashchange', function() {
     if(location.hash.length > 1)

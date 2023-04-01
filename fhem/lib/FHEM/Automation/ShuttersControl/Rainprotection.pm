@@ -2,7 +2,7 @@
 #
 # Developed with VSCodium and richterger perl plugin
 #
-#  (c) 2018-2022 Copyright: Marko Oldenburg (fhemdevelopment at cooltux dot net)
+#  (c) 2018-2023 Copyright: Marko Oldenburg (fhemdevelopment at cooltux dot net)
 #  All rights reserved
 #
 #   Special thanks goes to:
@@ -33,7 +33,7 @@
 #  GNU General Public License for more details.
 #
 #
-# $Id: Rainprotection.pm 26357 2022-08-29 08:57:14Z CoolTux $
+# $Id: Rainprotection.pm 26950 2023-01-03 07:09:44Z CoolTux $
 #
 ###############################################################################
 
@@ -57,7 +57,7 @@ our %EXPORT_TAGS = (
     ALL => [
         qw(
           RainProcessing
-          )
+        )
     ],
 );
 

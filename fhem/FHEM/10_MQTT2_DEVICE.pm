@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_MQTT2_DEVICE.pm 26609 2022-10-28 12:19:47Z rudolfkoenig $
+# $Id: 10_MQTT2_DEVICE.pm 26860 2022-12-16 08:13:49Z rudolfkoenig $
 package main;
 
 use strict;
@@ -448,8 +448,8 @@ MQTT2_DEVICE_Attr($$)
     } else {
       my ($a, $h) = parseParams($param); #126679
       foreach my $key (keys %{$h}) {
-        return "$key is not valid, must only contain a-zA-z0-9_"
-                if($key !~ m/[a-z0-9_]/);
+        return "$key is not valid, must only contain a-zA-Z0-9_"
+                if($key !~ m/^[a-zA-Z0-9_]+$/);
       }
       $hash->{".DT"} = $h;
     }

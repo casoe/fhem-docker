@@ -4,7 +4,7 @@
 #
 #  Copyright notice
 #
-#  (c) 2005-2022
+#  (c) 2005-2023
 #  Copyright: Rudolf Koenig (rudolf dot koenig at fhem dot de)
 #  All rights reserved
 #
@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 26608 2022-10-28 12:09:44Z rudolfkoenig $
+# $Id: fhem.pl 27302 2023-03-05 17:57:23Z fhemupdate $
 
 
 use strict;
@@ -219,6 +219,7 @@ sub cfgDB_FileWrite;
 # ShutdownFn-called before shutdown, if DelayedShutdownFn is "over"
 # StateFn  - set local info for this device, do not activate anything
 # UndefFn  - clean up (delete timer, close fd), called by delete and rereadcfg
+# prioSave - save the definition at the start, for a small SubProcess
 
 #Special values in %defs:
 # TYPE    - The name of the module it belongs to
@@ -236,6 +237,7 @@ use vars qw($addTimerStacktrace);# set to 1 by fhemdebug
 use vars qw($auth_refresh);
 use vars qw($cmdFromAnalyze);   # used by the warnings-sub
 use vars qw($devcount);         # Maximum device number, used for storing
+use vars qw($devcountPrioSave); # Maximum prioSave device number
 use vars qw($unicodeEncoding);  # internal encoding is unicode (wide character)
 use vars qw($featurelevel); 
 use vars qw($fhemForked);       # 1 in a fhemFork()'ed process, else undef
@@ -277,7 +279,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 26608 2022-10-28 12:09:44Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 27302 2023-03-05 17:57:23Z fhemupdate $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -310,7 +312,7 @@ my $readytimeout = ($^O eq "MSWin32") ? 0.1 : 5.0;
 
 $init_done = 0;
 $lastDefChange = 0;
-$featurelevel = 6.1; # see also GlobalAttr
+$featurelevel = 6.2; # see also GlobalAttr
 $numCPUs = `grep -c ^processor /proc/cpuinfo 2>&1` if($^O eq "linux");
 $numCPUs = ($numCPUs && $numCPUs =~ m/(\d+)/ ? $1 : 1);
 
@@ -1020,7 +1022,7 @@ Log3($$$)
   no strict "refs";
   foreach my $li (keys %logInform) {
     if($defs{$li}) {    # Function wont be called for WARNING, don't know why
-      &{$logInform{$li}}($li, "$tim $loglevel : $text");
+      &{$logInform{$li}}($li, "$tim $loglevel: $text");
     } else {
       delete $logInform{$li};
     }
@@ -2136,7 +2138,9 @@ CommandDefine($$)
   $hash{TYPE}  = $m;
   $hash{STATE} = "???";
   $hash{DEF}   = $a[2] if(int(@a) > 2);
-  $hash{NR}    = $devcount++;
+  #130588: start early after next save, for a small SubProcess size
+  $hash{NR}    = ($modules{$m}{prioSave} && $devcountPrioSave < 30) ? 
+                  $devcountPrioSave++ : $devcount++;
   $hash{CFGFN} = $currcfgfile
         if($currcfgfile ne AttrVal("global", "configfile", "") &&
           !configDBUsed());
@@ -2743,7 +2747,7 @@ CommandReload($$;$)
       $cfgDB = 'X';
     } else {
       # configDB not used and file not found: it's a real error!
-      return "Can't read $file: $!";
+      return "Can't read $file";
     }
   }
 
@@ -2808,6 +2812,8 @@ CommandRename($$)
   return "Invalid characters in name (not A-Za-z0-9._): $new"
                         if(!goodDeviceName($new));
   return "Cannot rename global" if($old eq "global");
+  return "Cannot rename $old from itself"
+        if($cl && $cl->{SNAME} && $cl->{SNAME} eq $old);
 
   %ntfyHash = ();
   $defs{$new} = $defs{$old};
@@ -2912,7 +2918,7 @@ GlobalAttr($$$$)
   if($type eq "del") {
     my %noDel = ( modpath=>1, verbose=>1, logfile=>1, configfile=>1, encoding=>1 );
     return "The global attribute $name cannot be deleted" if($noDel{$name});
-    $featurelevel = 6.1 if($name eq "featurelevel");
+    $featurelevel = 6.2 if($name eq "featurelevel");
     $haveInet6    = 0   if($name eq "useInet6"); # IPv6
     delete($defs{global}{ignoreRegexpObj}) if($name eq "ignoreRegexp");
     return undef;
@@ -3691,7 +3697,9 @@ ResolveDateWildcards($@)
   return $f if($f !~ m/%/);     # Be fast if there is no wildcard
   my $logdir = Logdir();
   $f =~ s/%L/$logdir/g;
-  return strftime($f,@t);
+  my $ret = strftime($f,@t);    # converts from UTF-8 to WideChar
+  $ret = Encode::encode("UTF-8", $ret) if(!$unicodeEncoding);
+  return $ret;
 }
 
 sub
@@ -4029,6 +4037,9 @@ doGlobalDef($)
   CommandAttr(undef, "global verbose 3");
   CommandAttr(undef, "global configfile $arg");
   CommandAttr(undef, "global logfile -");
+
+  $devcountPrioSave = 2;
+  $devcount = 30;
 }
 
 #####################################
@@ -4183,7 +4194,8 @@ Dispatch($$;$$)
     if(defined($h)) {
       foreach my $m (sort keys %{$h}) {
         my ($order, $mname) = split(":", $m);
-        next if($modules{$mname}{LOADED}); # checked in the loop above, #125292
+        next if(!$modules{$mname} ||       # #130952 / FS20V
+                $modules{$mname}{LOADED}); # checked in the loop above, #125292
         if($dmsg =~ m/$h->{$m}/s) {
           if(AttrVal("global", "autoload_undefined_devices", 1)) {
             my $newm = LoadModule($mname);

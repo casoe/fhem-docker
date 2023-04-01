@@ -1,4 +1,4 @@
-# $Id: 31_HUEDevice.pm 26204 2022-07-09 18:04:20Z justme1968 $
+# $Id: 31_HUEDevice.pm 26730 2022-11-21 17:28:03Z justme1968 $
 # "Hue Personal Wireless Lighting" is a trademark owned by Koninklijke Philips Electronics N.V.,
 # see www.meethue.com for more information.
 # I am in no way affiliated with the Philips organization.
@@ -1834,7 +1834,7 @@ HUEDevice_Parse($$)
 
       $hash->{tholddark} = $config->{tholddark} if( defined($config->{tholddark}) );
       $hash->{sensitivity} = $config->{sensitivity} if( defined($config->{sensitivity}) );
-
+      $hash->{ledindication} = $config->{ledindication}?1:0 if( defined($config->{ledindication}) );
 
       $readings{battery} = $config->{battery} if( defined($config->{battery}) );
       $readings{batteryPercent} = $config->{battery} if( defined($config->{battery}) );
