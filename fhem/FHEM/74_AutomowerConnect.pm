@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: 74_AutomowerConnect.pm 27203 2023-02-11 16:44:41Z Ellert $
+# $Id: 74_AutomowerConnect.pm 27448 2023-04-15 17:08:41Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::AutomowerConnect;
-my $cvsid = '$Id: 74_AutomowerConnect.pm 27203 2023-02-11 16:44:41Z Ellert $';
+my $cvsid = '$Id: 74_AutomowerConnect.pm 27448 2023-04-15 17:08:41Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -119,6 +119,7 @@ sub Initialize() {
                         "mowerSchedule:textField-long " .
                         "mowingAreaLimits:textField-long " .
                         "propertyLimits:textField-long " .
+                        "weekdaysToResetWayPoints " .
                         "numberOfWayPointsToDisplay " .
                         $readingFnAttributes;
 
@@ -346,8 +347,6 @@ sub getMowerResponse {
 
         my $storediff = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} - $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp};
         if ($storediff) {
-          # collect timestamps for analysis
-          unshift ( @{ $hash->{helper}{timestamps} }, $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} );
 
           ::FHEM::Devices::AMConnect::Common::AlignArray( $hash );
           ::FHEM::Devices::AMConnect::Common::FW_detailFn_Update ($hash) if (AttrVal($name,'showMap',1));
@@ -424,6 +423,15 @@ sub getMowerResponse {
               $hash->{helper}{statistics}{currentWeekArea} = 0;
 
             }
+
+            #clear position arrays
+            if ( AttrVal( $name, 'weekdaysToResetWayPoints', 1 ) =~ $time[6] ) {
+              
+              $hash->{helper}{areapos} = [];
+              $hash->{helper}{otherpos} = [];
+
+            }
+
           }
         readingsSingleUpdate($hash, 'state', 'connected', 1 );
         
@@ -587,6 +595,19 @@ sub Attr {
     }
 
   ##########
+  } elsif( $attrName eq "weekdaysToResetWayPoints" ) {
+
+    if( $cmd eq "set" ) {
+
+      return "$iam $attrName is invalid enter a combination of weekday numbers <0123456>" unless( $attrVal =~ /0|1|2|3|4|5|6/ );
+      Log3 $name, 3, "$iam $cmd $attrName $attrVal";
+
+    } elsif( $cmd eq "del" ) {
+
+      Log3 $name, 3, "$iam $cmd $attrName and set default to 1";
+
+    }
+  ##########
   } elsif ( $attrName eq 'numberOfWayPointsToDisplay' ) {
     
     my $icurr = @{$hash->{helper}{areapos}};
@@ -736,7 +757,7 @@ __END__
 
 =begin html
 
-<a id="AutomowerConnect"></a>
+<a id="AutomowerConnect" ></a>
 <h3>AutomowerConnect</h3>
 <ul>
   <u><b>FHEM-FORUM:</b></u> <a target="_blank" href="https://forum.fhem.de/index.php/topic,131661.0.html"> AutomowerConnect und AutomowerConnectDevice</a><br>
@@ -888,7 +909,6 @@ __END__
     <li><a id='AutomowerConnect-attr-interval'>interval</a><br>
       <code>attr &lt;name&gt; interval &lt;time in seconds&gt;</code><br>
       Time in seconds that is used to get new data from Husqvarna Cloud. Default: 600</li>
-
     <li><a id='AutomowerConnect-attr-mapImagePath'>mapImagePath</a><br>
       <code>attr &lt;name&gt; mapImagePath &lt;path to image&gt;</code><br>
       Path of a raster image file for an area the mower path has to be drawn to.<br>
@@ -910,7 +930,15 @@ __END__
 
     <li><a id='AutomowerConnect-attr-mapDesignAttributes'>mapDesignAttributes</a><br>
       <code>attr &lt;name&gt; mapDesignAttributes &lt;complete list of design-attributes&gt;</code><br>
-      Load the list of attributes by <code>set &lt;name&gt; defaultDesignAttributesToAttribute</code> to change its values</li>
+      Load the list of attributes by <code>set &lt;name&gt; defaultDesignAttributesToAttribute</code> to change its values. Some default values are 
+      <ul>
+        <li>mower path (activity MOWING): red</li>
+        <li>path in CS (activity CHARGING,PARKED_IN_CS): grey</li>
+        <li>path for interval with error (all activities with error): kind of magenta</li>
+        <li>all other activities: green</li>
+      </ul>
+    </li>
+
 
     <li><a id='AutomowerConnect-attr-mapImageCoordinatesToRegister'>mapImageCoordinatesToRegister</a><br>
       <code>attr &lt;name&gt; mapImageCoordinatesToRegister &lt;upper left longitude&gt;&lt;space&gt;&lt;upper left latitude&gt;&lt;line feed&gt;&lt;lower right longitude&gt;&lt;space&gt;&lt;lower right latitude&gt;</code><br>
@@ -953,7 +981,13 @@ __END__
 
     <li><a id='AutomowerConnect-attr-numberOfWayPointsToDisplay'>numberOfWayPointsToDisplay</a><br>
       <code>attr &lt;name&gt; numberOfWayPointsToDisplay &lt;number of way points&gt;</code><br>
-      Set the number of way points stored and displayed, default 500</li>
+      Set the number of way points stored and displayed, default 5000.
+      While in activity MOWING every 30 s a geo data set is generated.
+      While in activity PARKED_IN_CS/CHARGING every 42 min a geo data set is generated.</li>
+
+    <li><a id='AutomowerConnect-attr-weekdaysToResetWayPoints'>weekdaysToResetWayPoints</a><br>
+      <code>attr &lt;name&gt; weekdaysToResetWayPoints &lt;any combination of weekday numbers from 0123456&gt;</code><br>
+      A combination of weekday numbers when the way point stack will be reset, default 1.</li>
 
      <li><a id='AutomowerConnect-attr-scaleToMeterXY'>scaleToMeterXY</a><br>
       <code>attr &lt;name&gt; scaleToMeterXY &lt;scale factor longitude&gt;&lt;seperator&gt;&lt;scale factor latitude&gt;</code><br>
@@ -1179,7 +1213,14 @@ __END__
 
     <li><a id='AutomowerConnect-attr-mapDesignAttributes'>mapDesignAttributes</a><br>
       <code>attr &lt;name&gt; mapDesignAttributes &lt;complete list of design-attributes&gt;</code><br>
-      Lade die Attributliste mit <code>set &lt;name&gt; defaultDesignAttributesToAttribute</code> um die Werte zu ändern.</li>
+      Lade die Attributliste mit <code>set &lt;name&gt; defaultDesignAttributesToAttribute</code> um die Werte zu ändern. Einige Vorgabewerte:
+      <ul>
+        <li>Pfad beim mähen (Aktivität MOWING): rot</li>
+        <li>In der Ladestation (Aktivität CHARGING,PARKED_IN_CS): grau</li>
+        <li>Pfad eines Intervalls mit Fehler (alle Aktivitäten with error): Eine Art Magenta</li>
+        <li>Pfad aller anderen Aktivitäten: grün</li>
+      </ul>
+    </li>
 
     <li><a id='AutomowerConnect-attr-mapImageCoordinatesToRegister'>mapImageCoordinatesToRegister</a><br>
       <code>attr &lt;name&gt; mapImageCoordinatesToRegister &lt;upper left longitude&gt;&lt;space&gt;&lt;upper left latitude&gt;&lt;line feed&gt;&lt;lower right longitude&gt;&lt;space&gt;&lt;lower right latitude&gt;</code><br>
@@ -1225,7 +1266,12 @@ __END__
 
     <li><a id='AutomowerConnect-attr-numberOfWayPointsToDisplay'>numberOfWayPointsToDisplay</a><br>
       <code>attr &lt;name&gt; numberOfWayPointsToDisplay &lt;number of way points&gt;</code><br>
-      Legt die Anzahl der gespeicherten und und anzuzeigenden Wegpunkte fest, default 500</li>
+      Legt die Anzahl der gespeicherten und und anzuzeigenden Wegpunkte fest, default 5000
+      Während der Aktivität MOWING wird ca. alle 30 s und während PARKED_IN_CS/CHARGING wird alle 42 min ein Geodatensatz erzeugt.</li>
+
+    <li><a id='AutomowerConnect-attr-weekdaysToResetWayPoints'>weekdaysToResetWayPoints</a><br>
+      <code>attr &lt;name&gt; weekdaysToResetWayPoints &lt;any combination of weekday numbers from 0123456&gt;</code><br>
+      Eine Kombination von Wochentagnummern an denen der Wegpunktspeicher gelöscht wird, default 1.</li>
 
      <li><a id='AutomowerConnect-attr-scaleToMeterXY'>scaleToMeterXY</a><br>
       <code>attr &lt;name&gt; scaleToMeterXY &lt;scale factor longitude&gt;&lt;seperator&gt;&lt;scale factor latitude&gt;</code><br>

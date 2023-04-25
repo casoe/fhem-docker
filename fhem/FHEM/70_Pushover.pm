@@ -1,5 +1,5 @@
 ###############################################################################
-# $Id: 70_Pushover.pm 20897 2020-01-06 12:16:20Z loredo $
+# $Id: 70_Pushover.pm 27466 2023-04-20 07:51:19Z rudolfkoenig $
 # https://pushover.net/api
 #
 package main;
@@ -1476,10 +1476,10 @@ sub Pushover_HttpUri ($$;$) {
 
         # replace any URL-encoded \n with their hex equivalent
         # but ignore \\n
-        $v =~ s/(?<!%5c)(%5cn)/%0a/g;
+        $v =~ s/(?<!%5c)(%5cn)/%0a/gi;
 
         # replace any URL-encoded \\n by \n
-        $v =~ s/%5c%5cn/%5cn/g;
+        $v =~ s/%5c%5cn/%5cn/gi;
 
         $uri .= "&" if ($uri);
         $uri .= "$n=$v";

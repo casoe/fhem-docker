@@ -1,5 +1,5 @@
 ################################################################
-# $Id: 98_update.pm 26986 2023-01-06 17:15:47Z rudolfkoenig $
+# $Id: 98_update.pm 27421 2023-04-10 08:27:24Z rudolfkoenig $
 
 package main;
 use strict;
@@ -106,7 +106,7 @@ upd_metainit($)
        Log 1, $msg;
        return $msg;
      }
-     print FH "http://fhem.de/fhemupdate/controls_fhem.txt\n";
+     print FH "https://fhem.de/fhemupdate/controls_fhem.txt\n";
      close(FH);
   }
   return undef;

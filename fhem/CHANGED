@@ -1,8 +1,33 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - bugfix: 72_FRITZBOX: weitere Stabilisierung
+ - feature: 72_FRITZBOX: set <name> reboot
+            Readings für Mobilfunkgeräte als Fall Back
+            attr <name> m3uFileActive <0 | 1>
+ - change:  72_FB_CALLMONITOR: Passwort Sicherheit
+ - feature: 7x_AutomowerConnect(Device): add attribute to determine
+            the days of a week when the way point stack will be reset
+ - bugfix: AutomowerConnectFamily:minor fixes and changes in cref
+ - bugfix: 72_FRITZBOX: kleinere Korrekturen
+ - bugfix: 72_FRITZBOX: TR-064 Problem (topic=133142.0)
+ - bugfix: 72_FRITZBOX: Fehler in Evaluierung RegEx
+ - change: 93_DbRep: diffValue Forum: forum.fhem.de/index.php?msg=1271853 
+ - bugfix: 98_WeekdayTimer: sunday handling in special cases
+ - bugfix: 74_AMADDevice: much more bugfixes
+ - change: Update Synology lib modules
+ - bugfix: 72_FRITZBOX: Fehlerkorrekturen: u.a. Verhalten bei disable
+               feature: attr nonblockingTimeOut <50|75|100|125>
+               feature: fritzLog zusätzlich mit blocking sub (commandRef)
+ - bugfix:  93_DbRep: fix diffValue writeToDB: Fm:#53584.msg1270905#msg1270905
+ - feature: 93_DbRep: diffValue can operate positive and negative differences, 
+                      sqlCmd can execute 'describe' statement
+ - bugfix: 72_FRITZBOX: Fehlerkorrekturen: u.a. fritzLog
+               feature: set name wakeUpCall ... / Attr disableHostIPv4check
+ - change:  93_DBLog: Plot Editor - include functions like delta-h, delta-h
+                      !! setter deleteOldDaysNbl, reduceLogNbl removed !!
  - change:  10_KNX: syntax check on Attr., internal code improvement 
  - change:  00_KNXIO: rework logging & duplicate msg detection
- - bugfx: 72_FRITZBOX: Fehler bei leerem Ereignislog FB bereinigt
+ - bugfix: 72_FRITZBOX: Fehler bei leerem Ereignislog FB bereinigt
  - feature: 72_FRITZBOX: Neu: box_upnp, box_upnp_control_activated
             box_fon_logNewest
  - feature: 72_FRITZBOX: Neu: get <name> fritzLog <hash | table> <...>

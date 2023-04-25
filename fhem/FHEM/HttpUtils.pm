@@ -1,5 +1,5 @@
 ##############################################
-# $Id: HttpUtils.pm 27255 2023-02-20 12:21:24Z rudolfkoenig $
+# $Id: HttpUtils.pm 27406 2023-04-07 16:52:19Z rudolfkoenig $
 package main;
 
 use strict;
@@ -49,7 +49,7 @@ filename2MIMEType($) {
 sub
 urlEncode($) {
   $_= $_[0];
-  s/([\x00-\x2F \x3A-\x40 \x5B-\x60 \x7B-\xFF])/sprintf("%%%02x",ord($1))/eg;
+  s/([\x00-\x2F \x3A-\x40 \x5B-\x60 \x7B-\xFF])/sprintf("%%%02X",ord($1))/eg;
   return $_;
 }
 
@@ -557,6 +557,14 @@ HttpUtils_Connect2NonblockingSSL($$)
     }
 
     $hash->{hu_sslAdded} = $hash->{keepalive} ? 1 : 2;
+
+    Log 4, "alpn_selected:".$hash->{conn}->alpn_selected()
+      if($par->{SSL_alpn_protocols} &&
+         $hash->{conn}->can('alpn_selected'));
+    Log 4, "next_proto_negotiated:".$hash->{conn}->next_proto_negotiated()
+      if($par->{SSL_npn_protocols} &&
+         $hash->{conn}->can('next_proto_negotiated'));
+
     return HttpUtils_Connect2($hash); # Continue with HTML-Processing
   };
 
@@ -608,6 +616,17 @@ HttpUtils_Connect2($)
            (!$hash->{sslargs} || !defined($hash->{sslargs}{SSL_hostname})));
       $par{SSL_verify_mode} = 0
         if(!$hash->{sslargs} || !defined($hash->{sslargs}{SSL_verify_mode}));
+
+      for my $p ("alpn", "npn") { #111959
+        my $n = "SSL_${p}_protocols";
+        next if(!$par{$n});
+        if(IO::Socket::SSL->can("can_${p}")) {
+          my @a = split(",",$par{$n});
+          $par{$n} = \@a;
+        } else {
+          Log 1, "ERROR: the SSL library has no support for $n";
+        }
+      }
 
       return HttpUtils_Connect2NonblockingSSL($hash,\%par)
         if($hash->{callback});

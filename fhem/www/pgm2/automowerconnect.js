@@ -1,5 +1,5 @@
 
-FW_version["automowerconnect.js"] = "$Id: automowerconnect.js 27205 2023-02-11 23:04:14Z Ellert $";
+FW_version["automowerconnect.js"] = "$Id: automowerconnect.js 27444 2023-04-14 08:42:59Z Ellert $";
 
 function AutomowerConnectShowError( ctx, div, dev, picx, picy, errdesc, erray ) {
 //~ log( 'AutomowerConnectShowError: ' + erray[0]+'  '+erray[1]+'  '+erray[2]+'  '+erray[3]+'  '+erray[4]+'  '+erray[5]);
@@ -193,7 +193,7 @@ function AutomowerConnectUpdateDetail (dev, type, imgsrc, picx, picy, csx, csy, 
         // draw area limits
         if ( plixy.length > 0 ) AutomowerConnectLimits( ctx, div, plixy, 'property' );
         // draw scale
-        AutomowerConnectScale( ctx, div, picx, picy, scalx, 'scale' );
+        AutomowerConnectScale( ctx, picx, picy, scalx );
         // draw charging station path
         AutomowerConnectDrawPath ( ctx, div, posc, 'chargingStationPath' );
         // draw path for other activity
@@ -201,7 +201,7 @@ function AutomowerConnectUpdateDetail (dev, type, imgsrc, picx, picy, csx, csy, 
 
       if ( pos.length > 4 ) {
         // draw mowing path
-        var mowpos = pos.slice(4);
+        var mowpos = pos.slice(2);
         AutomowerConnectDrawPath ( ctx, div, mowpos, 'mowingPath' );
 
         // draw start
