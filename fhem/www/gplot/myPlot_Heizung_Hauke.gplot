@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2022-10-31 13:56:47
+# Created by FHEM/98_SVG.pm, 2023-04-28 11:31:15
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -13,8 +13,10 @@ set y2label "Temperature"
 set yrange [9:30]
 set y2range [9:30]
 
-#dblog MQTT2_shellytrv_60A423D7D5F0:tmp_value
-#dblog MQTT2_shellytrv_60A423D7D5F0:thermostats_1_target_t_value
+#dblog MQTT2_shellytrv_60A423D7D5F0:tmp_value:::
+#dblog MQTT2_shellytrv_60A423D7D5F0:thermostats_1_target_t_value:::
+#lp ConstY:20
 
 plot "<IN>" using 1:2 axes x1y1 title 'Temperatur' ls l0 lw 1 with lines,\
-     "<IN>" using 1:2 axes x1y1 title 'Ziel-Temperatur' ls l1 lw 1 with lines
+     "<IN>" using 1:2 axes x1y1 title 'Ziel-Temperatur' ls l1 lw 1 with lines,\
+     "<IN>" using 1:2 axes x1y2 title '20°' ls l7 lw 1 with lines
