@@ -1,5 +1,5 @@
 #############################################
-# $Id: 98_DOIF.pm 27452 2023-04-16 11:34:30Z Damian $
+# $Id: 98_DOIF.pm 27487 2023-04-26 08:04:04Z Damian $
 #
 # This file is part of fhem.
 #
@@ -1313,7 +1313,7 @@ sub ReadingValDoIf
         }
         DOIF_setValue_bar($hash,\%{$hash->{$bartype}{"$name $reading"}{"$num $period"}});
         return (\%{$hash->{$bartype}{"$name $reading"}{"$num $period"}});
-      } elsif ($regExp =~ /^d(\d)?/) {
+      } elsif ($regExp =~ /^d(\d)?$/) {
         my $round=$1;
         $r = ($r =~ /(-?\d+(\.\d+)?)/ ? $1 : 0);
         $r = round ($r,$round) if (defined $round); 
@@ -2291,7 +2291,7 @@ sub ReplaceReadingDoIf
             $hash->{$bartype}{"$name $reading"}{"$num $period"}{timeOffset} = (defined $timeOffset and $timeOffset ne "") ? $timeOffset : 0; 
             DOIF_setValue_bar($hash,\%{$hash->{$bartype}{"$name $reading"}{"$num $period"}},undef,1);            
           }
-        } elsif ($format =~ /^(d[^:]*)(?::(.*))?/) {
+        } elsif ($format =~ /^(d\d?)(?::(.*))?/) {
           $regExp =$1;
           $output=$2;
         }else {
