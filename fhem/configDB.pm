@@ -1,4 +1,4 @@
-# $Id: configDB.pm 27183 2023-02-05 17:31:57Z betateilchen $
+# $Id: configDB.pm 27560 2023-05-12 19:51:55Z betateilchen $
 
 =for comment (License)
 
@@ -551,7 +551,7 @@ sub cfgDB_SaveState {
     # don't write statefile in rescue mode
     return if ($configDB{attr}{rescue} == 1);
 
-    _cfgDB_deleteRF;
+#    _cfgDB_deleteRF;
 
 	$t = localtime;
 	$out = "#$t";
@@ -692,7 +692,7 @@ sub cfgDB_MigrationImport {
 
 # return SVN Id, called by fhem's CommandVersion
 sub cfgDB_svnId { 
-	return "# ".'$Id: configDB.pm 27183 2023-02-05 17:31:57Z betateilchen $' 
+	return "# ".'$Id: configDB.pm 27560 2023-05-12 19:51:55Z betateilchen $' 
 }
 
 # return filelist depending on directory and regexp

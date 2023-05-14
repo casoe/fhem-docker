@@ -1,5 +1,5 @@
 ##############################################
-# $Id: LandroidUtils.pm 27470 2023-04-21 08:48:41Z rudolfkoenig $
+# $Id: LandroidUtils.pm 27555 2023-05-12 08:38:38Z rudolfkoenig $
 use strict;
 use warnings;
 
@@ -256,7 +256,7 @@ Landroid_connect4($)
   $m2c->{DeviceName} = "$m2c->{mqttEndpoint}:443";
   $m2c->{sslargs}{SSL_alpn_protocols} = "mqtt";
   $m2c->{SSL} = 1;
-  $m2c->{devioLoglevel} = AttrVal($m2c_name, "verbose", 4);
+  $m2c->{devioLoglevel} = 4;
 
   my $wxid = ReadingsVal($m2c_name, "wxid", undef);
   if(!defined($wxid)) {

@@ -1,6 +1,24 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
- - bugfix: 72_FRITZBOX: weitere Stabilisierung
+ - feature: AutomowerConnectFamily: set cutting height for user defined zones
+            automatically, code cleaning, some fixes
+ - feature: 72_FRITZBOX: neue Readings:
+            dect<n>_NoRingTime - Ruhezeiten des DECT Telefons <n>
+            dect<n>_NoRingWithNightSetting - Bei aktiver Klingelsperre
+              keine Ereignisse signalisieren für das DECT Telefon <n>
+ - feature: codemirror: code folding added
+ - feature: 72_FRITZBOX: verbose bei SOAP auf 4 gesetzt
+ - feature: AutomowerConnectFamily: enhanced zone statistics
+ - bugfix:  72_FRITZBOX: XML::Simple entfernt
+            wg diverese Inkompatibilitaeten
+ - change:  codemirror updated from 5.22.0 to 5.65.13
+ - bugfix:  72_FRITZBOX: weitere Stabilisierung
+                         TR064 Fehlerhandling
+ - feature: 93_DbLog: new Events FRAME_INITIALIZED, SUBPROC_INITIALIZED, 
+                      SUBPROC_DISCONNECTED, SUBPROC_STOPPED
+                      (Forum: #133403.0)
+ - feature: 48_MieleAtHome: support optional event-api
+ - bugfix:  72_FRITZBOX: weitere Stabilisierung
  - feature: 72_FRITZBOX: neue Readings
             box_dns_Server<n>, box_connection_Type,
             box_last_auth_err, box_mac_Address

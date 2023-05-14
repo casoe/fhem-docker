@@ -1,4 +1,4 @@
-# $Id: 55_InfoPanel.pm 27257 2023-02-20 19:21:25Z betateilchen $
+# $Id: 55_InfoPanel.pm 27558 2023-05-12 14:08:48Z betateilchen $
 
 =for comment
 ##############################################
@@ -58,10 +58,22 @@
 # 2015-03-29 - 8334 - changed: commandref updated
 # 2015-09-25 -      - changed: support ReadingsVal() in ticker
 #                              with \n in text
+#
 # 2016-09-04 - 12114 - added:   movecalculated
+# 2016-11-05 - 12506 - changed: fix perl 5.24 compatibility (each on hash)
+#
+# 2017-01-09 - 13023 - added:   attribute mobileApp
+# 2017-02-19 - 13454 - added:   csrf token (featureLevel 5.8)
+# 2017-12-27 - 15708 - added:   create empty layout file on define if nonexistent
 #
 # 2018-05-06 - 16695 - changed: check plotName exists
-# 2018-05-28 - $Rev: 27257 $ - changed: remove misleading link in commandref
+# 2018-05-28 - 16791 - changed: remove misleading link in commandref
+#
+# 2019-05-30 - 19497 - added:   meta tag to prevent translation popup in google
+#
+# 2023-02-20 - 27257 - added:   show alias in overview
+# 2023-05-12 - 27557 - added:   support for named parameters in define
+#                               for new define syntax
 #
 ##############################################
 =cut
@@ -160,14 +172,19 @@ sub InfoPanel_Initialize {
 
 sub btIP_Define {
   my ($hash, $def) = @_;
-  my @a = split("[ \t]+", $def);
-  return "Usage: define <name> InfoPanel filename"  if(int(@a) != 3);
-  my $name= $a[0];
-  my $filename= $a[2];
-
+  my $name = $hash->{NAME};
   $hash->{NOTIFYDEV} = 'global';
   $hash->{fhem}{div} = '';
-  $hash->{LAYOUTFILE} = $filename;
+
+  my ($unnamedParams,$namedParams) = parseParams($def);
+
+  if ($unnamedParams->[2]) {
+    $hash->{LAYOUTFILE} = $unnamedParams->[2];
+  } elsif ($namedParams->{layout}) {
+    $hash->{LAYOUTFILE} = $namedParams->{layout};
+  } else {
+    return "Usage: define <name> InfoPanel layout=layoutFileName";
+  }
 
   btIP_addExtension("btIP_CGI","btip","InfoPanel");
   btIP_readLayout($hash);
@@ -1529,10 +1546,10 @@ sub btIP_getURL {
 	<a name="InfoPaneldefine"></a>
 	<b>Define</b><br/><br/>
     <ul>
-       <code>define &lt;name&gt; InfoPanel &lt;layoutFileName&gt;</code><br/>
+       <code>define &lt;name&gt; InfoPanel layout=layoutFileName</code><br/>
        <br/>
        Example:<br/><br>
-       <ul><code>define myInfoPanel InfoPanel ./FHEM/panel.layout</code><br/></ul>
+       <ul><code>define myInfoPanel InfoPanel layout=./FHEM/panel.layout</code><br/></ul>
     </ul>
 	<br/><br/>
 

@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: Common.pm 27488 2023-04-26 15:18:56Z Ellert $
+# $Id: Common.pm 27559 2023-05-12 15:03:38Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::Devices::AMConnect::Common;
-my $cvsid = '$Id: Common.pm 27488 2023-04-26 15:18:56Z Ellert $';
+my $cvsid = '$Id: Common.pm 27559 2023-05-12 15:03:38Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -34,7 +34,7 @@ use POSIX;
 use GPUtils qw(:all);
 
 use Time::HiRes qw(gettimeofday);
-use Blocking;
+# use Blocking;
 use Storable qw(dclone retrieve store);
 
 # Import der FHEM Funktionen
@@ -148,19 +148,24 @@ mowingPathLineWidth="1"';
 
 my $mapZonesTpl = '{
   "A_Zone_1" : {
-    "condition"  : "<condition to separate Zone_1 from other zones>"
+    "condition"  : "<condition to separate Zone_1 from other zones>",
+    "cuttingHeight" : "<cutting height for the first zone>"
   },
   "B_Zone_2" : {
-    "condition"  : "<condition to separate Zone_2 from other zones, except myZone_1>"
+    "condition"  : "<condition to separate Zone_2 from other zones, except myZone_1>",
+    "cuttingHeight" : "<cutting height for the second zone>"
   },
   "C_Zone_3" : {
-    "condition"  : "<condition to separate Zone_3 from other zones, except myZone_1 and myZone_2>"
+    "condition"  : "<condition to separate Zone_3 from other zones, except myZone_1 and myZone_2>",
+    "cuttingHeight" : "<cutting height for the third zone>"
   },
   "D_Zone_x" : {
-    "condition"  : "<condition to separate Zone_x from other zones ,except the zones already seperated>"
+    "condition"  : "<condition to separate Zone_x from other zones ,except the zones already seperated>",
+    "cuttingHeight" : "<cutting height for the nth-1 zone>"
   },
   "E_LastZone" : {
-    "condition"  : "Use undef because the last zone remains."
+    "condition"  : "Use undef because the last zone remains.",
+    "cuttingHeight" : "<cutting height for the nth zone>"
   }
 }';
 
@@ -168,7 +173,7 @@ my $mapZonesTpl = '{
   %$hash = (%$hash,
     helper => {
       passObj                   => FHEM::Core::Authentication::Passwords->new($type),
-      interval                  => 600,
+      interval                  => 420,
       client_id                 => $client_id,
       grant_type                => 'client_credentials',
       mowerNumber               => $mowerNumber,
@@ -724,7 +729,7 @@ sub AlignArray {
 
         if ( $act =~ /^(MOWING)$/ && $actold =~ /^(MOWING|LEAVING|PARKED_IN_CS|CHARGING)$/ ) {
 
-          AreaStatistics ( $hash, $tmp, $cnt );
+          AreaStatistics ( $hash, $cnt );
 
         }
 
@@ -733,6 +738,14 @@ sub AlignArray {
 
           $tmp = dclone( \@ar );
           ZoneHandling ( $hash, $tmp, $cnt );
+
+        }
+        # set cutting height per zone
+        if ( AttrVal($name, 'mapZones', 0) && $act =~ /^MOWING$/ && $actold =~ /^MOWING$/
+             && defined( $hash->{helper}{currentZone} ) && defined( $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{cuttingHeight} )) {
+
+          CMD( $hash ,'cuttingHeight', $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{cuttingHeight} )
+               if ( $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{cuttingHeight} != $hash->{helper}{mower}{attributes}{settings}{cuttingHeight} );
 
         }
 
@@ -773,6 +786,7 @@ sub AlignArray {
   return undef;
 
 }
+
 #########################
 sub isErrorThanPrepare {
   my ( $hash, $poshash ) = @_;
@@ -858,8 +872,8 @@ sub ZoneHandling {
 
         }
 
-       $hash->{helper}{mapZones}{$zonekeys[$k]}{zoneCnt}++;
-
+        $hash->{helper}{mapZones}{$zonekeys[$k]}{zoneCnt}++;
+        $hash->{helper}{mapZones}{$zonekeys[$k]}{zoneLength} += calcPathLength( $hash, $i, $i + 1 );
         last;
 
       } elsif ( $k == @zonekeys-2 ) { # last zone
@@ -872,6 +886,7 @@ sub ZoneHandling {
         }
 
         $hash->{helper}{mapZones}{$zonekeys[$k+1]}{zoneCnt}++;
+        $hash->{helper}{mapZones}{$zonekeys[$k+1]}{zoneLength} += calcPathLength( $hash, $i, $i + 1 );
 
       }
 
@@ -880,9 +895,82 @@ sub ZoneHandling {
   }
 
       my $sumDayCnt=0;
-      map { $sumDayCnt += $hash->{helper}{mapZones}{$_}{zoneCnt} } @zonekeys;
-      map { $hash->{helper}{mapZones}{$_}{currentDayCntPct} = sprintf( "%.0f", $hash->{helper}{mapZones}{$_}{zoneCnt} / $sumDayCnt * 100 ) } @zonekeys if ( $sumDayCnt );
-      $hash->{helper}{newzonedatasets} = $cnt;      
+      my $sumDayArea=0;
+
+      map { $sumDayCnt += $hash->{helper}{mapZones}{$_}{zoneCnt};
+            $sumDayArea += $hash->{helper}{mapZones}{$_}{zoneLength};
+      } @zonekeys;
+
+      map { $hash->{helper}{mapZones}{$_}{currentDayCntPct} = ( $sumDayCnt ? sprintf( "%.0f", $hash->{helper}{mapZones}{$_}{zoneCnt} / $sumDayCnt * 100 ) : 0 );
+            $hash->{helper}{mapZones}{$_}{currentDayAreaPct} = ( $sumDayArea ? sprintf( "%.0f", $hash->{helper}{mapZones}{$_}{zoneLength} / $sumDayArea * 100 ) : 0 );
+      } @zonekeys;
+
+      $hash->{helper}{newzonedatasets} = $cnt;
+
+}
+
+#########################
+sub setCuttingHeight {
+  my ( $hash, $poshash, $cnt ) = @_;
+  my $name = $hash->{NAME};
+  my $zone = '';
+  my $nextzone = '';
+  my @pos = @$poshash;
+  my $longitude = 0;
+  my $latitude = 0;
+  my @zonekeys = sort (keys %{$hash->{helper}{mapZones}});
+  my $i = 0;
+  my $k = 0;
+
+  map{ $hash->{helper}{mapZones}{$_}{curZoneCnt} = 0 } @zonekeys;
+
+  for ( $i = 0; $i < $cnt; $i++){
+
+    $longitude = $pos[$i]{longitude};
+    $latitude = $pos[$i]{latitude};
+
+    for ( $k = 0; $k < @zonekeys-1; $k++){
+
+      if ( eval ("$hash->{helper}{mapZones}{$zonekeys[$k]}{condition}") ) {
+
+        if ( $hash->{helper}{mapZones}{$zonekeys[$k]}{curZoneCnt} == $i) { # find current zone and count consecutive way points
+
+          $hash->{helper}{mapZones}{$zonekeys[$k]}{curZoneCnt}++;
+          $hash->{helper}{currentZone} = $zonekeys[$k];
+
+        }
+
+        $hash->{helper}{mapZones}{$zonekeys[$k]}{zoneCnt}++;
+        $hash->{helper}{mapZones}{$zonekeys[$k]}{zoneLength} += calcPathLength( $hash, $i, $i + 1 );
+        last;
+
+      } elsif ( $k == @zonekeys-2 ) { # last zone
+
+        if ( $hash->{helper}{mapZones}{$zonekeys[$k+1]}{curZoneCnt} == $i) { # find current zone and count  consecutive way points
+
+          $hash->{helper}{mapZones}{$zonekeys[$k+1]}{curZoneCnt}++;
+          $hash->{helper}{currentZone} = $zonekeys[$k+1];
+
+        }
+
+        $hash->{helper}{mapZones}{$zonekeys[$k+1]}{zoneCnt}++;
+        $hash->{helper}{mapZones}{$zonekeys[$k+1]}{zoneLength} += calcPathLength( $hash, $i, $i + 1 );
+
+      }
+
+    }
+
+  }
+
+      my $sumDayCnt=0;
+      my $sumDayArea=0;
+      map { $sumDayCnt += $hash->{helper}{mapZones}{$_}{zoneCnt};
+            $hash->{helper}{mapZones}{$_}{currentDayCntPct} = ( $sumDayCnt ? sprintf( "%.0f", $hash->{helper}{mapZones}{$_}{zoneCnt} / $sumDayCnt * 100 ) : 0 );
+            $sumDayArea += $hash->{helper}{mapZones}{$_}{zoneLength};
+            $hash->{helper}{mapZones}{$_}{currentDayAreaPct} = ( $sumDayArea ? sprintf( "%.0f", $hash->{helper}{mapZones}{$_}{zoneLength} / $sumDayArea * 100 ) : 0 );
+      } @zonekeys;
+
+      $hash->{helper}{newzonedatasets} = $cnt;
 
 }
 
@@ -943,23 +1031,30 @@ sub HighlightPath {
 }
 
 #########################
-sub AreaStatistics {
-  my ( $hash, $poshash, $i ) = @_;
+sub calcPathLength {
+  my ( $hash, $istart, $i ) = @_;
   my $name = $hash->{NAME};
-  my $activity = 'MOWING';
   my $k = 0;
   my @xyarr  = @{$hash->{helper}{areapos}};# areapos
   my $n = scalar @xyarr;
   my ($sclon, $sclat) = AttrVal($name,'scaleToMeterXY', $hash->{helper}{scaleToMeterLongitude} . ' ' .$hash->{helper}{scaleToMeterLatitude}) =~ /(-?\d+)\s+(-?\d+)/;
   my $lsum = 0;
-  my $asum = 0;
-  my $vm = 0;
 
-  for ( $k = 0; $k <= $i-1; $k++) {
+  for ( $k = $istart; $k < $i; $k++) {
 
     $lsum += ( ( ( $xyarr[ $k ]{longitude} - $xyarr[ $k+1 ]{longitude} ) * $sclon ) ** 2 + ( ( $xyarr[ $k ]{latitude} - $xyarr[ $k+1 ]{latitude} ) * $sclat ) ** 2 ) ** 0.5 if ( $xyarr[ $k+1 ]{longitude} && $xyarr[ $k+1 ]{latitude} );
 
   }
+  return $lsum;
+}
+
+#########################
+sub AreaStatistics {
+  my ( $hash, $i ) = @_;
+  my $name = $hash->{NAME};
+  my $activity = 'MOWING';
+  my $lsum = calcPathLength( $hash, 0, $i );
+  my $asum = 0;
 
   $asum = $lsum * AttrVal($name,'mowerCuttingWidth',0.24);
   $hash->{helper}{$activity}{track} = $lsum;
@@ -1068,6 +1163,141 @@ sub posMinMax {
 }
 
 #########################
+sub fillReadings {
+  my ( $hash ) = @_;
+  my $name = $hash->{NAME};
+
+  readingsBulkUpdateIfChanged($hash, "batteryPercent", $hash->{helper}{mower}{attributes}{battery}{batteryPercent} ); 
+  my $pref = 'mower';
+  readingsBulkUpdateIfChanged($hash, $pref.'_mode', $hash->{helper}{mower}{attributes}{$pref}{mode} );
+  readingsBulkUpdateIfChanged($hash, $pref.'_activity', $hash->{helper}{mower}{attributes}{$pref}{activity} );
+  readingsBulkUpdateIfChanged($hash, $pref.'_state', $hash->{helper}{mower}{attributes}{$pref}{state} );
+  readingsBulkUpdateIfChanged($hash, $pref.'_commandStatus', 'cleared' );
+
+  if ( AttrVal($name, 'mapZones', 0) && $hash->{helper}{currentZone} && $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{curZoneCnt} ) {
+    my $curZon = $hash->{helper}{currentZone};
+    my $curZonCnt = $hash->{helper}{mapZones}{$curZon}{curZoneCnt};
+    readingsBulkUpdateIfChanged($hash, $pref.'_currentZone', $curZon . '(' . $curZonCnt . '/' . $hash->{helper}{newzonedatasets} . ')' );
+  }
+
+  my $tstamp = $hash->{helper}{mower}{attributes}{$pref}{errorCodeTimestamp};
+  my $timestamp = FmtDateTimeGMT($tstamp/1000);
+  readingsBulkUpdateIfChanged($hash, $pref."_errorCodeTimestamp", $tstamp ? $timestamp : '-' );
+
+  my $errc = $hash->{helper}{mower}{attributes}{$pref}{errorCode};
+  readingsBulkUpdateIfChanged($hash, $pref.'_errorCode', $tstamp ? $errc  : '-');
+
+  my $errd = $errortable->{$errc};
+  readingsBulkUpdateIfChanged($hash, $pref.'_errorDescription', $tstamp ? $errd : '-');
+
+  $pref = 'system';
+  readingsBulkUpdateIfChanged($hash, $pref."_name", $hash->{helper}{mower}{attributes}{$pref}{name} );
+  my $model = $hash->{helper}{mower}{attributes}{$pref}{model};
+  $model =~ s/AUTOMOWER./AM/;
+  $hash->{MODEL} = $model if ( $model && $hash->{MODEL} ne $model );
+  $pref = 'planner';
+  readingsBulkUpdateIfChanged($hash, "planner_restrictedReason", $hash->{helper}{mower}{attributes}{$pref}{restrictedReason} );
+  readingsBulkUpdateIfChanged($hash, "planner_overrideAction", $hash->{helper}{mower}{attributes}{$pref}{override}{action} );
+
+  $tstamp = $hash->{helper}{mower}{attributes}{$pref}{nextStartTimestamp};
+  $timestamp = FmtDateTimeGMT($tstamp/1000);
+  readingsBulkUpdateIfChanged($hash, "planner_nextStart", $tstamp ? $timestamp : '-' );
+
+  $pref = 'statistics';
+  readingsBulkUpdateIfChanged($hash, $pref."_numberOfCollisions", $hash->{helper}->{mower}{attributes}{$pref}{numberOfCollisions} );
+  readingsBulkUpdateIfChanged($hash, $pref."_newGeoDataSets", $hash->{helper}{newdatasets} );
+  $pref = 'settings';
+  readingsBulkUpdateIfChanged($hash, $pref."_headlight", $hash->{helper}->{mower}{attributes}{$pref}{headlight}{mode} );
+  readingsBulkUpdateIfChanged($hash, $pref."_cuttingHeight", $hash->{helper}->{mower}{attributes}{$pref}{cuttingHeight} );
+  $pref = 'status';
+  my $connected = $hash->{helper}{mower}{attributes}{metadata}{connected};
+  readingsBulkUpdateIfChanged($hash, $pref."_connected", ( $connected ? "CONNECTED($connected)"  : "OFFLINE($connected)") );
+
+  my $storediff = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} - $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp};
+  readingsBulkUpdateIfChanged($hash, $pref."_Timestamp", FmtDateTime( $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp}/1000 ));
+  readingsBulkUpdateIfChanged($hash, $pref."_TimestampDiff", $storediff/1000 );
+  readingsBulkUpdateIfChanged($hash, $pref."_TimestampOld", FmtDateTime( $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp}/1000 ));
+
+  return undef;
+}
+
+#########################
+sub calculateStatistics {
+  my ( $hash ) = @_;
+  my $name = $hash->{NAME};
+  my @time = localtime();
+  my $secs = ( $time[2] * 3600 ) + ( $time[1] * 60 ) + $time[0];
+  my $interval = $hash->{helper}->{interval};
+  # do at midnight
+  if ( $secs <= $interval ) {
+
+    $hash->{helper}{statistics}{lastDayTrack} = $hash->{helper}{statistics}{currentDayTrack};
+    $hash->{helper}{statistics}{lastDayArea} = $hash->{helper}{statistics}{currentDayArea};
+    $hash->{helper}{statistics}{currentWeekTrack} += $hash->{helper}{statistics}{currentDayTrack};
+    $hash->{helper}{statistics}{currentWeekArea} += $hash->{helper}{statistics}{currentDayArea};
+    $hash->{helper}{statistics}{currentDayTrack} = 0;
+    $hash->{helper}{statistics}{currentDayArea} = 0;
+
+    if ( AttrVal($name, 'mapZones', 0) && defined( $hash->{helper}{mapZones} ) ) {
+      
+      my @zonekeys = sort (keys %{$hash->{helper}{mapZones}});
+      my $sumCurrentWeekCnt=0;
+      my $sumCurrentWeekArea=0;
+      map { 
+        $hash->{helper}{mapZones}{$_}{currentWeekCnt} += $hash->{helper}{mapZones}{$_}{zoneCnt};
+        $sumCurrentWeekCnt += $hash->{helper}{mapZones}{$_}{currentWeekCnt};
+        $hash->{helper}{mapZones}{$_}{currentWeekArea} += $hash->{helper}{mapZones}{$_}{zoneLength};
+        $sumCurrentWeekArea += $hash->{helper}{mapZones}{$_}{currentWeekArea};
+        $hash->{helper}{mapZones}{$_}{zoneCnt} = 0;
+        $hash->{helper}{mapZones}{$_}{zoneLength} = 0;
+      } @zonekeys;
+
+      map { 
+        $hash->{helper}{mapZones}{$_}{lastDayCntPct} = $hash->{helper}{mapZones}{$_}{currentDayCntPct};
+        $hash->{helper}{mapZones}{$_}{currentWeekCntPct} = ( $sumCurrentWeekCnt ? sprintf( "%.0f", $hash->{helper}{mapZones}{$_}{currentWeekCnt} / $sumCurrentWeekCnt * 100 ) : '' );
+        $hash->{helper}{mapZones}{$_}{lastDayAreaPct} = $hash->{helper}{mapZones}{$_}{currentDayAreaPct};
+        $hash->{helper}{mapZones}{$_}{currentWeekAreaPct} = ( $sumCurrentWeekArea ? sprintf( "%.0f", $hash->{helper}{mapZones}{$_}{currentWeekArea} / $sumCurrentWeekArea * 100 ) : '' );
+        $hash->{helper}{mapZones}{$_}{currentDayCntPct} = '';
+        $hash->{helper}{mapZones}{$_}{currentDayAreaPct} = '';
+      } @zonekeys;
+
+    }
+    # do on days
+    if ( $time[6] == 1 ) {
+
+      $hash->{helper}{statistics}{lastWeekTrack} = $hash->{helper}{statistics}{currentWeekTrack};
+      $hash->{helper}{statistics}{lastWeekArea} = $hash->{helper}{statistics}{currentWeekArea};
+      $hash->{helper}{statistics}{currentWeekTrack} = 0;
+      $hash->{helper}{statistics}{currentWeekArea} = 0;
+
+      if ( AttrVal($name, 'mapZones', 0) && defined( $hash->{helper}{mapZones} ) ) {
+
+        my @zonekeys = sort (keys %{$hash->{helper}{mapZones}});
+        map { 
+          $hash->{helper}{mapZones}{$_}{lastWeekCntPct} = $hash->{helper}{mapZones}{$_}{currentWeekCntPct};
+          $hash->{helper}{mapZones}{$_}{lastWeekAreaPct} = $hash->{helper}{mapZones}{$_}{currentWeekAreaPct};
+          $hash->{helper}{mapZones}{$_}{currentWeekCntPct} = '';
+          $hash->{helper}{mapZones}{$_}{currentWeekAreaPct} = '';
+        } @zonekeys;
+
+      }
+
+    }
+
+    #clear position arrays
+    if ( AttrVal( $name, 'weekdaysToResetWayPoints', 1 ) =~ $time[6] ) {
+      
+      $hash->{helper}{areapos} = [];
+      $hash->{helper}{otherpos} = [];
+
+    }
+
+  }
+
+  return undef;
+}
+
+#########################
 sub listStatisticsData {
   my ( $hash ) = @_;
   if ( $::init_done && $hash->{helper}{statistics} ) {
@@ -1081,10 +1311,10 @@ sub listStatisticsData {
     $ret .= '<tr class="col_header"><td> Hash Path </td><td> Value </td><td> Unit </td></tr>';
     $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>numberOfChargingCycles</b>} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{numberOfChargingCycles} . ' </td><td>  </td></tr>';
     $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>numberOfCollisions</b>} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{numberOfCollisions} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalChargingTime</b>} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{totalChargingTime} . ' </td><td> s </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalCuttingTime</b>} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{totalCuttingTime} . ' </td><td> s </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalRunningTime</b>} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{totalRunningTime} . '<sup>1</sup> </td><td> s </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalSearchingTime</b>} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{totalSearchingTime} . ' </td><td> s </td></tr>';
+    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalChargingTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalChargingTime} / 3600 ) . ' </td><td> h </td></tr>';
+    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalCuttingTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalCuttingTime} / 3600 ) . ' </td><td> h </td></tr>';
+    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalRunningTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalRunningTime} / 3600 ) . '<sup>1</sup> </td><td> h </td></tr>';
+    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalSearchingTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalSearchingTime} / 3600 ) . ' </td><td> h </td></tr>';
 
     # $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{currentSpeed} &emsp;</td><td> ' . $hash->{helper}{statistics}{currentSpeed} . ' </td><td> m/s </td></tr>';
     $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentDayTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentDayTrack} ) . ' </td><td> m </td></tr>';
@@ -1125,6 +1355,34 @@ sub listStatisticsData {
 
       $cnt++;
       $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastWeekCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastWeekCntPct} ? $hash->{helper}{mapZones}{$_}{lastWeekCntPct} : '' ). ' </td><td> % </td></tr>';
+
+    }
+
+    for ( @zonekeys ) {
+
+      $cnt++;
+      $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentDayAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentDayAreaPct} ? $hash->{helper}{mapZones}{$_}{currentDayAreaPct} : '' ) . ' </td><td> % </td></tr>';
+
+    }
+
+    for ( @zonekeys ) {
+
+      $cnt++;
+      $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastDayAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastDayAreaPct} ? $hash->{helper}{mapZones}{$_}{lastDayAreaPct} : '' ) . ' </td><td> % </td></tr>';
+
+    }
+
+    for ( @zonekeys ) {
+
+      $cnt++;
+      $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentWeekAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentWeekAreaPct} ? $hash->{helper}{mapZones}{$_}{currentWeekAreaPct} : '' ) . ' </td><td> % </td></tr>';
+
+    }
+
+    for ( @zonekeys ) {
+
+      $cnt++;
+      $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastWeekAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastWeekAreaPct} ? $hash->{helper}{mapZones}{$_}{lastWeekAreaPct} : '' ). ' </td><td> % </td></tr>';
 
     }
 

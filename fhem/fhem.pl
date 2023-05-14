@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 27410 2023-04-07 19:59:43Z rudolfkoenig $
+# $Id: fhem.pl 27498 2023-04-30 08:50:41Z rudolfkoenig $
 
 
 use strict;
@@ -279,7 +279,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 27410 2023-04-07 19:59:43Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 27498 2023-04-30 08:50:41Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -4799,12 +4799,15 @@ setReadingsVal($$$$)
 
   return if($rname eq "IODev" && !fhem_devSupportsAttr($hash->{NAME}, "IODev"));
 
-  if($hash->{".or"} && grep($rname =~ m/^$_$/, @{$hash->{".or"}}) ) {
-    if(defined($hash->{READINGS}{$rname}) && 
-       defined($hash->{READINGS}{$rname}{VAL}) &&
-        $hash->{READINGS}{$rname}{VAL} ne $val ) {
-      $hash->{OLDREADINGS}{$rname}{VAL} = $hash->{READINGS}{$rname}{VAL};
-      $hash->{OLDREADINGS}{$rname}{TIME} = $hash->{READINGS}{$rname}{TIME};
+  my $or = $hash->{".or"};
+  if($or && grep($rname =~ m/^$_$/, @{$or}) ) {
+    my $rd = $hash->{READINGS};
+    if(defined($rd->{$rname}) && 
+       defined($rd->{$rname}{VAL}) &&
+        ($or->[@{$or}-1] eq "oldreadingsAlways" ||
+         $rd->{$rname}{VAL} ne $val) ) {
+      $hash->{OLDREADINGS}{$rname}{VAL} = $rd->{$rname}{VAL};
+      $hash->{OLDREADINGS}{$rname}{TIME} = $rd->{$rname}{TIME};
     }
   }
 
