@@ -1,10 +1,10 @@
-# Created by FHEM/98_SVG.pm, 2023-05-26 13:51:30
+# Created by FHEM/98_SVG.pm, 2023-05-26 13:54:49
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
 set timefmt "%Y-%m-%d_%H:%M:%S"
 set xlabel " "
-set title 'Umwälzpumpe'
+set title 'Poolpumpe'
 set ytics 
 set y2tics 
 set grid ytics
@@ -13,6 +13,6 @@ set y2label ""
 set yrange [0:60]
 set y2range [0:60]
 
-#dblog MQTT2_DVES_4B31BB:power:::
+#dblog MQTT2_shellyplus1pm_4855199ce640:power:::
 
 plot "<IN>" using 1:2 axes x1y1 title 'Watt' ls l0fill lw 1 with steps
