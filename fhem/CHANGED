@@ -1,5 +1,32 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - feature:  76_SMAInverter: add new Inverter (STP X, SI x.xM-13),
+                    add String 3 for STP X
+ - feature:  76_SMAInverter: add new Readings 
+                    (GeneralOperatingStatus, OperatingStatus, BACKRELAYRELAY)
+ - change: 76_SMAInverter: changed some read call (Hybridinverter)
+ - feature: 93_DbLog: write cachefile while Server shutdown if database isn't 
+                      available, Forum: #133599
+ - change:  00_KNXIO: multiple changes, see Forum #127792
+ - change:  10_KNX: multiple changes, see Forum #122582
+ - change:  74_AutomowerConnect: Common.pm, automowerconnect.js
+            use of websocket for realtime events, more at 
+            https://forum.fhem.de/index.php?topic=131661.msg1276678#msg1276678
+ - change:  50_SSChatBot: compatibility to DSM starting with DSM 7.2 RC, 
+                          Forum: https://forum.fhem.de/index.php?msg=1276303
+ - change:  75_AutomowerConnectDevice: deleted,
+               change definition to AutomowerConnect before updating, 
+               use different application key each definition
+ - change:  50_SSChatBot: support of loglevel in HttpUtils
+ - change:  75_AutomowerConnectDevice: last revision, declared deprecated
+            will be removed soon, change definition to AutomowerConnect
+            use different application key
+ - change:  74_AutomowerConnect: Common.pm remove attr mowerActivityToHighLight
+            extend design attributes, automowerconnect.js enhanced highlighting
+ - change:  93_DbRep: attr executeBeforeProc, executeAfterProc can execute 
+                      FHEM commands as well as PERL code
+ - bugfix:  82_LGTV_WebOS: fix little typos and change version
+ - change:  93_DBLog: changed default splitting, Forum: #133537
  - feature: AutomowerConnectFamily: set cutting height for user defined zones
             automatically, code cleaning, some fixes
  - feature: 72_FRITZBOX: neue Readings:

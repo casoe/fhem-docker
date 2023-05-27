@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 01_FHEMWEB.pm 27294 2023-03-03 14:34:59Z rudolfkoenig $
+# $Id: 01_FHEMWEB.pm 27566 2023-05-14 08:52:22Z rudolfkoenig $
 package main;
 
 use strict;
@@ -7,7 +7,6 @@ use warnings;
 use TcpServerUtils;
 use HttpUtils;
 use Blocking;
-use Time::HiRes qw(gettimeofday);
 
 #########################
 # Forward declaration
@@ -125,6 +124,7 @@ my $FW_encoding="UTF-8";
 my $FW_styleStamp=time();
 my %FW_svgData;
 my $FW_encodedByPlugin; # unicodeEncoding: data is encoded by plugin
+my $FW_needIsDay;
 
 
 #####################################
@@ -1243,6 +1243,7 @@ FW_dataAttr()
   }
 
   return
+    ($FW_needIsDay ? 'data-isDay="'.(isday()?1:0).'"' : '') .
     addParam($FW_wname, "jsLog", 0).
     addParam($FW_wname, "confirmDelete", 1).
     addParam($FW_wname, "confirmJSError", 1).
@@ -2928,6 +2929,10 @@ FW_Attr(@)
   if($attrName eq "longpoll" && $type eq "set" && $param[0] eq "websocket") {
     return "$devName: Could not load Digest::SHA on startup, no websocket"
         if(!$FW_use{sha});
+  }
+
+  if($attrName eq "styleData" && $type eq "set") {
+     $FW_needIsDay = ($param[0] =~ m/dayNightActive.*true/);
   }
 
   return $retMsg;
