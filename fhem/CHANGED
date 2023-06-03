@@ -1,5 +1,20 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - change:  74_AutomowerConnect: Common.pm, automowerconnect.js
+            shift subs to library, mowing path: display only way point dots
+            alternatively
+ - bugfix:  59_Weather: wunderground API fix lost temperature reading
+ - bugfix:  88_HMCCU: Fixed scaling of non numeric reading values
+ - bugfix:  74_AutomowerConnect: improved background image loading
+            Commandref: Hint to connect application key with Automower Connect
+            API in Developer Portal.
+ - bugfix:  74_AutomowerConnect: prevent division by zero, delay ws init
+            force new access token when set client_secret
+ - change:  74_AutomowerConnect: Common.pm, automowerconnect.js
+            implemented error stack and getter to show
+            show daily collisions, not calculate statistics solved
+            use only differential data to update mower path, hints at
+            https://forum.fhem.de/index.php?topic=131661.msg1277180
  - feature:  76_SMAInverter: add new Inverter (STP X, SI x.xM-13),
                     add String 3 for STP X
  - feature:  76_SMAInverter: add new Readings 

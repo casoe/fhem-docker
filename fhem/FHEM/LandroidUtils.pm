@@ -1,5 +1,5 @@
 ##############################################
-# $Id: LandroidUtils.pm 27555 2023-05-12 08:38:38Z rudolfkoenig $
+# $Id: LandroidUtils.pm 27638 2023-06-01 08:48:22Z frober $
 use strict;
 use warnings;
 
@@ -23,13 +23,13 @@ use warnings;
 my %types = (
    worx => {
 	url => "api.worxlandroid.com",
-	loginUrl => "id.eu.worx.com",
+	loginUrl => "id.worx.com",
 	clientId => "150da4d2-bb44-433b-9429-3773adc70a2a", # OAuth Client ID
 	mqttPrefix => "WX",
     },
     kress => {
 	url => "api.kress-robotik.com",
-	loginUrl => "id.eu.kress.com",
+	loginUrl => "id.kress.com",
 	clientId => "931d4bc4-3192-405a-be78-98e43486dc59",
 	mqttPrefix => "KR",
     },

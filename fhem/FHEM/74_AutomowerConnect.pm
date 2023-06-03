@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: 74_AutomowerConnect.pm 27611 2023-05-23 15:24:21Z Ellert $
+# $Id: 74_AutomowerConnect.pm 27644 2023-06-02 16:49:35Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,58 +25,13 @@
 ################################################################################
 
 package FHEM::AutomowerConnect;
-my $cvsid = '$Id: 74_AutomowerConnect.pm 27611 2023-05-23 15:24:21Z Ellert $';
+our $cvsid = '$Id: 74_AutomowerConnect.pm 27644 2023-06-02 16:49:35Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
 
 # wird für den Import der FHEM Funktionen aus der fhem.pl benötigt
 use GPUtils qw(:all);
-use FHEM::Core::Authentication::Passwords qw(:ALL);
-
-use Time::HiRes qw(gettimeofday);
-use DevIo;
-use Storable qw(dclone retrieve store);
-
-# Import der FHEM Funktionen
-BEGIN {
-    GP_Import(
-        qw(
-          AttrVal
-          CommandAttr
-          CommandDeleteReading
-          FmtDateTime
-          getKeyValue
-          InternalTimer
-          InternalVal
-          IsDisabled
-          Log3
-          Log
-          minNum
-          maxNum
-          readingFnAttributes
-          readingsBeginUpdate
-          readingsBulkUpdate
-          readingsBulkUpdateIfChanged
-          readingsDelete
-          readingsEndUpdate
-          ReadingsNum
-          readingsSingleUpdate
-          ReadingsVal
-          RemoveInternalTimer
-          setKeyValue
-          defs
-          attr
-          modules
-          devspec2array
-          DevIo_IsOpen
-          DevIo_CloseDev
-          DevIo_OpenDev
-          DevIo_SimpleRead
-          DevIo_Ping
-          )
-    );
-}
 
 GP_Export(
     qw(
@@ -84,16 +39,7 @@ GP_Export(
       )
 );
 
-my $missingModul = "";
-
-eval "use JSON;1" or $missingModul .= "JSON ";
-require HttpUtils;
-
 require FHEM::Devices::AMConnect::Common;
-
-use constant AUTHURL => 'https://api.authentication.husqvarnagroup.dev/v1';
-use constant APIURL => 'https://api.amc.husqvarna.dev/v1';
-use constant WSDEVICENAME => 'wss:ws.openapi.husqvarna.dev:443/v1';
 
 ##############################################################
 sub Initialize() {
@@ -103,12 +49,13 @@ sub Initialize() {
   $hash->{GetFn}      = \&FHEM::Devices::AMConnect::Common::Get;
   $hash->{UndefFn}    = \&FHEM::Devices::AMConnect::Common::Undefine;
   $hash->{DeleteFn}   = \&FHEM::Devices::AMConnect::Common::Delete;
+  $hash->{ShutdownFn} = \&FHEM::Devices::AMConnect::Common::Shutdown;
   $hash->{RenameFn}   = \&FHEM::Devices::AMConnect::Common::Rename;
   $hash->{FW_detailFn}= \&FHEM::Devices::AMConnect::Common::FW_detailFn;
-  $hash->{ReadFn}     = \&wsRead; 
-  $hash->{ReadyFn}    = \&wsReady;
-  $hash->{SetFn}      = \&Set;
-  $hash->{AttrFn}     = \&Attr;
+  $hash->{ReadFn}     = \&FHEM::Devices::AMConnect::Common::wsRead; 
+  $hash->{ReadyFn}    = \&FHEM::Devices::AMConnect::Common::wsReady;
+  $hash->{SetFn}      = \&FHEM::Devices::AMConnect::Common::Set;
+  $hash->{AttrFn}     = \&FHEM::Devices::AMConnect::Common::Attr;
   $hash->{AttrList}   = "disable:1,0 " .
                         "debug:1,0 " .
                         "disabledForIntervals " .
@@ -130,715 +77,10 @@ sub Initialize() {
                         "propertyLimits:textField-long " .
                         "weekdaysToResetWayPoints " .
                         "numberOfWayPointsToDisplay " .
-                        $readingFnAttributes;
+                        $::readingFnAttributes;
 
   $::data{FWEXT}{AutomowerConnect}{SCRIPT} = "automowerconnect.js";
 
-  return undef;
-}
-
-
-##############################################################
-#
-# API AUTHENTICATION
-#
-##############################################################
-
-sub APIAuth {
-  my ( $hash, $update ) = @_;
-  my $name = $hash->{NAME};
-  my $type = $hash->{TYPE};
-  my $iam = "$type $name APIAuth:";
-  my $interval = $hash->{helper}{interval};
-  ( $hash->{VERSION} ) = $cvsid =~ /\.pm (.*)Z/ if ( !$hash->{VERSION} );
-
-  if ( IsDisabled($name) ) {
-
-    readingsSingleUpdate( $hash,'device_state','disabled',1) if ( ReadingsVal( $name, 'device_state', '' ) ne 'disabled' );
-    RemoveInternalTimer( $hash, \&wsReopen );
-    RemoveInternalTimer( $hash, \&wsKeepAlive );
-    DevIo_CloseDev( $hash ) if ( DevIo_IsOpen( $hash ) );
-    RemoveInternalTimer( $hash, \&APIAuth );
-    InternalTimer( gettimeofday() + $interval, \&APIAuth, $hash, 0 );
-
-    return undef;
-
-  }
-
-  if ( !$update && $::init_done ) {
-
-    if ( ReadingsVal( $name,'.access_token','' ) and gettimeofday() < (ReadingsVal( $name, '.expires', 0 ) - 45 ) ) {
-
-      $hash->{header} = { "Authorization", "Bearer ". ReadingsVal( $name,'.access_token','' ) };
-      readingsSingleUpdate( $hash, 'device_state', 'update', 1 );
-      getMower( $hash );
-
-    } else {
-
-      readingsSingleUpdate( $hash, 'device_state', 'authentification', 1 );
-      RemoveInternalTimer( $hash, \&wsReopen );
-      RemoveInternalTimer( $hash, \&wsKeepAlive );
-      DevIo_CloseDev( $hash ) if ( DevIo_IsOpen( $hash ) );
-      my $client_id = $hash->{helper}->{client_id};
-      my $client_secret = $hash->{helper}->{passObj}->getReadPassword( $name );
-      my $grant_type = $hash->{helper}->{grant_type};
-
-      my $header = "Content-Type: application/x-www-form-urlencoded\r\nAccept: application/json";
-      my $data = 'grant_type=' . $grant_type.'&client_id=' . $client_id . '&client_secret=' . $client_secret;
-      ::HttpUtils_NonblockingGet( {
-        url         => AUTHURL . '/oauth2/token',
-        timeout     => 5,
-        hash        => $hash,
-        method      => 'POST',
-        header      => $header,
-        data        => $data,
-        callback    => \&APIAuthResponse,
-      } );
-    }
-  } else {
-
-    RemoveInternalTimer( $hash, \&APIAuth );
-    InternalTimer( gettimeofday() + 20, \&APIAuth, $hash, 0 );
-
-  }
-  return undef;
-}
-
-#########################
-sub APIAuthResponse {
-  my ($param, $err, $data) = @_;
-  my $hash = $param->{hash};
-  my $name = $hash->{NAME};
-  my $type = $hash->{TYPE};
-  my $statuscode = $param->{code} // '';
-  my $interval = $hash->{helper}{interval};
-  my $iam = "$type $name APIAuthResponse:";
-
-  Log3 $name, 1, "\ndebug $iam \n\$statuscode [$statuscode]\n\$err [$err],\n \$data [$data] \n\$param->url $param->{url}" if ( AttrVal($name, 'debug', '') );
-
-  if( !$err && $statuscode == 200 && $data) {
-
-    my $result = eval { decode_json($data) };
-    if ($@) {
-
-      Log3 $name, 2, "$iam JSON error [ $@ ]";
-      readingsSingleUpdate( $hash, 'device_state', 'error JSON', 1 );
-
-    } else {
-
-      $hash->{helper}->{auth} = $result;
-      $hash->{header} = { "Authorization", "Bearer $hash->{helper}{auth}{access_token}" };
-      
-      # Update readings
-      readingsBeginUpdate($hash);
-        readingsBulkUpdateIfChanged($hash,'.access_token',$hash->{helper}{auth}{access_token},0 );
-        readingsBulkUpdateIfChanged($hash,'.provider',$hash->{helper}{auth}{provider},0 );
-        readingsBulkUpdateIfChanged($hash,'.user_id',$hash->{helper}{auth}{user_id},0 );
-
-        $hash->{helper}{auth}{expires} = $result->{expires_in} + gettimeofday();
-        readingsBulkUpdateIfChanged($hash,'.expires',$hash->{helper}{auth}{expires},0 );
-        readingsBulkUpdateIfChanged($hash,'.scope',$hash->{helper}{auth}{scope},0 );
-        readingsBulkUpdateIfChanged($hash,'.token_type',$hash->{helper}{auth}{token_type},0 );
-
-        my $expire_date = FmtDateTime($hash->{helper}{auth}{expires});
-        readingsBulkUpdateIfChanged($hash,'api_token_expires',$expire_date );
-        readingsBulkUpdateIfChanged($hash,'device_state', 'authenticated');
-        readingsBulkUpdateIfChanged($hash,'mower_commandStatus', 'cleared');
-      readingsEndUpdate($hash, 1);
-
-      getMower( $hash );
-      return undef;
-    }
-
-  } else {
-
-    readingsSingleUpdate( $hash, 'device_state', "error statuscode $statuscode", 1 );
-    Log3 $name, 1, "\n$iam\n\$statuscode [$statuscode]\n\$err [$err],\n\$data [$data]\n\$param->url $param->{url}";
-
-  }
-
-  RemoveInternalTimer( $hash, \&APIAuth );
-  InternalTimer( gettimeofday() + $interval, \&APIAuth, $hash, 0 );
-  return undef;
-
-}
-
-
-##############################################################
-#
-# GET MOWERS
-#
-##############################################################
-
-sub getMower {
-  
-  my ( $hash ) = @_;
-  my $name = $hash->{NAME};
-  my $type = $hash->{TYPE};
-  my $iam = "$type $name getMower:";
-  my $access_token = ReadingsVal($name,".access_token","");
-  my $provider = ReadingsVal($name,".provider","");
-  my $client_id = $hash->{helper}->{client_id};
-
-  my $header = "Accept: application/vnd.api+json\r\nX-Api-Key: " . $client_id . "\r\nAuthorization: Bearer " . $access_token . "\r\nAuthorization-Provider: " . $provider;
-  Log3 $name, 5, "$iam header [ $header ]";
-
-  ::HttpUtils_NonblockingGet({
-    url        	=> APIURL . "/mowers",
-    timeout    	=> 5,
-    hash       	=> $hash,
-    method     	=> "GET",
-    header     	=> $header,  
-    callback   	=> \&getMowerResponse,
-  }); 
-  
-
-  return undef;
-}
-
-#########################
-sub getMowerResponse {
-  
-  my ( $param, $err, $data ) = @_;
-  my $hash = $param->{hash};
-  my $name = $hash->{NAME};
-  my $type = $hash->{TYPE};
-  my $statuscode = $param->{code};
-  my $iam = "$type $name getMowerResponse:";
-  my $mowerNumber = $hash->{helper}{mowerNumber};
-  
-  Log3 $name, 1, "\ndebug $iam \n\$statuscode [$statuscode]\n\$err [$err],\n \$data [$data] \n\$param->url $param->{url}" if ( AttrVal($name, 'debug', '') );
-  
-  if( !$err && $statuscode == 200 && $data) {
-    
-    if ( $data eq "[]" ) {
-      
-      Log3 $name, 2, "$iam no mower data present";
-      
-    } else {
-
-      my $result = eval { decode_json($data) };
-      if ($@) {
-
-        Log3( $name, 2, "$iam - JSON error while request: $@");
-
-      } else {
-
-        $hash->{helper}{mowers} = $result->{data};
-        my $maxMower = 0;
-        $maxMower = @{$hash->{helper}{mowers}} if ( ref ( $hash->{helper}{mowers} ) eq 'ARRAY' );
-        if ($maxMower <= $mowerNumber || $mowerNumber < 0 ) {
-
-          Log3 $name, 2, "$iam wrong mower number $mowerNumber ($maxMower mower available). Change definition of $name.";
-          return undef;
-
-        }
-
-        my $foundMower .= '0 => ' . $hash->{helper}{mowers}[0]{attributes}{system}{name} . ' ' . $hash->{helper}{mowers}[0]{id};
-        for (my $i = 1; $i < $maxMower; $i++) {
-
-          $foundMower .= "\n" . $i .' => '. $hash->{helper}{mowers}[$i]{attributes}{system}{name} . ' ' . $hash->{helper}{mowers}[$i]{id};
-
-        }
-        Log3 $name, 5, "$iam found $foundMower ";
-
-        if ( defined ($hash->{helper}{mower}{id}) ) { # update dataset
-
-          $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp} = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp};
-          $hash->{helper}{mowerold}{attributes}{mower}{activity} = $hash->{helper}{mower}{attributes}{mower}{activity};
-
-        } else { # first data set
-
-          $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp} = $hash->{helper}{mowers}[$mowerNumber]{attributes}{metadata}{statusTimestamp};
-          $hash->{helper}{mowerold}{attributes}{mower}{activity} = $hash->{helper}{mowers}[$mowerNumber]{attributes}{mower}{activity};
-
-          if ( AttrVal( $name, 'mapImageCoordinatesToRegister', '' ) eq '' ) {
-            ::FHEM::Devices::AMConnect::Common::posMinMax( $hash, $hash->{helper}{mowers}[$mowerNumber]{attributes}{positions} );
-          }
-
-        }
-
-        $hash->{helper}{mower} = dclone( $hash->{helper}{mowers}[$mowerNumber] );
-        $hash->{helper}{mower}{attributes}{positions}[0]{getMower} = 'from polling';
-        $hash->{helper}{mower_id} = $hash->{helper}{mower}{id};
-        $hash->{helper}{newdatasets} = 0;
-
-        $hash->{helper}{storediff} = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} - $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp};
-
-        # Update readings
-        readingsBeginUpdate($hash);
-
-          readingsBulkUpdateIfChanged($hash, 'api_MowerFound', $foundMower ); # host only
-          ::FHEM::Devices::AMConnect::Common::fillReadings( $hash );
-
-        readingsEndUpdate($hash, 1);
-
-        readingsSingleUpdate($hash, 'device_state', 'connected', 1 );
-
-        # initialize statistics 
-        ::FHEM::Devices::AMConnect::Common::initStatistics($hash);
-
-        # schedule new access token
-        RemoveInternalTimer( $hash, \&APIAuth );
-        InternalTimer( ReadingsVal($name, '.expires', 600)-37, \&APIAuth, $hash, 0 );
-        # Websocket initialisieren, schedule ping, reopen
-        wsReopen( $hash );
-
-        return undef;
-
-      }
-    }
-    
-  } else {
-
-    readingsSingleUpdate( $hash, 'device_state', "error statuscode $statuscode", 1 );
-    Log3 $name, 1, "\ndebug $iam \n\$statuscode [$statuscode]\n\$err [$err],\n \$data [$data] \n\$param->url $param->{url}";
-
-  }
-  RemoveInternalTimer( $hash, \&APIAuth );
-  InternalTimer( gettimeofday() + $hash->{helper}{interval}, \&APIAuth, $hash, 0 );
-  return undef;
-
-}
-
-#########################
-sub wsKeepAlive {
-  my ($hash) = @_;
-  RemoveInternalTimer( $hash, \&wsKeepAlive);
-  DevIo_Ping($hash);
-  InternalTimer(gettimeofday() + 60, \&wsKeepAlive, $hash, 0);
-  
-}
-
-#########################
-sub wsInit {
-
-  my ( $hash ) = @_;
-  $hash->{First_Read} = 1;
-  RemoveInternalTimer( $hash, \&wsReopen );
-  RemoveInternalTimer( $hash, \&wsKeepAlive );
-  InternalTimer( gettimeofday() + 7110, \&wsReopen, $hash, 0 );
-  InternalTimer( gettimeofday() + 60, \&wsKeepAlive, $hash, 0 );
-  return undef;
-
-}
-
-#########################
-sub wsCb {
-  my ($hash, $error) = @_;
-  my $name = $hash->{NAME};
-  my $type = $hash->{TYPE};
-  my $iam = "$type $name wsCb:";
-  Log3 $name, 2, "$iam failed with error: $error" if( $error );
-  return undef;
-
-}
-
-#########################
-sub wsReopen {
-  my ( $hash ) = @_;
-  RemoveInternalTimer( $hash, \&wsReopen );
-  RemoveInternalTimer( $hash, \&wsKeepAlive );
-  DevIo_CloseDev( $hash ) if ( DevIo_IsOpen( $hash ) );
-  $hash->{DeviceName} = WSDEVICENAME;
-  DevIo_OpenDev( $hash, 0, \&wsInit, \&wsCb );
-
-}
-
-#########################
-sub wsRead {
-  my ($hash) = @_;
-  my $name = $hash->{NAME};
-  my $type = $hash->{TYPE};
-  my $iam = "$type $name wsRead:";
-
-  my $buf = DevIo_SimpleRead( $hash );
-  return "" if ( !defined($buf) );
-
-  if ( $buf ) {
-
-    my $result = eval { decode_json($buf) };
-
-    if ( $@ ) {
-
-      Log3( $name, 2, "$iam - JSON error while request: $@");
-
-    } else {
-
-      $hash->{helper}{wsResult} = $result;
-
-      if ( defined( $result->{type} && $result->{id} eq $hash->{helper}{mower_id}) ) {
-
-        if ( $result->{type} eq "status-event" ) {
-
-          $hash->{helper}{statusTime} = gettimeofday();
-          $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp} = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp};
-          $hash->{helper}{mowerold}{attributes}{mower}{activity} = $hash->{helper}{mower}{attributes}{mower}{activity};
-          $hash->{helper}{mower}{attributes}{battery} = dclone( $result->{attributes}{battery} );
-          $hash->{helper}{mower}{attributes}{metadata} = dclone( $result->{attributes}{metadata} );
-          $hash->{helper}{mower}{attributes}{mower} = dclone( $result->{attributes}{mower} );
-          $hash->{helper}{mower}{attributes}{planner} = dclone( $result->{attributes}{planner} );
-          $hash->{helper}{storediff} = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} - $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp};
-
-        }
-
-        if ( $result->{type} eq "positions-event" ) {
-
-          $hash->{helper}{positionsTime} = gettimeofday();
-          # for ( my $i=0;$i<@{$result->{attributes}{positions}};$i++ ) {
-            # $result->{attributes}{positions}[ $i ]->{nr}=$i;
-          # };
-          $hash->{helper}{mower}{attributes}{positions} = dclone( $result->{attributes}{positions} );
-          ::FHEM::Devices::AMConnect::Common::AlignArray( $hash );
-          ::FHEM::Devices::AMConnect::Common::FW_detailFn_Update ($hash) if (AttrVal($name,'showMap',1));
-
-        }
-
-        if ( $result->{type} eq "settings-event" ) {
-
-          $hash->{helper}{mower}{attributes}{calendar} = dclone( $result->{attributes}{calendar} ) if ( defined ( $result->{attributes}{calendar} ) );
-          $hash->{helper}{mower}{attributes}{settings}{headlight} = $result->{attributes}{headlight} if ( defined ( $result->{attributes}{headlight} ) );
-          $hash->{helper}{mower}{attributes}{settings}{cuttingHeight} = $result->{attributes}{cuttingHeight} if ( defined ( $result->{attributes}{cuttingHeight} ) );
-        }
-
-        # Update readings
-        readingsBeginUpdate($hash);
-
-          ::FHEM::Devices::AMConnect::Common::fillReadings( $hash );
-
-        readingsEndUpdate($hash, 1);
-
-      }
-
-    }
-
-  }
-  Log3 $name, 4, "$iam received websocket data: >$buf<";
-
-  $hash->{First_Read} = 0;
-  return;
-
-}
-
-#########################
-sub wsReady {
-  my  ($hash ) = @_;
-  RemoveInternalTimer( $hash, \&wsReopen);
-  RemoveInternalTimer( $hash, \&wsKeepAlive);
-  return DevIo_OpenDev( $hash, 1, \&wsInit, \&wsCb );
-
-}
-
-#########################
-sub Set {
-  my ($hash,@val) = @_;
-  my $type = $hash->{TYPE};
-
-  return "$type $hash->{NAME} Set: needs at least one argument" if ( @val < 2 );
-
-  my ($name,$setName,$setVal,$setVal2,$setVal3) = @val;
-  my $iam = "$type $name Set:";
-
-  Log3 $name, 4, "$iam called with $setName " . ($setVal ? $setVal : "") if ($setName !~ /^(\?|client_secret)$/);
-
-  if ( !IsDisabled($name) && $setName eq 'getUpdate' ) {
-
-    RemoveInternalTimer($hash, \&APIAuth);
-    APIAuth($hash);
-    return undef;
-
-  } elsif ( $setName eq 'chargingStationPositionToAttribute' ) {
-
-    my $xm = $hash->{helper}{chargingStation}{longitude} // 10.1165;
-    my $ym = $hash->{helper}{chargingStation}{latitude} // 51.28;
-    CommandAttr( $hash, "$name chargingStationCoordinates $xm $ym" );
-    return undef;
-
-  } elsif ( $setName eq 'defaultDesignAttributesToAttribute' ) {
-
-    my $design = $hash->{helper}{mapdesign};
-    CommandAttr( $hash, "$name mapDesignAttributes $design" );
-    return undef;
-
-  } elsif ( $setName eq 'mapZonesTemplateToAttribute' ) {
-
-    my $tpl = $hash->{helper}{mapZonesTpl};
-    CommandAttr( $hash, "$name mapZones $tpl" );
-    return undef;
-
-  } elsif ( ReadingsVal( $name, 'device_state', 'defined' ) !~ /defined|initialized|authentification|authenticated|update/ && $setName eq 'mowerScheduleToAttribute' ) {
-
-    my $calendarjson = eval { JSON::XS->new->pretty(1)->encode ($hash->{helper}{mower}{attributes}{calendar}{tasks}) };
-    if ( $@ ) {
-      return "$iam $@";
-    }
-    CommandAttr($hash,"$name mowerSchedule $calendarjson");
-    return undef;
-
-  } elsif ( $setName eq 'client_secret' ) {
-    if ( $setVal ) {
-
-      my ($passResp, $passErr) = $hash->{helper}->{passObj}->setStorePassword($name, $setVal);
-      Log3 $name, 1, "$iam error: $passErr" if ($passErr);
-      return "$iam $passErr" if( $passErr );
-      RemoveInternalTimer($hash, \&APIAuth);
-      APIAuth($hash);
-      return undef;
-    }
-
-  } elsif ( ReadingsVal( $name, 'device_state', 'defined' ) !~ /defined|initialized|authentification|authenticated|update/ && $setName =~ /^(Start|Park|cuttingHeight)$/ ) {
-    if ( $setVal =~ /^(\d+)$/) {
-
-      ::FHEM::Devices::AMConnect::Common::CMD($hash ,$setName, $setVal);
-      return undef;
-
-    }
-
-  } elsif ( ReadingsVal( $name, 'device_state', 'defined' ) !~ /defined|initialized|authentification|authenticated|update/ && $setName eq 'headlight' ) {
-    if ( $setVal =~ /^(ALWAYS_OFF|ALWAYS_ON|EVENING_ONLY|EVENING_AND_NIGHT)$/) {
-
-      ::FHEM::Devices::AMConnect::Common::CMD($hash ,$setName, $setVal);
-
-      return undef;
-    }
-
-  } elsif ( !IsDisabled($name) && $setName eq 'getNewAccessToken' ) {
-
-    readingsBeginUpdate($hash);
-      readingsBulkUpdateIfChanged( $hash, '.access_token', '', 0 );
-      readingsBulkUpdateIfChanged( $hash, 'device_state', 'initialized');
-      readingsBulkUpdateIfChanged( $hash, 'mower_commandStatus', 'cleared');
-    readingsEndUpdate($hash, 1);
-
-      RemoveInternalTimer($hash, \&APIAuth);
-      APIAuth($hash);
-      return undef;
-
-  } elsif (ReadingsVal( $name, 'device_state', 'defined' ) !~ /defined|initialized|authentification|authenticated|update/ && $setName =~ /ParkUntilFurtherNotice|ParkUntilNextSchedule|Pause|ResumeSchedule|sendScheduleFromAttributeToMower/) {
-
-    ::FHEM::Devices::AMConnect::Common::CMD($hash,$setName);
-    return undef;
-
-  }
-  my $ret = " getNewAccessToken:noArg ParkUntilFurtherNotice:noArg ParkUntilNextSchedule:noArg Pause:noArg Start:selectnumbers,60,60,600,0,lin Park:selectnumbers,60,60,600,0,lin ResumeSchedule:noArg getUpdate:noArg client_secret ";
-  $ret .= "chargingStationPositionToAttribute:noArg headlight:ALWAYS_OFF,ALWAYS_ON,EVENING_ONLY,EVENING_AND_NIGHT cuttingHeight:1,2,3,4,5,6,7,8,9 mowerScheduleToAttribute:noArg ";
-  $ret .= "sendScheduleFromAttributeToMower:noArg defaultDesignAttributesToAttribute:noArg mapZonesTemplateToAttribute:noArg ";
-  return "Unknown argument $setName, choose one of".$ret;
-  
-}
-
-#########################
-sub Attr {
-
-  my ( $cmd, $name, $attrName, $attrVal ) = @_;
-  my $hash = $defs{$name};
-  my $type = $hash->{TYPE};
-  my $iam = "$type $name Attr:";
-  ##########
-  if( $attrName eq "disable" ) {
-    if( $cmd eq "set" and $attrVal eq "1" ) {
-
-      Log3 $name, 3, "$iam $cmd $attrName disabled";
-
-    } elsif( $cmd eq "del" or $cmd eq 'set' and !$attrVal ) {
-
-      Log3 $name, 3, "$iam $cmd $attrName enabled";
-
-    }
-
-  ##########
-  } elsif ( $attrName eq 'mapImagePath' ) {
-
-    if( $cmd eq "set") {
-      if ($attrVal =~ '(webp|png|jpg|jpeg)$' ) {
-        $hash->{helper}{MAP_PATH} = $attrVal;
-        $hash->{helper}{MAP_MIME} = "image/".$1;
-
-        if ($attrVal =~ /(\d+)x(\d+)/) {
-          CommandAttr($hash,"$name mapImageWidthHeight $1 $2");
-        }
-
-        ::FHEM::Devices::AMConnect::Common::readMap( $hash );
-        Log3 $name, 3, "$iam $cmd $attrName $attrVal";
-      } else {
-        return "$iam $cmd $attrName wrong image type, use webp, png, jpeg or jpg";
-        Log3 $name, 3, "$iam $cmd $attrName wrong image type, use webp, png, jpeg or jpg";
-      }
-
-    } elsif( $cmd eq "del" ) {
-
-      $hash->{helper}{MAP_PATH} = '';
-      $hash->{helper}{MAP_CACHE} = '';
-      $hash->{helper}{MAP_MIME} = '';
-      Log3 $name, 3, "$iam $cmd $attrName";
-
-    }
-
-  ##########
-  } elsif( $attrName eq "weekdaysToResetWayPoints" ) {
-
-    if( $cmd eq "set" ) {
-
-      return "$iam $attrName is invalid, enter a combination of weekday numbers, space or - [0123456 -]" unless( $attrVal =~ /0|1|2|3|4|5|6| |-/ );
-      Log3 $name, 4, "$iam $cmd $attrName $attrVal";
-
-    } elsif( $cmd eq "del" ) {
-
-      Log3 $name, 3, "$iam $cmd $attrName and set default to 1";
-
-    }
-  ##########
-  } elsif ( $attrName eq 'numberOfWayPointsToDisplay' ) {
-    
-    my $icurr = @{$hash->{helper}{areapos}};
-    if( $cmd eq "set" && $attrVal =~ /\d+/ && $attrVal > $hash->{helper}{MOWING}{maxLengthDefault}) {
-
-      # reduce array
-      $hash->{helper}{MOWING}{maxLength} = $attrVal;
-      for ( my $i = $icurr; $i > $attrVal; $i-- ) {
-        pop @{$hash->{helper}{areapos}};
-      }
-      Log3 $name, 3, "$iam $cmd $attrName $attrVal";
-
-    } elsif( $cmd eq "del" ) {
-
-      # reduce array
-      my $imax = $hash->{helper}{MOWING}{maxLengthDefault};
-      $hash->{helper}{MOWING}{maxLength} = $imax;
-      for ( my $i = $icurr; $i > $imax; $i-- ) {
-        pop @{$hash->{helper}{areapos}};
-      }
-      Log3 $name, 3, "$iam $cmd $attrName $attrName and set default $imax";
-
-    }
-  ##########
-  } elsif( $attrName eq "mapImageCoordinatesUTM" ) {
-
-    if( $cmd eq "set" ) {
-
-      if ( AttrVal( $name,'mapImageCoordinatesToRegister', '' ) && $attrVal =~ /(-?\d*\.?\d+)\s(-?\d*\.?\d+)(\R|\s)(-?\d*\.?\d+)\s(-?\d*\.?\d+)/ ) {
-
-        my ( $x1, $y1, $x2, $y2 ) = ( $1, $2, $4, $5 );
-        AttrVal( $name,'mapImageCoordinatesToRegister', '' ) =~ /(-?\d*\.?\d+)\s(-?\d*\.?\d+)(\R|\s)(-?\d*\.?\d+)\s(-?\d*\.?\d+)/;
-        my ( $lo1, $la1, $lo2, $la2 ) = ( $1, $2, $4, $5 );
-        my $scx = int( ( $x1 - $x2) / ( $lo1 - $lo2 ) );
-        my $scy = int( ( $y1 - $y2 ) / ( $la1 - $la2 ) );
-        CommandAttr($hash,"$name scaleToMeterXY $scx $scy");
-
-      } else {
-        return "$iam $attrName has a wrong format use linewise pairs <floating point longitude><one space character><floating point latitude> or the attribute mapImageCoordinatesToRegister was not set before.";
-    }
-      Log3 $name, 3, "$iam $cmd $attrName $attrVal";
-
-    } elsif( $cmd eq "del" ) {
-
-      Log3 $name, 3, "$iam $cmd $attrName and set default 0 90<Line feed>90 0";
-
-    }
-  ##########
-  } elsif( $attrName eq "mapImageCoordinatesToRegister" ) {
-
-    if( $cmd eq "set" ) {
-
-      return "$iam $attrName has a wrong format use linewise pairs <floating point longitude><one space character><floating point latitude>" unless( $attrVal =~ /(-?\d*\.?\d+)\s(-?\d*\.?\d+)(\R|\s)(-?\d*\.?\d+)\s(-?\d*\.?\d+)/ );
-      Log3 $name, 3, "$iam $cmd $attrName $attrVal";
-
-    } elsif( $cmd eq "del" ) {
-
-      Log3 $name, 3, "$iam $cmd $attrName and set default 0 90<Line feed>90 0";
-
-    }
-  ##########
-  } elsif( $attrName eq "chargingStationCoordinates" ) {
-
-    if( $cmd eq "set" ) {
-
-      return "$iam $attrName has a wrong format use <floating point longitude><one space character><floating point latitude>" unless( $attrVal =~ /(-?\d*\.?\d+)\s(-?\d*\.?\d+)/ );
-      Log3 $name, 3, "$iam $cmd $attrName $attrVal";
-
-    } elsif( $cmd eq "del" ) {
-
-      Log3 $name, 3, "$iam $cmd $attrName and set default 10.1165 51.28";
-
-    }
-  ##########
-  } elsif( $attrName eq "mapImageWidthHeight" ) {
-
-    if( $cmd eq "set" ) {
-
-      return "$iam $attrName has a wrong format use <integer longitude><one space character><integer latitude>" unless( $attrVal =~ /(\d+)\s(\d+)/ );
-      Log3 $name, 3, "$iam $cmd $attrName $attrVal";
-
-    } elsif( $cmd eq "del" ) {
-
-      Log3 $name, 3, "$iam $cmd $attrName and set default 100 200";
-
-    }
-  ##########
-  } elsif( $attrName eq "scaleToMeterXY" ) {
-
-    if( $cmd eq "set" ) {
-
-      return "$iam $attrName has a wrong format use <integer longitude><one space character><integer latitude>" unless( $attrVal =~ /(-?\d+)\s(-?\d+)/ );
-      Log3 $name, 3, "$iam $cmd $attrName $attrVal";
-
-    } elsif( $cmd eq "del" ) {
-
-      Log3 $name, 3, "$iam $cmd $attrName and set default $hash->{helper}{scaleToMeterLongitude} $hash->{helper}{scaleToMeterLatitude}";
-
-    }
-  ##########
-  } elsif( $attrName eq "mowerSchedule" ) {
-    if( $cmd eq "set" ) {
-
-      my $perl = eval { decode_json ($attrVal) };
-
-      if ($@) {
-        return "$iam $cmd $attrName decode error: $@ \n $perl";
-      }
-      my $json = eval { encode_json ($perl) };
-      if ($@) {
-        return "$iam $cmd $attrName encode error: $@ \n $json";
-      }
-      Log3 $name, 4, "$iam $cmd $attrName mower schedule array";
-
-    }
-  ##########
-  } elsif( $attrName eq "mapZones" ) {
-    if( $cmd eq "set" ) {
-
-      my $longitude = 10;
-      my $latitude = 52;
-      my $perl = eval { decode_json ($attrVal) };
-
-      if ($@) {
-        return "$iam $cmd $attrName decode error: $@ \n $attrVal";
-      }
-
-      for ( keys %{$perl} ) {
-
-        $perl->{$_}{zoneCnt} = 0;
-        $perl->{$_}{zoneLength} = 0;
-        my $cond = eval "($perl->{$_}{condition})";
-
-        if ($@) {
-          return "$iam $cmd $attrName syntax error in condition: $@ \n $perl->{$_}{condition}";
-        }
-
-      }
-
-        Log3 $name, 4, "$iam $cmd $attrName";
-        $hash->{helper}{mapZones} = $perl;
-
-    } elsif( $cmd eq "del" ) {
-
-      delete $hash->{helper}{mapZones};
-      delete $hash->{helper}{currentZone};
-      CommandDeleteReading( $hash, "$name mower_currentZone" );
-      Log3 $name, 3, "$iam $cmd $attrName";
-
-    }
-  }
   return undef;
 }
 
@@ -881,6 +123,7 @@ __END__
   <ul>
     <li>To get access to the API an application has to be created in the <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a>.</li>
     <li>During registration an application key (client_id) and an application secret (client secret) is provided. Use these for for the module.</li>
+    <li>Don't forget to connect you API key to the Automower API.</li>
     <li>The module uses client credentials as grant type for authorization.</li>
   </ul>
   <br>
@@ -893,7 +136,7 @@ __END__
     It has to be set a <b>client_secret</b>. It's the application secret from the <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a>.<br>
     <code>set myMower &lt;client secret&gt;</code>
     <br><br>
-   </ul>
+  </ul>
   <br>
 
   <a id="AutomowerConnectSet"></a>
@@ -931,11 +174,11 @@ __END__
       <code>set &lt;name&gt; client_secret &lt;application secret&gt;</code><br>
       Sets the mandatory application secret (client secret)</li>
 
-     <li><a id='AutomowerConnect-set-cuttingHeight'>cuttingHeight</a><br>
+    <li><a id='AutomowerConnect-set-cuttingHeight'>cuttingHeight</a><br>
       <code>set &lt;name&gt; cuttingHeight &lt;1..9&gt;</code><br>
       Sets the cutting height. NOTE: Do not use for 550 EPOS and Ceora.</li>
 
-     <li><a id='AutomowerConnect-set-getNewAccessToken'>getNewAccessToken</a><br>
+    <li><a id='AutomowerConnect-set-getNewAccessToken'>getNewAccessToken</a><br>
       <code>set &lt;name&gt; getNewAccessToken</code><br>
       Gets a new access token</li>
 
@@ -943,27 +186,26 @@ __END__
       <code>set &lt;name&gt; getUpdate</code><br>
       Gets data from the API. This is done each intervall automatically.</li>
 
-     <li><a id='AutomowerConnect-set-headlight'>headlight</a><br>
+    <li><a id='AutomowerConnect-set-headlight'>headlight</a><br>
       <code>set &lt;name&gt; headlight &lt;ALWAYS_OFF|ALWAYS_ON|EVENIG_ONLY|EVENING_AND_NIGHT&gt;</code><br>
+    </li>
 
-      </li>
-     <li><a id='AutomowerConnect-set-mowerScheduleToAttribute'>mowerScheduleToAttribute</a><br>
+    <li><a id='AutomowerConnect-set-mowerScheduleToAttribute'>mowerScheduleToAttribute</a><br>
       <code>set &lt;name&gt; mowerScheduleToAttribute</code><br>
       Writes the schedule in to the attribute <code>moverSchedule</code>.</li>
 
-     <li><a id='AutomowerConnect-set-sendScheduleFromAttributeToMower'>sendScheduleFromAttributeToMower</a><br>
+    <li><a id='AutomowerConnect-set-sendScheduleFromAttributeToMower'>sendScheduleFromAttributeToMower</a><br>
       <code>set &lt;name&gt; sendScheduleFromAttributeToMower</code><br>
       Sends the schedule to the mower. NOTE: Do not use for 550 EPOS and Ceora.</li>
 
-     <li><a id='AutomowerConnect-set-mapZonesTemplateToAttribute'>mapZonesTemplateToAttribute</a><br>
+    <li><a id='AutomowerConnect-set-mapZonesTemplateToAttribute'>mapZonesTemplateToAttribute</a><br>
       <code>set &lt;name&gt; mapZonesTemplateToAttribute</code><br>
       Load the command reference example into the attribute mapZones.</li>
 
-
-      <li><a id='AutomowerConnect-set-'></a><br>
-      <code>set &lt;name&gt; </code><br>
-      </li>
-
+    <li><a id='AutomowerConnect-set-defaultDesignAttributesToAttribute'>defaultDesignAttributesToAttribute</a><br>
+      <code>set &lt;name&gt; mapZonesTemplateToAttribute</code><br>
+      Load default design attributes.</li>
+    <br><br>
   </ul>
   <br>
 
@@ -986,11 +228,15 @@ __END__
 
     <li><a id='AutomowerConnect-get-StatisticsData'>StatisticsData</a><br>
       <code>get &lt;name&gt; StatisticsData</code><br>
-      Lists statistics data with its hash path. The hash path can be used for generating userReadings. The trigger is <i>connected</i>.</li>
+      Lists statistics data with its hash path. The hash path can be used for generating userReadings. The trigger is <i>device_state: connected</i>.</li>
 
     <li><a id='AutomowerConnect-get-errorCodes'>errorCodes</a><br>
       <code>get &lt;name&gt; errorCodes</code><br>
       Lists API response status codes and mower error codes</li>
+
+    <li><a id='AutomowerConnect-get-errorStack'>errorStack</a><br>
+      <code>get &lt;name&gt; errorStack</code><br>
+      Lists error stack.</li>
     <br><br>
   </ul>
   <br>
@@ -1024,10 +270,12 @@ __END__
       <code>attr &lt;name&gt; mapDesignAttributes &lt;complete list of design-attributes&gt;</code><br>
       Load the list of attributes by <code>set &lt;name&gt; defaultDesignAttributesToAttribute</code> to change its values. Some default values are 
       <ul>
-        <li>mower path (activity MOWING): red</li>
-        <li>path in CS (activity CHARGING,PARKED_IN_CS): grey</li>
+        <li>mower path for activity MOWING: red</li>
+        <li>path in CS, activity CHARGING,PARKED_IN_CS: grey</li>
+        <li>path for activity LEAVING: green</li>
+        <li>path for activityGOING_HOME: blue</li>
         <li>path for interval with error (all activities with error): kind of magenta</li>
-        <li>all other activities: green</li>
+        <li>all other activities: grey</li>
       </ul>
     </li>
 
@@ -1043,7 +291,7 @@ __END__
       This attribute has to be set after the attribute mapImageCoordinatesToRegister. The values are used to calculate the scale factors and the attribute scaleToMeterXY is set accordingly.</li>
 
     <li><a id='AutomowerConnect-attr-showMap'>showMap</a><br>
-      <code>attr &lt;name&gt; showMap &lt;&gt;<b>1</b>,0</code><br>
+      <code>attr &lt;name&gt; showMap &lt;<b>1</b>,0&gt;</code><br>
       Shows Map on (1 default) or not (0).</li>
 
    <li><a id='AutomowerConnect-attr-chargingStationCoordinates'>chargingStationCoordinates</a><br>
@@ -1130,13 +378,9 @@ __END__
       }'<br>
       </code></li>
 
-     <li><a href="disable">disable</a></li>
-     <li><a href="disabledForIntervals">disabledForIntervals</a></li>
-
-
-    <li><a id='AutomowerConnect-attr-'></a><br>
-      <code>attr &lt;name&gt;  &lt;&gt;</code><br>
-      </li>
+    <li><a href="disable">disable</a></li>
+    <li><a href="disabledForIntervals">disabledForIntervals</a></li>
+    <br><br>
   </ul>
   <br>
 
@@ -1164,7 +408,7 @@ __END__
     <li>settings_cuttingHeight - actual cutting height from API</li>
     <li>settings_headlight - actual headlight mode from API</li>
     <li>statistics_newGeoDataSets - number of new data sets between the last two different time stamps</li>
-    <li>statistics_numberOfCollisions - Number of Collisions</li>
+    <li>statistics_numberOfCollisions - Number of collisions (last day/all days)</li>
     <li>status_connected - state of connetion between mower and Husqvarna Cloud.</li>
     <li>status_statusTimestamp - local time of last change of the API content</li>
     <li>status_statusTimestampDiff - time difference in seconds between the last and second last change of the API content</li>
@@ -1196,14 +440,17 @@ __END__
     <li>Es ist möglich alles was die API anbietet zu steuern, z.B. Mähplan,Scheinwerfer, Schnitthöhe und Aktionen wie, Start, Pause, Parken usw. </li>
     <li>Zonen können selbst definiert werden. </li>
     <li>Die Schnitthöhe kann je selbstdefinierter Zone eingestellt werden. </li>
-    <li>Die Daten aus der API sind im Gerätehash gespeichert, Mit <code>{Dumper $defs{&lt;device name&gt;}}</code> in der Befehlezeile können die Daten angezeigt werden und daraus userReadings erstellt werden.</li><br>
+    <li>Die Daten aus der API sind im Gerätehash gespeichert, Mit <code>{Dumper $defs{&lt;device name&gt;}}</code> in der Befehlezeile können die Daten angezeigt werden und daraus userReadings erstellt werden.</li>
+  <br>
   </ul>
   <u><b>Anforderungen</b></u>
   <br><br>
   <ul>
     <li>Für den Zugriff auf die API muss eine Application angelegt werden, im <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a>.</li>
     <li>Währenddessen wird ein Application Key (client_id) und ein Application Secret (client secret) bereitgestellt. Diese sind für dieses Modul zu nutzen.</li>
+    <li>Der Application Key muss im Portal mit der Automower API verbunden werden.</li>
     <li>Das Modul nutzt Client Credentials als Granttype zur Authorisierung.</li>
+  <br>
   </ul>
   <br>
   <a id="AutomowerConnectDefine"></a>
@@ -1214,7 +461,7 @@ __END__
     <code>define myMower AutomowerConnect 123456789012345678901234567890123456</code> Erstes Gerät: die Defaultmähernummer ist 0.<br>
     Es muss ein <b>client_secret</b> gesetzt werden. Es ist das Application Secret vom <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a>.<br>
     <code>set myMower &lt;client secret&gt;</code><br>
-    <br><br>
+    <br>
   </ul>
   <br>
 
@@ -1281,9 +528,12 @@ __END__
       <code>set &lt;name&gt; mapZonesTemplateToAttribute</code><br>
       Läd das Beispiel aus der Befehlsreferenz in das Attribut mapZones.</li>
 
-    <li><a id='AutomowerConnect-set-'></a><br>
-      <code>set &lt;name&gt; </code><br>
-      </li>
+     <li><a id='AutomowerConnect-set-defaultDesignAttributesToAttribute'>defaultDesignAttributesToAttribute</a><br>
+      <code>set &lt;name&gt; mapZonesTemplateToAttribute</code><br>
+      Läd die Standartdesignattribute.</li>
+      <br>
+  </ul>
+  <br>
 
   <a id="AutomowerConnectGet"></a>
   <b>Get</b>
@@ -1308,13 +558,15 @@ __END__
 
     <li><a id='AutomowerConnect-get-StatisticsData'>StatisticsData</a><br>
       <code>get &lt;name&gt; StatisticsData</code><br>
-      Listet statistische Daten mit ihrem Hashpfad auf. Der Hashpfad kann zur Erzeugung von userReadings genutzt werden, getriggert wird durch <i>connected</i></li>
-    <br><br>
+      Listet statistische Daten mit ihrem Hashpfad auf. Der Hashpfad kann zur Erzeugung von userReadings genutzt werden, getriggert wird durch <i>device_state: connected</i></li>
+
+    <li><a id='AutomowerConnect-get-errorStack'>errorStack</a><br>
+      <code>get &lt;name&gt; errorStack</code><br>
+      Listet die gespeicherten Fehler auf.</li>
+    <br>
   </ul>
   <br>
 
-  </ul>
-    <br>
     <a id="AutomowerConnectAttributes"></a>
     <b>Attributes</b>
   <ul>
@@ -1345,10 +597,12 @@ __END__
       <code>attr &lt;name&gt; mapDesignAttributes &lt;complete list of design-attributes&gt;</code><br>
       Lade die Attributliste mit <code>set &lt;name&gt; defaultDesignAttributesToAttribute</code> um die Werte zu ändern. Einige Vorgabewerte:
       <ul>
-        <li>Pfad beim mähen (Aktivität MOWING): rot</li>
-        <li>In der Ladestation (Aktivität CHARGING,PARKED_IN_CS): grau</li>
+        <li>Pfad beim mähen, Aktivität MOWING: rot</li>
+        <li>In der Ladestation, Aktivität CHARGING,PARKED_IN_CS: grau</li>
+        <li>Pfad für die Aktivität LEAVING: grün</li>
+        <li>Pfad für Aktivität GOING_HOME: blau</li>
         <li>Pfad eines Intervalls mit Fehler (alle Aktivitäten with error): Eine Art Magenta</li>
-        <li>Pfad aller anderen Aktivitäten: grün</li>
+        <li>Pfad aller anderen Aktivitäten: grau</li>
       </ul>
     </li>
 
@@ -1367,7 +621,7 @@ __END__
       Dieses Attribut berechnet die Skalierungsfaktoren. Das Attribut scaleToMeterXY wird entsprechend gesetzt.</li>
 
     <li><a id='AutomowerConnect-attr-showMap'>showMap</a><br>
-      <code>attr &lt;name&gt; showMap &lt;&gt;<b>1</b>,0</code><br>
+      <code>attr &lt;name&gt; showMap &lt;<b>1</b>,0&gt;</code><br>
       Zeigt die Karte an (1 default) oder nicht (0).</li>
 
    <li><a id='AutomowerConnect-attr-chargingStationCoordinates'>chargingStationCoordinates</a><br>
@@ -1457,12 +711,7 @@ __END__
 
      <li><a href="disable">disable</a></li>
      <li><a href="disabledForIntervals">disabledForIntervals</a></li>
-
-
-<li><a id='AutomowerConnect-attr-'></a><br>
-      <code>attr &lt;name&gt;  &lt;&gt;</code><br>
-      </li>
-      
+  <br>
   </ul>
   <br>
 
@@ -1490,7 +739,7 @@ __END__
     <li>settings_cuttingHeight - aktuelle Schnitthöhe aus der API</li>
     <li>settings_headlight - aktueller Scheinwerfermode aus der API</li>
     <li>statistics_newGeoDataSets - Anzahl der neuen Datensätze zwischen den letzten zwei unterschiedlichen Zeitstempeln</li>
-    <li>statistics_numberOfCollisions - Anzahl der Kollisionen</li>
+    <li>statistics_numberOfCollisions - Anzahl der Kollisionen (letzter Tag/alle Tage)</li>
     <li>status_connected - Status der Verbindung zwischen dem Automower und der Husqvarna Cloud.</li>
     <li>status_statusTimestamp - Lokalzeit der letzten Änderung der Daten in der API</li>
     <li>status_statusTimestampDiff - Zeitdifferenz zwischen den beiden letzten Änderungen im Inhalt der Daten aus der API</li>

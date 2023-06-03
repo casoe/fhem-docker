@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_MQTT2_DEVICE.pm 26860 2022-12-16 08:13:49Z rudolfkoenig $
+# $Id: 10_MQTT2_DEVICE.pm 27627 2023-05-29 08:42:31Z rudolfkoenig $
 package main;
 
 use strict;
@@ -417,13 +417,12 @@ MQTT2_DEVICE_Set($@)
   if(!$ssl) {
     readingsSingleUpdate($hash, "state", $cmdSE, 1);
 
-  } else {
+  } elsif($ssl ne "ignore") {
     if($ssl =~ m/\b$cmdName\b/) {
       $hash->{skipStateFormat} = 1;
       readingsSingleUpdate($hash, "state", "set_$cmdSE", 1);
       delete($hash->{skipStateFormat});
     } else {
-      shift(@a);
       unshift(@a, "set");
       readingsSingleUpdate($hash, $cmdName, join(" ",@a), 1);
     }
@@ -457,7 +456,7 @@ MQTT2_DEVICE_Attr($$)
     return undef;
   }
 
-  if($attrName =~ m/(.*)List/) {
+  if($attrName =~ m/^(get|set|reading)List/) {
     my $atype = $1;
     if($type eq "del") {
       MQTT2_DEVICE_delReading($dev) if($atype eq "reading");
@@ -1142,7 +1141,9 @@ zigbee2mqtt_devStateIcon255($;$$)
       in the list will set a reading named after the command, with the word set
       and the command parameters as its value.<br><br>
       If this attribute is not defined, then a set command will set the state
-      reading to the name of the command.
+      reading to the name of the command.<br>
+      If this attribute is set to ignore, then a set command will not affect any
+      reading in the device.
       </li><br>
 
   </ul>
