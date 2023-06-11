@@ -1,4 +1,4 @@
-# $Id: 98_JsonMod.pm 27640 2023-06-01 17:03:20Z herrmannj $
+# $Id: 98_JsonMod.pm 27660 2023-06-06 20:03:18Z herrmannj $
 ###############################################################################
 #
 #     This file is part of fhem.
@@ -72,7 +72,7 @@ sub JsonMod_Define {
 	my ($hash, $def) = @_;
 	my ($name, $type, $source) = split /\s/, $def, 3;
 
-	my $cvsid = '$Id: 98_JsonMod.pm 27640 2023-06-01 17:03:20Z herrmannj $';
+	my $cvsid = '$Id: 98_JsonMod.pm 27660 2023-06-06 20:03:18Z herrmannj $';
 	$cvsid =~ s/^.*pm\s//;
 	$cvsid =~ s/Z\s\S+\s\$$/ UTC/;
 	$hash->{'SVN'} = $cvsid;
@@ -594,12 +594,15 @@ sub JsonMod_ApiRequest {
 
 	my $source = $hash->{'CONFIG'}->{'SOURCE'};
 
-	# file: correct file:/.. but also accepted file://..
-	if ($source =~ m/^file:[\/]{1,2}(.+)/) {
+	# abs: file:/// or file:/
+	# rel: file:
+	# non-comform file:// -> rel file:
+	if ($source =~ m/^file:[\/]{2}(.+)|^file:(.+)/) {
 		$hash->{'CONFIG'}->{'IN_REQUEST'} = 0;
 		$hash->{'API_LAST_RES'} = Time::HiRes::time();
-
-		my $filename = $1;
+		
+		my $filename = $1//$2;
+		# say "filename: $filename";
 		if (-e $filename) {
 			my $data;
 			open(my $fh, '<', $filename) or do {
@@ -1889,7 +1892,16 @@ sub listDates {
 	<ul>
     	<code>define &lt;name&gt; JsonMod &lt;http[s]:example.com:/somepath/somefile.json&gt;</code>
     	<br><br>
-    	defines the device and set the source (file:/|http://|https://).
+    	defines the device and set the source (file:|http:|https:|system://).<br>
+		<br>files example:
+		<ul>
+		<li>file:[//]/path/file (absolute)</li>
+		<li>file:[//]path/file (realtive)</li>
+		</ul>
+		<br>system example:
+		<ul>
+		<li>system://curl -X POST "https://httpbin.org/anything" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"login":"my_login","password":"my_password"}'</li>
+		</ul>
 	</ul>
 	<br>
 

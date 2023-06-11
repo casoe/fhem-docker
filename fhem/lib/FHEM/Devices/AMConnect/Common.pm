@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: Common.pm 27644 2023-06-02 16:49:35Z Ellert $
+# $Id: Common.pm 27652 2023-06-03 21:28:35Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::Devices::AMConnect::Common;
-my $cvsid = '$Id: Common.pm 27644 2023-06-02 16:49:35Z Ellert $';
+my $cvsid = '$Id: Common.pm 27652 2023-06-03 21:28:35Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -153,7 +153,7 @@ mowingPathLineColor="#ff0000"
 mowingPathLineDash="6,2"
 mowingPathLineWidth="1"
 mowingPathDotWidth="4"
-mowingPathUseDots="0"';
+mowingPathUseDots=""';
 
 my $mapZonesTpl = '{
     "01_oben" : {

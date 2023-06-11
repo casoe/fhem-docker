@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 00_MQTT2_CLIENT.pm 27468 2023-04-20 19:55:52Z rudolfkoenig $
+# $Id: 00_MQTT2_CLIENT.pm 27654 2023-06-04 15:20:06Z rudolfkoenig $
 package main;
 
 use strict;
@@ -799,6 +799,8 @@ MQTT2_CLIENT_feedTheList($$$;$)
   my $fl = $server->{".feedList"};
   if($fl) {
     my $now = gettimeofday();
+    my $informVal = $val; # Convert it to text for websocket
+    $informVal =~ s/([^ -~])/"(".ord($1).")"/ge; 
     my $ts = sprintf("%s.%03d", FmtTime($now), 1000*($now-int($now)));
     foreach my $fwid (keys %{$fl}) {
       my $cl = $FW_id2inform{$fwid};
@@ -806,7 +808,8 @@ MQTT2_CLIENT_feedTheList($$$;$)
         delete($fl->{$fwid});
         next;
       }
-      FW_AsyncOutput($cl,"",toJSON([$ts,defined($cid)?"RCVD":"SENT",$tp,$val]));
+      FW_AsyncOutput($cl, "",
+                   toJSON([$ts, defined($cid)?"RCVD":"SENT", $tp, $informVal]));
     }
     delete($server->{".feedList"}) if(!keys %{$fl});
   }
