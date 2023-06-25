@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: 74_AutomowerConnect.pm 27644 2023-06-02 16:49:35Z Ellert $
+# $Id: 74_AutomowerConnect.pm 27701 2023-06-23 22:06:55Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::AutomowerConnect;
-our $cvsid = '$Id: 74_AutomowerConnect.pm 27644 2023-06-02 16:49:35Z Ellert $';
+our $cvsid = '$Id: 74_AutomowerConnect.pm 27701 2023-06-23 22:06:55Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -77,6 +77,8 @@ sub Initialize() {
                         "propertyLimits:textField-long " .
                         "weekdaysToResetWayPoints " .
                         "numberOfWayPointsToDisplay " .
+                        "addPollingMinInterval " .
+                        "addPositionPolling:1,0 " .
                         $::readingFnAttributes;
 
   $::data{FWEXT}{AutomowerConnect}{SCRIPT} = "automowerconnect.js";
@@ -121,9 +123,8 @@ __END__
   <u><b>Requirements</b></u>
   <br><br>
   <ul>
-    <li>To get access to the API an application has to be created in the <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a>.</li>
-    <li>During registration an application key (client_id) and an application secret (client secret) is provided. Use these for for the module.</li>
-    <li>Don't forget to connect you API key to the Automower API.</li>
+    <li>To get access to the API an application has to be created in the <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a>. The application has to be connected with the AutomowerConnect API.</li>
+    <li>During registration an application key (client_id) and an application secret (client secret) is provided. Use these for the module.</li>
     <li>The module uses client credentials as grant type for authorization.</li>
   </ul>
   <br>
@@ -180,11 +181,11 @@ __END__
 
     <li><a id='AutomowerConnect-set-getNewAccessToken'>getNewAccessToken</a><br>
       <code>set &lt;name&gt; getNewAccessToken</code><br>
-      Gets a new access token</li>
+      For debug purpose only.</li>
 
     <li><a id='AutomowerConnect-set-getUpdate'>getUpdate</a><br>
       <code>set &lt;name&gt; getUpdate</code><br>
-      Gets data from the API. This is done each intervall automatically.</li>
+      For debug purpose only.</li>
 
     <li><a id='AutomowerConnect-set-headlight'>headlight</a><br>
       <code>set &lt;name&gt; headlight &lt;ALWAYS_OFF|ALWAYS_ON|EVENIG_ONLY|EVENING_AND_NIGHT&gt;</code><br>
@@ -244,9 +245,6 @@ __END__
   <a id="AutomowerConnectAttributes"></a>
   <b>Attributes</b>
   <ul>
-    <li><a id='AutomowerConnect-attr-interval'>interval</a><br>
-      <code>attr &lt;name&gt; interval &lt;time in seconds&gt;</code><br>
-      Time in seconds that is used to get new data from Husqvarna Cloud. Default: 420</li>
     <li><a id='AutomowerConnect-attr-mapImagePath'>mapImagePath</a><br>
       <code>attr &lt;name&gt; mapImagePath &lt;path to image&gt;</code><br>
       Path of a raster image file for an area the mower path has to be drawn to.<br>
@@ -273,7 +271,7 @@ __END__
         <li>mower path for activity MOWING: red</li>
         <li>path in CS, activity CHARGING,PARKED_IN_CS: grey</li>
         <li>path for activity LEAVING: green</li>
-        <li>path for activityGOING_HOME: blue</li>
+        <li>path for activity GOING_HOME: blue</li>
         <li>path for interval with error (all activities with error): kind of magenta</li>
         <li>all other activities: grey</li>
       </ul>
@@ -378,16 +376,53 @@ __END__
       }'<br>
       </code></li>
 
+    <li><a id='AutomowerConnect-attr-addPollingMinInterval'>addPollingMinInterval</a><br>
+      <code>attr &lt;name&gt; addPollingMinInterval &lt;interval in seconds&gt;</code><br>
+      Set minimum intervall for additional polling, default 0 (no polling). Gets periodically statistics data from mower. Make sure to be within API limits (10000 calls per month).</li>
+
+    <li><a id='AutomowerConnect-attr-addPositionPolling'>addPositionPolling</a><br>
+      <code>attr &lt;name&gt; addPositionPolling &lt;[1|<b>0</b>]&gt;</code><br>
+      Set position polling, default 0 (no position polling). Gets periodically position data from mower, instead from websocket. It has no effect without setting attribute addPollingMinInterval.</li>
+
     <li><a href="disable">disable</a></li>
+
     <li><a href="disabledForIntervals">disabledForIntervals</a></li>
     <br><br>
   </ul>
   <br>
 
+
+  <a id="AutomowerConnectUserAttr"></a>
+  <b>userattr</b><br>
+  <ul>
+  The following user attributes are taken into account.<br>
+
+    <li><a id='AutomowerConnect-attr-loglevelDevIo'>loglevelDevIo</a><br>
+      <code>attr &lt;name&gt; loglevelDevIo &lt;[012345]&gt;</code><br>
+      Set internal deviologlevel, <a target="_blank" href="https://wiki.fhem.de/wiki/DevIo#Wichtige_Internals_zur_Konfiguration"> DevIo: Wichtige_Internals_zur_Konfiguration</a> </li>
+
+    <li><a id='AutomowerConnect-attr-timeoutGetMower'>timeoutGetMower</a><br>
+      <code>attr &lt;name&gt; timeoutGetMower &lt;[6 to 60]&gt;</code><br>
+      Set timeout for API call, default 5 s. </li>
+
+    <li><a id='AutomowerConnect-attr-timeoutApiAuth'>timeoutApiAuth</a><br>
+      <code>attr &lt;name&gt; timeoutApiAuth &lt;[6 to 60]&gt;</code><br>
+      Set timeout for API call, default 5 s. </li>
+
+    <li><a id='AutomowerConnect-attr-timeoutCMD'>timeoutCMD</a><br>
+      <code>attr &lt;name&gt; timeoutCMD &lt;[6 to 60]&gt;</code><br>
+      Set timeout for API call, default 5 s. </li><br>
+  The response time is meassured and logged if a timeout ist set to 60 s.
+
+    <br><br>
+  </ul>
+
+
   <a id="AutomowerConnectReadings"></a>
   <b>Readings</b>
   <ul>
     <li>api_MowerFound - all mower registered under the application key (client_id) </li>
+    <li>api_callsThisMonth - counts monthly API calls, if attribute addPollingMinInterval is set.</li>
     <li>api_token_expires - date when session of Husqvarna Cloud expires</li>
     <li>batteryPercent - battery state of charge in percent</li>
     <li>mower_activity - current activity "UNKNOWN" | "NOT_APPLICABLE" | "MOWING" | "GOING_HOME" | "CHARGING" | "LEAVING" | "PARKED_IN_CS" | "STOPPED_IN_GARDEN"</li>
@@ -408,10 +443,10 @@ __END__
     <li>settings_cuttingHeight - actual cutting height from API</li>
     <li>settings_headlight - actual headlight mode from API</li>
     <li>statistics_newGeoDataSets - number of new data sets between the last two different time stamps</li>
-    <li>statistics_numberOfCollisions - Number of collisions (last day/all days)</li>
+    <li>statistics_numberOfCollisions - Number of collisions (current day/last day/all days)</li>
     <li>status_connected - state of connetion between mower and Husqvarna Cloud.</li>
-    <li>status_statusTimestamp - local time of last change of the API content</li>
-    <li>status_statusTimestampDiff - time difference in seconds between the last and second last change of the API content</li>
+    <li>status_statusTimestamp - local time of last status update</li>
+    <li>status_statusTimestampDiff - time difference in seconds between the last and second last status update</li>
     <li>system_name - name of the mower</li>
 
   </ul>
@@ -446,9 +481,8 @@ __END__
   <u><b>Anforderungen</b></u>
   <br><br>
   <ul>
-    <li>Für den Zugriff auf die API muss eine Application angelegt werden, im <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a>.</li>
+    <li>Für den Zugriff auf die API muss eine Application angelegt werden, im <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a>angelegt und mit der Automower Connect API verbunden werden.</li>
     <li>Währenddessen wird ein Application Key (client_id) und ein Application Secret (client secret) bereitgestellt. Diese sind für dieses Modul zu nutzen.</li>
-    <li>Der Application Key muss im Portal mit der Automower API verbunden werden.</li>
     <li>Das Modul nutzt Client Credentials als Granttype zur Authorisierung.</li>
   <br>
   </ul>
@@ -506,11 +540,11 @@ __END__
 
      <li><a id='AutomowerConnect-set-getNewAccessToken'>getNewAccessToken</a><br>
       <code>set &lt;name&gt; getNewAccessToken</code><br>
-      Holt ein neues Access Token.</li>
+      Nur zur Fehlerbehebung.</li>
 
     <li><a id='AutomowerConnect-set-getUpdate'>getUpdate</a><br>
       <code>set &lt;name&gt; getUpdate</code><br>
-      Liest die Daten von der API. Das passiert jedes Interval automatisch.</li>
+      Nur zur Fehlerbehebung.</li>
 
      <li><a id='AutomowerConnect-set-headlight'>headlight</a><br>
       <code>set &lt;name&gt; headlight &lt;ALWAYS_OFF|ALWAYS_ON|EVENIG_ONLY|EVENING_AND_NIGHT&gt;</code><br>
@@ -570,10 +604,6 @@ __END__
     <a id="AutomowerConnectAttributes"></a>
     <b>Attributes</b>
   <ul>
-    <li><a id='AutomowerConnect-attr-interval'>interval</a><br>
-      <code>attr &lt;name&gt; interval &lt;time in seconds&gt;</code><br>
-      Zeit in Sekunden nach denen neue Daten aus der Husqvarna Cloud abgerufen werden. Standard: 420</li>
-
     <li><a id='AutomowerConnect-attr-mapImagePath'>mapImagePath</a><br>
       <code>attr &lt;name&gt; mapImagePath &lt;path to image&gt;</code><br>
       Pfad zur Bilddatei. Auf das Bild werden Pfad, Anfangs- u. Endpunkte gezeichnet.<br>
@@ -709,16 +739,53 @@ __END__
       }'<br>
       </code></li>
 
+    <li><a id='AutomowerConnect-attr-addPollingMinInterval'>addPollingMinInterval</a><br>
+      <code>attr &lt;name&gt; addPollingMinInterval &lt;interval in seconds&gt;</code><br>
+      Setzt das Mindestintervall für zusätzliches Polling der API, default 0 (kein Polling). Liest periodisch statistische Daten vom Mäher. Es muss sichergestellt werden, das die API Begrenzung (10000 Anfragen pro Monat) eingehalten wird.</li>
+
+    <li><a id='AutomowerConnect-attr-addPositionPolling'>addPositionPolling</a><br>
+      <code>attr &lt;name&gt; addPositionPolling &lt;[1|<b>0</b>]&gt;</code><br>
+      Setzt das Positionspolling, default 0 (kein Positionpolling). Liest periodisch Positiondaten des Mähers, an Stelle der über Websocket gelieferten Daten. Das Attribut ist nur wirksam, wenn durch das Attribut addPollingMinInterval das Polling eingeschaltet ist.</li>
+
      <li><a href="disable">disable</a></li>
+
      <li><a href="disabledForIntervals">disabledForIntervals</a></li>
   <br>
   </ul>
   <br>
 
+
+  <a id="AutomowerConnectUserAttr"></a>
+  <b>userattr</b><br>
+  <ul>
+  Die folgenden Benutzerattribute werden unterstützt.<br>
+
+    <li><a id='AutomowerConnect-attr-loglevelDevIo'>loglevelDevIo</a><br>
+      <code>attr &lt;name&gt; loglevelDevIo &lt;[012345]&gt;</code><br>
+      Setzt das Internal deviologlevel, <a target="_blank" href="https://wiki.fhem.de/wiki/DevIo#Wichtige_Internals_zur_Konfiguration"> DevIo: Wichtige_Internals_zur_Konfiguration</a> </li>
+
+    <li><a id='AutomowerConnect-attr-timeoutGetMower'>timeoutGetMower</a><br>
+      <code>attr &lt;name&gt; timeoutGetMower &lt;[6 to 60]&gt;</code><br>
+      Setzt den Timeout für das Lesen der Mäherdaten, default 5 s. </li>
+
+    <li><a id='AutomowerConnect-attr-timeoutApiAuth'>timeoutApiAuth</a><br>
+      <code>attr &lt;name&gt; timeoutApiAuth &lt;[6 to 60]&gt;</code><br>
+      Setzt den Timeout für die Authentifikation, default 5 s. </li>
+
+    <li><a id='AutomowerConnect-attr-timeoutCMD'>timeoutCMD</a><br>
+      <code>attr &lt;name&gt; timeoutCMD &lt;[6 to 60]&gt;</code><br>
+      Setzt den Timeout für Befehl senden, default 15 s. </li><br>
+  Wird ein Timeout auf 60 s gesetzt, wird die Antwortzeit gemessen und geloggt.
+
+    <br><br>
+  </ul>
+
+
   <a id="AutomowerConnectReadings"></a>
   <b>Readings</b>
   <ul>
     <li>api_MowerFound - Alle Mähroboter, die unter dem genutzten Application Key (client_id) registriert sind.</li>
+    <li>api_callsThisMonth - Zählt die im Monat erfolgten API Aufrufe, wenn das Attribut addPollingMinInterval gesetzt ist.</li>
     <li>api_token_expires - Datum wann die Session der Husqvarna Cloud abläuft</li>
     <li>batteryPercent - Batterieladung in Prozent</li>
     <li>mower_activity - aktuelle Aktivität "UNKNOWN" | "NOT_APPLICABLE" | "MOWING" | "GOING_HOME" | "CHARGING" | "LEAVING" | "PARKED_IN_CS" | "STOPPED_IN_GARDEN"</li>
@@ -739,10 +806,10 @@ __END__
     <li>settings_cuttingHeight - aktuelle Schnitthöhe aus der API</li>
     <li>settings_headlight - aktueller Scheinwerfermode aus der API</li>
     <li>statistics_newGeoDataSets - Anzahl der neuen Datensätze zwischen den letzten zwei unterschiedlichen Zeitstempeln</li>
-    <li>statistics_numberOfCollisions - Anzahl der Kollisionen (letzter Tag/alle Tage)</li>
+    <li>statistics_numberOfCollisions - Anzahl der Kollisionen (laufender Tag/letzter Tag/alle Tage)</li>
     <li>status_connected - Status der Verbindung zwischen dem Automower und der Husqvarna Cloud.</li>
-    <li>status_statusTimestamp - Lokalzeit der letzten Änderung der Daten in der API</li>
-    <li>status_statusTimestampDiff - Zeitdifferenz zwischen den beiden letzten Änderungen im Inhalt der Daten aus der API</li>
+    <li>status_statusTimestamp - Lokalzeit des letzten Statusupdates in der API</li>
+    <li>status_statusTimestampDiff - Zeitdifferenz zwischen dem letzten und vorletzten Statusupdate.</li>
     <li>system_name - Name des Automowers</li>
   </ul>
 </ul>

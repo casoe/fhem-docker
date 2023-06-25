@@ -1,5 +1,18 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - feature: 74_AutomowerConnect: Common.pm, add additional API polling
+ - feature: 76_SMAInverter: bugfix DC-Power 
+ - change:  74_AutomowerConnect: Common.pm, automowerconnect.js
+            handle userattr for API timeouts and logleveldevio, measure
+            response time, prevent some warnings, update map via FW extension,
+            reduce side effects while maually update mower data via polling
+ - feature: 72_FRITZBOX: Attribut: disableHostIPv4check
+ - bugfix:  72_FRITZBOX: Parameter Fehlerbehandlung: get fritzLog
+ - change:  10_KNX: moved KNX_scan function to KNXIO-module, see Forum #122582
+ - change:  00_KNXIO: update KNX and KNXIO-module at same time!, Forum #127792
+            added new Attr. enableKNXscan, see cmd-ref 
+ - change:  74_AutomowerConnect: Common.pm, automowerconnect.js
+            improved disabled handling, reworked use only differential data
  - feature: OpenWeatherMapAPI: add human-readable text of daily forecast
  - feature: 48_BlinkCamera: Support for doorbell added 
  - change:  50_Signalbot: Minor change in event behavior and catch dbus error

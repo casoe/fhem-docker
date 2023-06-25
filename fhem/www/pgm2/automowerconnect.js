@@ -1,12 +1,12 @@
 
-FW_version["automowerconnect.js"] = "$Id: automowerconnect.js 27644 2023-06-02 16:49:35Z Ellert $";
+FW_version["automowerconnect.js"] = "$Id: automowerconnect.js 27701 2023-06-23 22:06:55Z Ellert $";
 
 function AutomowerConnectShowError( ctx, div, dev, picx, picy, errdesc, erray ) {
   // ERROR BANNER
   ctx.beginPath();
-  ctx.fillStyle = div.getAttribute( 'data-errorBackgroundColor' );;
+  ctx.fillStyle = div.getAttribute( 'data-errorBackgroundColor' );
   ctx.font = div.getAttribute( 'data-errorFont' );
-  var m = ctx.measureText( errdesc[ 1 ] + ', ' + dev + ': ' + errdesc[ 0 ] ).width > picy - 6;
+  var m = ctx.measureText( errdesc[ 1 ] + ', ' + dev + ': ' + errdesc[ 2 ] + ' - ' + errdesc[ 0 ] ).width > picx - 6;
 
   if ( m ) {
 
@@ -24,11 +24,11 @@ function AutomowerConnectShowError( ctx, div, dev, picx, picy, errdesc, erray ) 
   if ( m ) {
 
   ctx.fillText( errdesc[ 1 ] + ', ' + dev + ':', 3, 15 );
-  ctx.fillText( errdesc[ 0 ], 3, 30 );
+  ctx.fillText( errdesc[ 2 ] + ' - ' + errdesc[ 0 ], 3, 30 );
 
   } else {
 
-  ctx.fillText( errdesc[ 1 ] + ', ' + dev + ': ' + errdesc[ 0 ], 3, 15 );
+  ctx.fillText( errdesc[ 1 ] + ', ' + dev + ': ' + errdesc[ 2 ] + ' - ' + errdesc[ 0 ], 3, 15 );
 
   }
 
@@ -271,6 +271,17 @@ function AutomowerConnectTor ( x0, y0, x1, y1 ) {
   //~ log ('ret: ' + ret);
   return ret;
 }
+
+function AutomowerConnectUpdateJson ( path ) {
+  $.getJSON( path, function( data, textStatus ) {
+    log( 'AutomowerConnectUpdateJson ( '+path+' ): status '+textStatus );
+    if ( textStatus == 'success') 
+      AutomowerConnectUpdateDetail ( data.name, data.type, data.detailfnfirst, data.picx, data.picy, data.scalx, data.errdesc, data.posxy, data.poserrxy );
+
+  });
+
+}
+
 //AutomowerConnectUpdateDetail (<devicename>, <type>, <detailfnfirst>, <imagesize x>, <imagesize y>,<scale x>, <error description>, <path array>, <error array>)
 function AutomowerConnectUpdateDetail (dev, type, detailfnfirst, picx, picy, scalx, errdesc, pos, erray) {
   const colorat = {
@@ -283,7 +294,6 @@ function AutomowerConnectUpdateDetail (dev, type, detailfnfirst, picx, picy, sca
     "L" : "leavingPath",
     "G" : "goingHomePath"
   };
-//  log('pos.length '+pos.length+' lixy.length '+lixy.length+', scalx '+scalx );
 //  log('loop: Start '+ type+' '+dev );
   if (FW_urlParams.detail == dev || 1) {
     const canvas_0 = document.getElementById(type+'_'+dev+'_canvas_0');
@@ -292,7 +302,7 @@ function AutomowerConnectUpdateDetail (dev, type, detailfnfirst, picx, picy, sca
 
     if ( canvas && canvas_0 ) {
 
-//    log('loop: canvas && canvas_0 true '+ type+' '+dev );
+//    log('loop: canvas && canvas_0 true '+ type+' '+dev + ' detailfnfirst '+detailfnfirst);
 
       if ( detailfnfirst ) {
 
@@ -303,6 +313,7 @@ function AutomowerConnectUpdateDetail (dev, type, detailfnfirst, picx, picy, sca
         // draw area limits
         const lixy = div.getAttribute( 'data-areaLimitsPath' ).split(",");
         if ( lixy.length > 0 ) AutomowerConnectLimits( ctx0, div, lixy, 'area' );
+//        log('pos.length '+pos.length+' lixy.length '+lixy.length+', scalx '+scalx );
 
         // draw property limits
         const plixy = div.getAttribute( 'data-propertyLimitsPath' ).split( "," );
@@ -321,23 +332,6 @@ function AutomowerConnectUpdateDetail (dev, type, detailfnfirst, picx, picy, sca
       
       const ctx = canvas.getContext( '2d' );
       ctx.clearRect( 0, 0, canvas.width, canvas.height );
-      const attrpath = div.getAttribute( 'data-mowingPath' );
-      var oldpath = "";
-
-      if ( attrpath ) {
-
-        oldpath = attrpath.split( "," );
-        pos.push( ...oldpath );
-
-        while ( pos.length > 5000 ) {
-
-          pos.pop();
-
-        }
-
-      }
-
-      div.setAttribute( 'data-mowingPath', pos.join( "," ) );
 
       if ( pos.length > 3 ) {
 
@@ -359,7 +353,7 @@ function AutomowerConnectUpdateDetail (dev, type, detailfnfirst, picx, picy, sca
           ctx.lineWidth=3;
           ctx.strokeStyle = 'white';
           ctx.fillStyle= 'black';
-          ctx.arc(parseInt(pos[pos.length-3]), parseInt(pos[pos.length-2]), 4, 0, 2 * Math.PI, false);
+          ctx.arc( parseInt( pos[ pos.length-3 ] ), parseInt( pos[ pos.length-2 ] ), 4, 0, 2 * Math.PI, false );
           ctx.fill();
           ctx.stroke();
         }
