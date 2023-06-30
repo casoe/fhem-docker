@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 27302 2023-03-05 17:57:23Z fhemupdate $
+# $Id: fhem.pl 27498 2023-04-30 08:50:41Z rudolfkoenig $
 
 
 use strict;
@@ -279,7 +279,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 27302 2023-03-05 17:57:23Z fhemupdate $';
+my $cvsid = '$Id: fhem.pl 27498 2023-04-30 08:50:41Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -842,11 +842,13 @@ while (1) {
   }
 
   foreach my $p (keys %readyfnlist) {
-    next if(!$readyfnlist{$p});                 # due to rereadcfg / delete
+    my $h = $readyfnlist{$p};
+    next if(!$h);                 # due to rereadcfg / delete
+    next if($h->{NEXT_OPEN} && gettimeofday() < $h->{NEXT_OPEN});
 
-    if(CallFn($readyfnlist{$p}{NAME}, "ReadyFn", $readyfnlist{$p})) {
+    if(CallFn($h->{NAME}, "ReadyFn", $h)) {
       if($readyfnlist{$p}) {                    # delete itself inside ReadyFn
-        CallFn($readyfnlist{$p}{NAME}, "ReadFn", $readyfnlist{$p});
+        CallFn($h->{NAME}, "ReadFn", $h);
       }
 
     }
@@ -4797,12 +4799,15 @@ setReadingsVal($$$$)
 
   return if($rname eq "IODev" && !fhem_devSupportsAttr($hash->{NAME}, "IODev"));
 
-  if($hash->{".or"} && grep($rname =~ m/^$_$/, @{$hash->{".or"}}) ) {
-    if(defined($hash->{READINGS}{$rname}) && 
-       defined($hash->{READINGS}{$rname}{VAL}) &&
-        $hash->{READINGS}{$rname}{VAL} ne $val ) {
-      $hash->{OLDREADINGS}{$rname}{VAL} = $hash->{READINGS}{$rname}{VAL};
-      $hash->{OLDREADINGS}{$rname}{TIME} = $hash->{READINGS}{$rname}{TIME};
+  my $or = $hash->{".or"};
+  if($or && grep($rname =~ m/^$_$/, @{$or}) ) {
+    my $rd = $hash->{READINGS};
+    if(defined($rd->{$rname}) && 
+       defined($rd->{$rname}{VAL}) &&
+        ($or->[@{$or}-1] eq "oldreadingsAlways" ||
+         $rd->{$rname}{VAL} ne $val) ) {
+      $hash->{OLDREADINGS}{$rname}{VAL} = $rd->{$rname}{VAL};
+      $hash->{OLDREADINGS}{$rname}{TIME} = $rd->{$rname}{TIME};
     }
   }
 

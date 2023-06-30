@@ -1,4 +1,4 @@
-# $Id: 98_WeekdayTimer.pm 27118 2023-01-25 19:32:47Z Beta-User $
+# $Id: 98_WeekdayTimer.pm 27586 2023-05-17 13:43:31Z Beta-User $we Beta-User $
 #############################################################################
 #
 #     98_WeekdayTimer.pm
@@ -331,29 +331,28 @@ sub _Profile {
   my $idx = 0;
   for  my $st ( @{$hash->{SWITCHINGTIMES}} ) {
     my ($tage,$time,$parameter,$overrulewday) = _SwitchingTime ($hash, $st);
-
     $idx++;
     for  my $d (@{$tage}) {
       my    @listeDerTage = ($d);
       push  (@listeDerTage, _getDaysList($hash, $d, $time)) if ($d>=7);
-      
+
       for my $day (@listeDerTage) {
         my $dayOfEchteZeit = $day;
-        #####
+
         if ($day < 7) {
           my $relativeDay = ($day - $wday ) % 7;
-          #my $relativeDay = $day - $wday; 
-          #$relativeDay = $relativeDay + 7 if $relativeDay < 0 ;
-          $dayOfEchteZeit = undef if ($hash->{helper}{WEDAYS}{$relativeDay} && $overrulewday);
+          $dayOfEchteZeit = undef if $hash->{helper}{WEDAYS}{$relativeDay} && defined $overrulewday && $overrulewday !~ m{$day}x;
+        } elsif ($day==7) {
+            $dayOfEchteZeit = ($wday>=1&&$wday<=5) ? 6 : $wday; # ggf. Samstag
+        } elsif ($day==8) {
+            $dayOfEchteZeit = ($wday==0||$wday==6) ? 1 : $wday; # ggf. Montag
         }
-        $dayOfEchteZeit = ($wday>=1&&$wday<=5) ? 6 : $wday  if ($day==7); # ggf. Samstag $wday ~~ [1..5]
-        $dayOfEchteZeit = ($wday==0||$wday==6) ? 1 : $wday  if ($day==8); # ggf. Montag  $wday ~~ [0, 6]
         if (defined $dayOfEchteZeit) { 
           my $echtZeit = _getHHMMSS($hash, $dayOfEchteZeit, $time);
           $hash->{profile}    {$day}{$echtZeit} = $parameter;
           $hash->{profile_IDX}{$day}{$echtZeit} = $idx;
         }
-      };
+      }
     }
   }
 # ---- Zeitpunkte des aktuellen Tages mit EPOCH ermitteln --------------
@@ -427,17 +426,22 @@ sub _SwitchingTime {
 
   my ($daylist, $time, $timeString, $para);
   my @st = split m{\|}xms, $switchingtime;
-  my $overrulewday = 0;
+  my $overrulewday;
   if ( @st == 2 || @st == 3 && $st[2] eq 'w') {
     $daylist = ($globalDaylistSpec ne '') ? $globalDaylistSpec : '0123456';
     $time    = $st[0];
     $para    = $st[1];
-    $overrulewday = 1 if defined $st[2] && $st[2] eq 'w';
+    $overrulewday = 'w' if defined $st[2] && $st[2] eq 'w';
   } elsif ( @st == 3 || @st == 4) {
     $daylist  = $st[0];
     $time     = $st[1];
     $para     = $st[2];
-    $overrulewday = 1 if defined $st[3] && $st[3] eq 'w' || $st[0] == 8;
+    if ( defined $st[3] && $st[3] eq 'w' ) {
+        $overrulewday = 'w'; 
+    } elsif ($st[0] =~ m{8}x ) {
+        $overrulewday = $daylist;
+        $overrulewday =~ s{8}{}x;# was: $st[0] == 8; might be: $st[0] eq '8'?!?
+    }
   }
 
   my @tage = @{_daylistAsArray($hash, $daylist)};
@@ -529,7 +533,7 @@ sub _getHHMMSS {
 
   # Zeitangabe verarbeiten.
   $time = qq{"$time"} if $time !~  m{\A\{.*\}\z}xms;
-  my $date           = $now+($d-$wday)*DAYSECONDS;
+  my $date           = $now+abs($d-$wday)*DAYSECONDS;
   my $timeString     = '{ my $date='."$date;" .$time."}";
   my $eTimeString    = AnalyzePerlCommand( $hash, $timeString );                            # must deliver HH:MM[:SS]
 
@@ -1064,7 +1068,7 @@ sub checkIfDeviceIsHeatingType {
   my $allSets = getAllSets($dName);
 
   for my $ts (@tempSet) {
-  if ($allSets =~ m{$ts}xms) {
+    if ($allSets =~ m{$ts}xms) {
       Log3( $hash, 4, "[$name] device type heating recognized, setModifier:$ts" );
       $hash->{setModifier} = $ts;
       return $ts
@@ -1293,7 +1297,7 @@ sub checkDaysCondition {
 ################################################################################
 sub getDaysAsHash {
   my $hash = shift;
-  my $tage = shift //return {};
+  my $tage = shift // return {};
 
   my %days = map {$_ => 1} @{$tage};
   delete @days{7,8};
@@ -1304,7 +1308,7 @@ sub getDaysAsHash {
 ################################################################################
 sub getDaysAsCondition {
   my $tage         = shift;
-  my $overrulewday = shift // return;
+  my $overrulewday = shift;
 
   my %days     = map {$_ => 1} @{$tage};
 
@@ -1312,7 +1316,7 @@ sub getDaysAsCondition {
   my $notWe    = $days{8}; delete $days{8};  #!$we
 
   my $tageExp  = 'defined $days->{$wday}';
-     $tageExp .= ' && !$we' if $overrulewday;
+     $tageExp .= ' && !$we' if defined $overrulewday;
      $tageExp .= ' ||  $we' if defined $we;
      $tageExp .= ' || !$we' if defined $notWe;
   return $tageExp;
@@ -1323,11 +1327,11 @@ sub Attr {
   my ($cmd, $name, $attrName, $attrVal) = @_;
   $attrVal = 0 if !defined $attrVal;
 
-  my $hash = $defs{$name};
+  my $hash = $defs{$name} // return 'error: device not defined!';
   if ( $attrName eq 'WDT_eventMap' ) {
     if($cmd eq 'set') {
       my @ret = split m{[: \r\n]}x, $attrVal;
-      return "WDT_eventMap: Odd number of elements" if int(@ret) % 2;
+      return 'WDT_eventMap: Odd number of elements' if int(@ret) % 2;
       my %ret = @ret;
       for (keys %ret) {
         $ret{$_} =~ s{\+}{ }gxms;
@@ -1337,22 +1341,22 @@ sub Attr {
       delete $hash->{WDT_EVENTMAP};
     }
     $attr{$name}{$attrName} = $attrVal;
-    return if (!$init_done);
+    return if !$init_done;
     return WDT_Start($hash);
   }
   return if !$init_done;
   if( $attrName eq 'disable' ) {
     _DeleteTimer($hash);
-    ###RemoveInternalTimer($fnHash);
     readingsSingleUpdate ($hash, 'disabled',  $attrVal, 1);
     $attr{$name}{$attrName} = $attrVal;
-    return RemoveInternalTimer($hash,\&WDT_SetTimerOfDay) if $attrVal;
+    if ( $attrVal ) {
+      readingsSingleUpdate ($hash, 'state', 'inactive', 1);
+      return RemoveInternalTimer($hash,\&WDT_SetTimerOfDay);
+    }
     return WDT_Start($hash);
-    #return WDT_SetTimerOfDay( { HASH => $hash} ) if !$attrVal;
   }
   if ( $attrName eq 'weekprofile' ) {
     $attr{$name}{$attrName} = $attrVal;
-    #return WDT_Start($hash);
   } 
   if ( $attrName eq 'switchInThePast' ) {
     $attr{$name}{$attrName} = $attrVal;
@@ -1380,7 +1384,6 @@ sub Attr {
 
   return;
 }
-
 
 ################################################################################
 sub WeekdayTimer_SetParm {

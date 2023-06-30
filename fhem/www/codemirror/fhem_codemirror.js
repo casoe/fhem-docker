@@ -1,10 +1,12 @@
-/* $Id: fhem_codemirror.js 16926 2018-07-01 09:15:20Z rudolfkoenig $ */
+/* $Id: fhem_codemirror.js 27549 2023-05-10 16:14:43Z betateilchen $ */
 
 var cm_loaded = 0;
 var cm_active = 0;
 var cm_attr = {
     matchBrackets:       true,
+    foldGutter:          false,
     autoRefresh:         true,
+    fullScreen:          false,
     search:              true,
     comment:             true,
     autocomplete:        true,
@@ -12,6 +14,7 @@ var cm_attr = {
     autoCloseBrackets:   true,
     indentUnit:          4,
     type:                "fhem",
+    mode:                "fhem",
     theme:               "blackboard",
     indentWithTabs:      true,
     autofocus:           true,
@@ -79,6 +82,17 @@ function AddCodeMirror(e, cb) {
       loadScript("codemirror/codemirror.js", function(){cm_loaded++;} );
         
     // load additional addons
+    if (cm_attr.foldGutter) {
+        cm_active++; 
+          loadLink("codemirror/foldgutter.css");
+          loadScript("codemirror/foldgutter.js", function(){cm_loaded++;} );
+        cm_attr.extraKeys['Ctrl-X'] = function(cm){ cm.foldCode(cm.getCursor(),{ scanUp: true }); };
+        cm_attr.extraKeys['Ctrl-I'] = function(cm){ CodeMirror.commands.foldAll(cm); };
+        cm_attr.extraKeys['Ctrl-J'] = function(cm){ CodeMirror.commands.unfoldAll(cm); };
+        cm_active++; loadScript("codemirror/brace-fold.js", function(){cm_loaded++;} );
+        cm_active++; loadScript("codemirror/foldcode.js", function(){cm_loaded++;} );
+        cm_attr.gutters = ["CodeMirror-linenumbers", "CodeMirror-foldgutter"];
+    }
     if (cm_attr.autoCloseBrackets) {
         cm_active++; loadScript("codemirror/closebrackets.js", function(){cm_loaded++;} );
     }
@@ -127,7 +141,17 @@ function AddCodeMirror(e, cb) {
             $("head").append('<style type="text/css">.CodeMirror {height:' + cm_attr.height + 'px;}');
         }
     }
-    
+    if (cm_attr.fullScreen) {
+        cm_active++;
+        loadLink("codemirror/fullscreen.css");
+        loadScript("codemirror/fullscreen.js", function(){cm_loaded++;} );
+        cm_attr.extraKeys['F10'] = function(cm) {
+            cm.setOption("fullScreen", !cm.getOption("fullScreen"));
+        }
+        cm_attr.extraKeys['Esc'] = function(cm) {
+            if (cm.getOption("fullScreen")) cm.setOption("fullScreen", false);
+        }
+    }    
     // get the type from hidden filename extension, load the type-file.js, theme.css and call cm_wait
     var ltype;
     $("input[name=save]").each(function() {

@@ -1,4 +1,4 @@
-# $Id: wundergroundAPI.pm 27146 2023-01-29 15:27:02Z CoolTux $
+# $Id: wundergroundAPI.pm 27642 2023-06-02 03:11:10Z CoolTux $
 package FHEM::APIs::Weather::wundergroundAPI;
 use strict;
 use warnings;
@@ -541,6 +541,16 @@ sub _ProcessingRetrieveData {
                                             $data->{sunsetTimeLocal}[$i]
                                         )
                                     )
+                                ),
+                                'temperature' => int(
+                                    sprintf(
+                                        "%.1f",
+                                        (
+                                              $data->{temperatureMax}[$i]
+                                            ? $data->{temperatureMax}[$i]
+                                            : 0
+                                        )
+                                    ) + 0.5
                                 ),
                                 'low_c' => int(
                                     sprintf( "%.1f",

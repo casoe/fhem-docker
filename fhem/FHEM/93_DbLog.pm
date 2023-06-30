@@ -1,5 +1,5 @@
 ############################################################################################################################################
-# $Id: 93_DbLog.pm 27327 2023-03-16 19:56:33Z DS_Starter $
+# $Id: 93_DbLog.pm 27617 2023-05-25 19:56:44Z DS_Starter $
 #
 # 93_DbLog.pm
 # written by Dr. Boris Neubert 2007-12-30
@@ -28,6 +28,7 @@ eval "use FHEM::Utility::CTZ qw(:all);1;"        or my $ctzAbsent     = 1;      
 eval "use Storable qw(freeze thaw);1;"           or my $storabs       = "Storable";         ## no critic 'eval'
 
 #use Data::Dumper;
+use Scalar::Util qw(looks_like_number);
 use Time::HiRes qw(gettimeofday tv_interval usleep);
 use Time::Local;
 use Encode qw(encode_utf8);
@@ -38,6 +39,13 @@ no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 # Version History intern by DS_Starter:
 my %DbLog_vNotesIntern = (
+  "5.9.0"   => "16.05.2023 Server shutdown -> write cachefile if database connect can't be done during delayed shutdown ". 
+                           "Forum: https://forum.fhem.de/index.php?topic=133599.0 ",
+  "5.8.8"   => "11.05.2023 _DbLog_ParseEvent changed default splitting, Forum: https://forum.fhem.de/index.php?topic=133537.0 ",
+  "5.8.7"   => "01.05.2023 new Events FRAME_INITIALIZED, SUBPROC_INITIALIZED, SUBPROC_DISCONNECTED, SUBPROC_STOPPED ".
+                           "Forum: https://forum.fhem.de/index.php?topic=133403.0, minor fixes ",
+  "5.8.6"   => "25.03.2023 change _DbLog_plotData (intx), Plot Editor: include functions delta-h, delta-h, ...".
+                           "remove setter deleteOldDaysNbl, reduceLogNbl ",
   "5.8.5"   => "16.03.2023 fix using https in configCheck after SVN server change ",
   "5.8.4"   => "20.02.2023 new attr plotInputFieldLength, improve Plot Editor, delete attr noNotifyDev ".
                            "move notifyRegexpChanged from Define to initOnStart ",
@@ -154,11 +162,12 @@ my %DbLog_columns = ("DEVICE"  => 64,
 
 # Defaultwerte
 ###############
-my $dblog_cachedef = 500;                       # default Größe cacheLimit bei asynchronen Betrieb
-my $dblog_cmdef    = 'basic_ta:on';             # default commitMode
-my $dblog_todef    = 86400;                     # default timeout Sekunden
-my $dblog_lrpth    = 0.8;                       # Schwellenwert für LONGRUN_PID ab dem "Another operation is in progress...." im state ausgegeben wird
-my $dblog_pifl     = 40;                        # default Breite Eingabefelder im Plot Editor
+my $dblog_cachedef = 500;                                                       # default Größe cacheLimit bei asynchronen Betrieb
+my $dblog_cmdef    = 'basic_ta:on';                                             # default commitMode
+my $dblog_todef    = 86400;                                                     # default timeout Sekunden
+my $dblog_lrpth    = 0.8;                                                       # Schwellenwert für LONGRUN_PID ab dem "Another operation is in progress...." im state ausgegeben wird
+my $dblog_pifl     = 40;                                                        # default Breite Eingabefelder im Plot Editor
+my $dblog_svgfnset = ',delta-d,delta-h,delta-ts,int,int1,int2,int3,int4,int5';  # Funktionen für SVG sampleDataFn
 
 ################################################################
 sub DbLog_Initialize {
@@ -260,6 +269,7 @@ sub DbLog_Define {
   $hash->{HELPER}{OLDSTATE}      = 'initialized';
   $hash->{HELPER}{MODMETAABSENT} = 1 if($modMetaAbsent);                                                      # Modul Meta.pm nicht vorhanden
 
+  DbLog_setSchemeTable ($hash, '');                                                                           # Tabellen initial setzen
   DbLog_setVersionInfo ($hash);                                                                               # Versionsinformationen setzen
 
   $hash->{PID}                      = $$;                                                                     # remember PID for plotfork
@@ -271,8 +281,6 @@ sub DbLog_Define {
       Log3($name, 1, "DbLog $name - Error while reading $hash->{CONFIGURATION}: '$ret' ");
       return $ret;
   }
-
-  InternalTimer(gettimeofday()+2, 'DbLog_setinternalcols', $hash, 0);                                         # set used COLUMNS
 
   DbLog_setReadingstate  ($hash, 'waiting for connection');
   DbLog_SBP_CheckAndInit ($hash, 1);                                                                          # SubProcess starten - direkt nach Define !! um wenig Speicher zu allokieren
@@ -310,16 +318,15 @@ sub _DbLog_initOnStart {
       readingsDelete ($hash, $r);
   }
 
-  DbLog_setSchemeTable   ($hash);
-  notifyRegexpChanged    ($hash, $hash->{REGEXP});                      # nur Events dieser Devices an NotifyFn weiterleiten, NOTIFYDEV wird gesetzt wenn möglich
-  DbLog_SBP_CheckAndInit ($hash);
-
-  my $rst = DbLog_SBP_sendConnectionData ($hash);                       # Verbindungsdaten an SubProzess senden
-  if (!$rst) {
-      Log3 ($name, 3, "DbLog $name - DB connection parameters are initialized in the SubProcess");
-  }
-
-  DbLog_execMemCacheAsync ($hash);                                      # InternalTimer DbLog_execMemCacheAsync starten
+  DbLog_setSchemeTable         ($hash);                                 # Tabellenschema nach Laden Attr neu setzen
+  notifyRegexpChanged          ($hash, $hash->{REGEXP});                # nur Events dieser Devices an NotifyFn weiterleiten, NOTIFYDEV wird gesetzt wenn möglich
+  DbLog_setinternalcols        ($hash);                                 # verwendete Feldlängen setzen
+  
+  DoTrigger                    ($name, 'FRAME_INITIALIZED', 1);
+  
+  DbLog_SBP_CheckAndInit       ($hash);
+  DbLog_SBP_sendConnectionData ($hash);                                 # Verbindungsdaten an SubProzess senden
+  DbLog_execMemCacheAsync      ($hash);                                 # InternalTimer DbLog_execMemCacheAsync starten
 
 return;
 }
@@ -453,7 +460,7 @@ sub DbLog_Attr {
   if ($aName =~ /SQLite/xs) {
       if ($init_done == 1) {
           DbLog_SBP_sendDbDisconnect ($hash, 1);                                            # DB Verbindung und Verbindungsdaten im SubProzess löschen
-          InternalTimer(gettimeofday()+2.0, 'DbLog_SBP_sendConnectionData', $hash, 0);      # neue Verbindungsdaten an SubProzess senden
+          InternalTimer(gettimeofday()+0.8, 'DbLog_SBP_sendConnectionData', $hash, 0);      # neue Verbindungsdaten an SubProzess senden
       }
   }
 
@@ -461,13 +468,16 @@ sub DbLog_Attr {
       if ($cmd eq "set" && $aVal) {
           unless ($aVal =~ /^[0-9]+$/) { return " The Value of $aName is not valid. Use only figures 0-9 !";}
       }
-      InternalTimer(gettimeofday()+0.5, "DbLog_setinternalcols", $hash, 0);
+      
+      if ($init_done == 1) {
+          InternalTimer(gettimeofday()+0.8, "DbLog_setinternalcols", $hash, 0);
+      }
   }
 
   if($aName eq 'asyncMode') {
       if ($cmd eq "set" && $aVal) {
           $hash->{MODE} = 'asynchronous';
-          InternalTimer(gettimeofday()+2, 'DbLog_execMemCacheAsync', $hash, 0);
+          InternalTimer(gettimeofday()+0.8, 'DbLog_execMemCacheAsync', $hash, 0);
       }
       else {
           $hash->{MODE} = 'synchronous';
@@ -489,7 +499,7 @@ sub DbLog_Attr {
       if ($init_done == 1) {
            DbLog_SBP_sendDbDisconnect ($hash, 1);                                            # DB Verbindung und Verbindungsdaten im SubProzess löschen
 
-          InternalTimer(gettimeofday()+2.0, 'DbLog_SBP_sendConnectionData', $hash, 0);       # neue Verbindungsdaten an SubProzess senden
+          InternalTimer(gettimeofday()+0.8, 'DbLog_SBP_sendConnectionData', $hash, 0);       # neue Verbindungsdaten an SubProzess senden
       }
   }
 
@@ -520,7 +530,7 @@ sub DbLog_Attr {
       DbLog_setReadingstate   ($hash, $val);
 
       if ($do == 0) {
-          InternalTimer(gettimeofday()+2, "_DbLog_initOnStart", $hash, 0);
+          InternalTimer(gettimeofday()+0.8, "_DbLog_initOnStart", $hash, 0);
       }
   }
 
@@ -541,7 +551,7 @@ sub DbLog_Attr {
       if ($init_done == 1) {
            DbLog_SBP_sendDbDisconnect ($hash, 1);                                            # DB Verbindung und Verbindungsdaten im SubProzess löschen
 
-          InternalTimer(gettimeofday()+2.0, 'DbLog_SBP_sendConnectionData', $hash, 0);       # neue Verbindungsdaten an SubProzess senden
+          InternalTimer(gettimeofday()+0.8, 'DbLog_SBP_sendConnectionData', $hash, 0);       # neue Verbindungsdaten an SubProzess senden
       }
   }
 
@@ -573,11 +583,9 @@ sub DbLog_Set {
                 "configCheck:noArg ".
                 "countNbl:noArg ".
                 "deleteOldDays ".
-                "deleteOldDaysNbl ".
                 "eraseReadings:noArg ".
                 "listCache:noArg ".
                 "reduceLog ".
-                "reduceLogNbl ".
                 "rereadcfg:noArg ".
                 "reopen ".
                 "stopSubProcess:noArg ".
@@ -1019,7 +1027,7 @@ sub _DbLog_setexportCache {              ## no critic "not used"
   my $logsref = $paref->{logsref};
   my $dir     = $paref->{dir};
 
-  return "Device is not in asynch working mode" if(!AttrVal($name, 'asyncMode', 0));
+  # return "Device is not in asynch working mode" if(!AttrVal($name, 'asyncMode', 0));
 
   my $cln;
   my $crows = 0;
@@ -1557,26 +1565,27 @@ sub _DbLog_ParseEvent {
 
   # split the event into reading, value and unit
   # "day-temp: 22.0 (Celsius)" -> "day-temp", "22.0 (Celsius)"
-  my @parts = split(/: /,$event, 2);
-  $reading  = shift @parts;
-
-  if(@parts == 2) {
-    $value = $parts[0];
-    $unit  = $parts[1];
+  my @parts = split /: /, $event;
+  
+  if(scalar @parts == 2) {                                               # V 5.8.8 default Splitting komplett umgebaut
+      $reading = shift @parts;
+      my $tail = shift @parts;
+      @parts   = split " ", $tail;
+      
+      $value = $tail;
+      $unit  = q{};
+    
+      if (scalar @parts <= 2 && looks_like_number($parts[0])) {
+          $value = $parts[0];
+          $unit  = $parts[1] // q{};            
+      }
   }
-  else {
-    $value = join(": ", @parts);
-    $unit  = "";
-  }
 
-  # Log3 $name, 2, "DbLog $name - ParseEvent - Event: $event, Reading: $reading, Value: $value, Unit: $unit";
-
-  #default
   if(!defined($reading)) { $reading = ""; }
   if(!defined($value))   { $value   = ""; }
-  if($value eq "") {                                                     # Default Splitting geändert 04.01.20 Forum: #106992
-      if($event =~ /^.*:\s$/) {                                          # und 21.01.20 Forum: #106769
-          $reading = (split(":", $event))[0];
+  if($value eq "") {                                                     
+      if($event =~ /:\s/) {                                              # 21.01.20 Forum: #106769
+          ($reading,$value) = split /: /, $event, 2;
       }
       else {
           $reading = "state";
@@ -1584,11 +1593,8 @@ sub _DbLog_ParseEvent {
       }
   }
 
-  #globales Abfangen von                                                  # changed in Version 4.12.5
-  # - temperature
+  # globales Abfangen von                                                 # changed in Version 4.12.5
   # - humidity
-  #if   ($reading =~ m(^temperature)) { $unit = "°C"; }                   # wenn reading mit temperature beginnt
-  #elsif($reading =~ m(^humidity))    { $unit = "%"; }                    # wenn reading mit humidity beginnt
   if($reading =~ m(^humidity))    { $unit = "%"; }                        # wenn reading mit humidity beginnt
 
 
@@ -1611,7 +1617,8 @@ sub _DbLog_ParseEvent {
               $value =~ s/ \(Celsius\)//;
               $value =~ s/([-\.\d]+).*/$1/;
               $unit  = "°C";
-          } elsif (lc($reading) =~ m/(humidity|vwc)/) {
+          } 
+          elsif (lc($reading) =~ m/(humidity|vwc)/) {
               $value =~ s/ \(\%\)//;
              $unit  = "%";
           }
@@ -1629,13 +1636,13 @@ sub _DbLog_ParseEvent {
       }
   }
 
-  # ZWAVE
-  elsif ($type eq "ZWAVE") {
-      if ( $value =~/([-\.\d]+)\s([a-z].*)/i ) {
-          $value = $1;
-          $unit  = $2;
-      }
-  }
+  # ZWAVE                                                             # V 5.8.8 rausgenommen
+  #elsif ($type eq "ZWAVE") {
+  #    if ( $value =~/([-\.\d]+)\s([a-z].*)/i ) {
+  #        $value = $1;
+  #        $unit  = $2;
+  #    }
+  #}
 
   # FBDECT
   elsif ($type eq "FBDECT") {
@@ -1648,7 +1655,7 @@ sub _DbLog_ParseEvent {
   # MAX
   elsif(($type eq "MAX")) {
       $unit = "°C" if(lc($reading) =~ m/temp/);
-      $unit = "%"   if(lc($reading) eq "valveposition");
+      $unit = "%"  if(lc($reading) eq "valveposition");
   }
 
   # FS20
@@ -1657,7 +1664,8 @@ sub _DbLog_ParseEvent {
           $value   = $1;
           $reading = "dim";
           $unit    = "%";
-      } elsif(!defined($value) || $value eq "") {
+      } 
+      elsif(!defined($value) || $value eq "") {
           $value   = $reading;
           $reading = "data";
       }
@@ -1670,35 +1678,43 @@ sub _DbLog_ParseEvent {
           $reading = $parts[0];
           $value   = $parts[1];
           $unit    = "";
-      } elsif($reading =~ m(-temp)) {
+      } 
+      elsif($reading =~ m(-temp)) {
           $value =~ s/ \(Celsius\)//; $unit= "°C";
-      } elsif($reading =~ m(temp-offset)) {
+      } 
+      elsif($reading =~ m(temp-offset)) {
           $value =~ s/ \(Celsius\)//; $unit= "°C";
-      } elsif($reading =~ m(^actuator[0-9]*)) {
+      } 
+      elsif($reading =~ m(^actuator[0-9]*)) {
           if($value eq "lime-protection") {
               $reading = "actuator-lime-protection";
               undef $value;
-          } elsif($value =~ m(^offset:)) {
+          } 
+          elsif($value =~ m(^offset:)) {
               $reading = "actuator-offset";
               @parts   = split(/: /,$value);
               $value   = $parts[1];
               if(defined $value) {
                   $value =~ s/%//; $value = $value*1.; $unit = "%";
               }
-          } elsif($value =~ m(^unknown_)) {
+          } 
+          elsif($value =~ m(^unknown_)) {
               @parts   = split(/: /,$value);
               $reading = "actuator-" . $parts[0];
               $value   = $parts[1];
               if(defined $value) {
                   $value =~ s/%//; $value = $value*1.; $unit = "%";
               }
-          } elsif($value =~ m(^synctime)) {
+          } 
+          elsif($value =~ m(^synctime)) {
               $reading = "actuator-synctime";
               undef $value;
-          } elsif($value eq "test") {
+          } 
+          elsif($value eq "test") {
               $reading = "actuator-test";
               undef $value;
-          } elsif($value eq "pair") {
+          } 
+          elsif($value eq "pair") {
               $reading = "actuator-pair";
               undef $value;
           }
@@ -1727,13 +1743,16 @@ sub _DbLog_ParseEvent {
   elsif($type eq "HMS" || $type eq "CUL_WS" || $type eq "OWTHERM") {
       if($event =~ m(T:.*)) {
           $reading = "data"; $value= $event;
-      } elsif($reading eq "temperature") {
+      } 
+      elsif($reading eq "temperature") {
           $value =~ s/ \(Celsius\)//;
           $value =~ s/([-\.\d]+).*/$1/; #OWTHERM
           $unit  = "°C";
-      } elsif($reading eq "humidity") {
+      } 
+      elsif($reading eq "humidity") {
           $value =~ s/ \(\%\)//; $unit= "%";
-      } elsif($reading eq "battery") {
+      } 
+      elsif($reading eq "battery") {
           $value =~ s/ok/1/;
           $value =~ s/replaced/1/;
           $value =~ s/empty/0/;
@@ -1766,9 +1785,11 @@ sub _DbLog_ParseEvent {
   elsif($type eq "TRX_WEATHER") {
       if($reading eq "energy_current") {
           $value =~ s/ W//;
-      } elsif($reading eq "energy_total") {
+      } 
+      elsif($reading eq "energy_total") {
           $value =~ s/ kWh//;
-      } elsif($reading eq "battery") {
+      } 
+      elsif($reading eq "battery") {
           if ($value =~ m/(\d+)\%/) {
               $value = $1;
           }
@@ -5382,7 +5403,7 @@ sub DbLog_SBP_CleanUp {
   #$subprocess->wait();
 
   kill 'SIGKILL', $pid;
-  waitpid($pid, 0);
+  waitpid ($pid, 0);
 
   Log3 ($name, 2, qq{DbLog $name - SubProcess PID >$pid< stopped});
 
@@ -5392,6 +5413,8 @@ sub DbLog_SBP_CleanUp {
   delete $hash->{HELPER}{LONGRUN_PID};
 
   $hash->{SBP_STATE} = "Stopped";
+  
+  DoTrigger ($name, 'SUBPROC_STOPPED', 1);
 
 return;
 }
@@ -5446,14 +5469,24 @@ sub DbLog_SBP_Read {
       if ($oper =~ /log_/xs) {
           my $rowlback = $ret->{rowlback};
 
-          if($rowlback) {                                                                         # one Transaction
+          if($rowlback) {                                                                                  
               my $memcount;
 
-              eval {
+              eval {                                                                                         # one Transaction
                   for my $key (sort {$a <=>$b} keys %{$rowlback}) {
-                      $memcount = DbLog_addMemCacheRow ($name, $rowlback->{$key});                # Datensatz zum Memory Cache hinzufügen
+                      $memcount = DbLog_addMemCacheRow ($name, $rowlback->{$key});                           # Datensatz zum Memory Cache hinzufügen
 
                       Log3 ($name, 5, "DbLog $name - row back to Cache: $key -> ".$rowlback->{$key});
+                  }
+                  
+                  if ($hash->{HELPER}{SHUTDOWNSEQ} && $memcount) {
+                      Log3 ($name, 2, "DbLog $name - an error occurred during the last write cycle to the database, the data is exported to a file instead ... ......");
+                      
+                      my $error = CommandSet (undef, qq{$name exportCache purgecache});
+
+                      if ($error) {                                                                          # Fehler beim Export Cachefile
+                          Log3 ($name, 1, "DbLog $name - ERROR - while exporting Cache file: $error");
+                      }                    
                   }
               };
 
@@ -5497,9 +5530,23 @@ sub DbLog_SBP_Read {
       if ($oper =~ /reduceLog/xs) {
           readingsSingleUpdate($hash, 'reduceLogState', $ret->{res}, 1) if($ret->{res});
       }
+      
+      ## sendDbConnectData - Read
+      #############################
+      if ($oper =~ /sendDbConnectData/xs) {
+          Log3 ($name, 3, "DbLog $name - DB connection parameters are initialized in the SubProcess");
+          
+          DoTrigger ($name, 'SUBPROC_INITIALIZED', 1);
+      }
+      
+      ## dbDisconnect - Read
+      ########################
+      if ($oper =~ /dbDisconnect/xs) {
+          DoTrigger ($name, 'SUBPROC_DISCONNECTED', 1);
+      }
 
       if(AttrVal($name, 'showproctime', 0) && $ot) {
-          my ($rt,$brt) = split(",", $ot);
+          my ($rt,$brt) = split ",", $ot;
 
           readingsBeginUpdate ($hash);
           readingsBulkUpdate  ($hash, 'background_processing_time', sprintf("%.4f",$brt));
@@ -6637,14 +6684,18 @@ sub _DbLog_plotData {
                   $writeout   = 1 if(!$deltacalc);
               }
 
-              ############ Auswerten des 4. Parameters: function ###################
+              ############ Auswerten des 4. Parameters: Funktion ###################
+              ######################################################################
               if($readings[$i]->[3] && $readings[$i]->[3] eq "int") {                         # nur den integerwert uebernehmen falls zb value=15°C
                   $out_value  = $1 if($sql_value =~ m/^(\d+).*/o);
                   $out_tstamp = $sql_timestamp;
                   $writeout   = 1;
               }
               elsif ($readings[$i]->[3] && $readings[$i]->[3] =~ m/^int(\d+).*/o) {           # Uebernehme den Dezimalwert mit den angegebenen Stellen an Nachkommastellen
-                  $out_value  = $1 if($sql_value =~ m/^([-\.\d]+).*/o);
+                  $readings[$i]->[3] =~ m/^int(\d+).*/xs;
+                  my $dnum    = $1;
+                  #$out_value  = $1 if($sql_value =~ m/^([-\.\d]+).*/o);         
+                  $out_value  = $1 if($sql_value =~ m/^(-?\d+\.?\d{1,$dnum}).*/xs);           # V5.8.6
                   $out_tstamp = $sql_timestamp;
                   $writeout   = 1;
               }
@@ -8274,6 +8325,7 @@ return @v;
 ################################################################
 sub DbLog_setinternalcols {
   my $hash = shift;
+  
   my $name = $hash->{NAME};
 
   $hash->{HELPER}{DEVICECOL}   = $DbLog_columns{DEVICE};
@@ -8443,17 +8495,19 @@ sub DbLog_fhemwebFn {
 return $ret;
 }
 
-#################################################################################
+############################################################################################
 #  Dropdown-Menü current-Tabelle SVG-Editor
 #  Datenlieferung für SVG EDitor
 #
-#  Beispiel Input Zeile: sysmon:ram:::$val=~s/^Total..([\d.]*).*/$1/eg
-#                          0     1 23 4
+#  <device>:<reading>:<default>:<fn>:<regexp>
+#  Beispiel Input Zeile: sysmon:ram::delta-h:$val=~s/^Total..([\d.]*).*/$1/eg
+#                          0     1 2 3       4
 #  $ret .= SVG_txt("par_${r}_0", "", $f[0], 40); # Device  (Column bei FileLog)
 #  $ret .= SVG_txt("par_${r}_1", "", $f[1], 40); # Reading (RegExp bei FileLog)
 #  $ret .= SVG_txt("par_${r}_2", "", $f[2], 1);  # Default not yet implemented
-#  $ret .= SVG_txt("par_${r}_3", "", $f[3], 3);  # Function
-#################################################################################
+#  $ret .= SVG_txt("par_${r}_3", "", $f[3], 10); # Function
+#  $ret .= SVG_txt("par_${r}_4", "", $f[4], 10); # RegExp (int, delta-h, delta-d, delta-ts)
+#############################################################################################
 sub DbLog_sampleDataFn {
   my $dlName  = shift;
   my $dlog    = shift;
@@ -8484,8 +8538,8 @@ sub DbLog_sampleDataFn {
   }
 
   if ($ccount) {                                                                           # Table Current present, use it for sample data
-      $desc = "Device:Reading:".
-              "<br>Function";                                                              # Beschreibung über Eingabezeile
+      $desc = "Device:Reading [Function]".
+              "<br>[RegExp] &lt;unused&gt;";                                               # Beschreibung über Eingabezeile
 
       my $query = "select device,reading from $current where device <> '' group by device,reading";
       my $sth   = $dbh->prepare( $query );
@@ -8493,45 +8547,47 @@ sub DbLog_sampleDataFn {
 
       while (my @line = $sth->fetchrow_array()) {
           $counter++;
-          push @example, (join ":", @line).':[Function]' if($counter <= 8);                # show max 8 examples
+          push @example, (join ":", @line).' [Function]<br>[RegExp]' if($counter <= 4);    # show max 4 examples
           push @colregs, "$line[0]:$line[1]";                                              # push all eventTypes to selection list
       }
 
       my $cols = join ",", sort { "\L$a" cmp "\L$b" } @colregs;
 
       for (my $r = 0; $r < $max; $r++) {
-          my @f   = split ":", ($dlog->[$r] ? $dlog->[$r] : ":::"), 4;                     # Beispiel Input Zeile: sysmon:ram:::$val=~s/^Total..([\d.]*).*/$1/eg
-          my $ret = "";
+          my @f   = split ":", ($dlog->[$r] ? $dlog->[$r] : "::::"), 5;                    # Beispiel Input Zeile > sysmon:ram::delta-h:$val=~s/^Total..([\d.]*).*/$1/eg          
+          my $ret = q{};                                                                   #                           0   1  2 3       4
 
           no warnings 'uninitialized';                                                     # Forum:74690, bug unitialized
-          $ret .= SVG_sel("par_${r}_0", $cols, "$f[0]:$f[1]");                             # par_<Zeile>_<Spalte>, <Auswahl>, <Vorbelegung>
+          $ret .= SVG_sel ("par_${r}_0", $cols, "$f[0]:$f[1]");                            # par_<Zeile>_<Spalte>, <Auswahl>, <Vorbelegung>
+
+          $ret .= SVG_sel ("par_${r}_3", $dblog_svgfnset, $f[3]);                          # Funktionsauswahl
+
+          $f[4] =~ /^(:+)?(.*)/xs;
+          $ret .= SVG_txt ("par_${r}_4", "<br>", "$2", $pifl);                             # RegExp (z.B. $val=~s/^Total..([\d.]*).*/$1/eg)
+
+          $ret .= SVG_txt ("par_${r}_2", "", $f[2], 1);                                    # der Defaultwert (nicht ausgewertet)
           use warnings;
-
-          $ret .= SVG_sel("par_${r}_2", ":", ":");                                         # nur ein Trenner -> wird zu ":::"
-
-          $f[3] =~ /^(:+)?(.*)/xs;
-          $ret .= SVG_txt("par_${r}_3", "<br>", "$2", $pifl);                              # RegExp (z.B. $val=~s/^Total..([\d.]*).*/$1/eg)
-
+          
           push @htmlArr, $ret;
       }
   }
   else {                                                                                   # Table Current not present, so create an empty input field
-      push @example, '&lt;Device&gt;:&lt;Reading&gt;::[Function]';
+      push @example, '&lt;Device&gt;:&lt;Reading&gt;::[Function]<br>[RegExp]';
 
-      $desc = "Device:Reading::".
-              "<br>Function";                                                              # Beschreibung über Eingabezeile
+      $desc = "Device:Reading::[Function]".
+              "<br>RegExp";                                                                # Beschreibung über Eingabezeile
 
       for (my $r = 0; $r < $max; $r++) {
-          my @f   = split ":", ($dlog->[$r] ? $dlog->[$r] : ":::"), 4;
-          my $ret = "";
+          my @f   = split ":", ($dlog->[$r] ? $dlog->[$r] : "::::"), 5;
+          my $ret = q{};
 
           no warnings 'uninitialized';                                                     # Forum:74690, bug unitialized
-          $ret .= SVG_txt("par_${r}_0", "", "$f[0]:$f[1]::", $pifl);                       # letzter Wert -> Breite der Eingabezeile
+          $ret .= SVG_txt ("par_${r}_0", "", "$f[0]:$f[1]::$f[3]", $pifl);                 # letzter Wert -> Breite der Eingabezeile
+
+          $f[4] =~ /^(:+)?(.*)/xs;
+          $ret .= SVG_txt ("par_${r}_3", "<br>", "$2", $pifl);                             # RegExp (z.B. $val=~s/^Total..([\d.]*).*/$1/eg)
           use warnings;
-
-          $f[3] =~ /^(:+)?(.*)/xs;
-          $ret .= SVG_txt("par_${r}_3", "<br>", "$2", $pifl);                              # RegExp (z.B. $val=~s/^Total..([\d.]*).*/$1/eg)
-
+          
           push @htmlArr, $ret;
       }
   }
@@ -8606,13 +8662,13 @@ sub DbLog_setVersionInfo {
 
   if($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {       # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;                                        # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{DbLog}{META}}
-      if($modules{$type}{META}{x_version}) {                                          # {x_version} ( nur gesetzt wenn $Id: 93_DbLog.pm 27327 2023-03-16 19:56:33Z DS_Starter $ im Kopf komplett! vorhanden )
+      if($modules{$type}{META}{x_version}) {                                          # {x_version} ( nur gesetzt wenn $Id: 93_DbLog.pm 27617 2023-05-25 19:56:44Z DS_Starter $ im Kopf komplett! vorhanden )
           $modules{$type}{META}{x_version} =~ s/1\.1\.1/$v/xsg;
       }
       else {
           $modules{$type}{META}{x_version} = $v;
       }
-      return $@ unless (FHEM::Meta::SetInternals($hash));                             # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbLog.pm 27327 2023-03-16 19:56:33Z DS_Starter $ im Kopf komplett! vorhanden )
+      return $@ unless (FHEM::Meta::SetInternals($hash));                             # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbLog.pm 27617 2023-05-25 19:56:44Z DS_Starter $ im Kopf komplett! vorhanden )
       if(__PACKAGE__ eq "FHEM::$type" || __PACKAGE__ eq $type) {
           # es wird mit Packages gearbeitet -> Perl übliche Modulversion setzen
           # mit {<Modul>->VERSION()} im FHEMWEB kann Modulversion abgefragt werden
@@ -8788,6 +8844,25 @@ return;
     If special characters, e.g. @,$ or % which have a meaning in the perl programming
     language are used in a password, these special characters have to be escaped.
     That means in this example you have to use: \@,\$ respectively \%.
+    <br>
+    <br>
+    
+    <b>DbLog specific events</b> <br><br>
+    
+    DbLog generates events depending on the initialisation status of the DbLog device: 
+    <br>
+    <br>
+    
+      <ul>
+       <table>
+       <colgroup> <col width=20%> <col width=80%> </colgroup>
+       <tr><td> FRAME_INITIALIZED    </td><td>- The basic framework is initialised. Blocking (Get) commands can be executed.                     </td></tr>
+       <tr><td> SUBPROC_INITIALIZED  </td><td>- The SupProcess is ready for use. Non-blocking (set) commands and Data logging can be executed.   </td></tr>
+       <tr><td> SUBPROC_DISCONNECTED </td><td>- The SupProcess was separated from the DB.                                                        </td></tr>
+       <tr><td> SUBPROC_STOPPED      </td><td>- The SupProcess has been stopped.                                                                 </td></tr>
+       </table>
+      </ul>
+    
     <br>
     <br>
     <br>
@@ -9015,16 +9090,6 @@ return;
     <br>
 
     <li>
-    <a id="DbLog-set-deleteOldDaysNbl"></a>
-    <b>set &lt;name&gt; deleteOldDaysNbl &lt;n&gt; </b> <br><br>
-      <ul>
-      The function is identical to "set &lt;name&gt; deleteOldDays" and will be removed soon.
-      <br>
-    </ul>
-    </li>
-    <br>
-
-    <li>
     <a id="DbLog-set-eraseReadings"></a>
     <b>set &lt;name&gt; eraseReadings </b> <br><br>
     <ul>
@@ -9127,15 +9192,6 @@ return;
       <b>Note</b> <br>
       During the runtime of the command, data to be logged is temporarily stored in the memory cache and written to
       the database after the command is finished.
-    </ul>
-    </li>
-    <br>
-
-    <li>
-    <a id="DbLog-set-reduceLogNbl"></a>
-    <b>set &lt;name&gt; reduceLogNbl &lt;no&gt;[:&lt;nn&gt;] [average[=day]] [exclude=device1:reading1,device2:reading2,...] </b> <br><br>
-    <ul>
-      The function is identical to "set &lt;name&gt; reduceLog" and will be removed soon.
     </ul>
     </li>
     <br>
@@ -10649,6 +10705,25 @@ attr SMA_Energymeter DbLogValueFn
     Das heißt in diesem Beispiel wäre zu verwenden: \@,\$ bzw. \%.
     <br>
     <br>
+    
+    <b>DbLog spezifische Events</b> <br><br>
+    
+    DbLog generiert Events abhängig vom Initialisierungsstatus des DbLog-Devices: 
+    <br>
+    <br>
+    
+      <ul>
+       <table>
+       <colgroup> <col width=20%> <col width=80%> </colgroup>
+       <tr><td> FRAME_INITIALIZED    </td><td>- Das grundlegende Rahmenwerk ist initialisiert. Blockierend arbeitende (Get)-Kommandos können ausgeführt werden.           </td></tr>
+       <tr><td> SUBPROC_INITIALIZED  </td><td>- Der SupProcess ist einsatzbereit. Nichtblockierend arbeitende (Set)-Kommandos und Daten Logging können ausgeführt werden. </td></tr>
+       <tr><td> SUBPROC_DISCONNECTED </td><td>- Der SupProcess wurde von der DB getrennt.                                                                                 </td></tr>
+       <tr><td> SUBPROC_STOPPED      </td><td>- Der SupProcess wurde gestoppt.                                                                                            </td></tr>
+       </table>
+      </ul>
+    
+    <br>
+    <br>
     <br>
 
   <a id="DbLog-define"></a>
@@ -10889,16 +10964,6 @@ attr SMA_Energymeter DbLogValueFn
     <br>
 
     <li>
-    <a id="DbLog-set-deleteOldDaysNbl"></a>
-    <b>set &lt;name&gt; deleteOldDaysNbl &lt;n&gt; </b> <br><br>
-      <ul>
-      Die Funktion ist identisch zu "set &lt;name&gt; deleteOldDays" und wird demnächst entfernt.
-      <br>
-    </ul>
-    </li>
-    <br>
-
-    <li>
     <a id="DbLog-set-exportCache"></a>
     <b>set &lt;name&gt; exportCache [nopurge | purgecache] </b> <br><br>
 
@@ -10998,16 +11063,6 @@ attr SMA_Energymeter DbLogValueFn
       <b>Hinweis</b> <br>
       Während der Laufzeit des Befehls werden zu loggende Daten temporär im Memory Cache gespeichert und nach Beendigung
       des Befehls in die Datenbank geschrieben.
-    </ul>
-    </li>
-    <br>
-
-    <li>
-    <a id="DbLog-set-reduceLogNbl"></a>
-    <b>set &lt;name&gt; reduceLogNbl &lt;no&gt;[:&lt;nn&gt;] [average[=day]] [exclude=device1:reading1,device2:reading2,...] </b> <br><br>
-
-    <ul>
-      Die Funktion ist identisch zu "set &lt;name&gt; reduceLog" und wird demnächst entfernt.
     </ul>
     </li>
     <br>

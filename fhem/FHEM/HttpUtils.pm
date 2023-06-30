@@ -1,5 +1,5 @@
 ##############################################
-# $Id: HttpUtils.pm 27376 2023-03-31 16:04:23Z rudolfkoenig $
+# $Id: HttpUtils.pm 27406 2023-04-07 16:52:19Z rudolfkoenig $
 package main;
 
 use strict;
@@ -49,7 +49,7 @@ filename2MIMEType($) {
 sub
 urlEncode($) {
   $_= $_[0];
-  s/([\x00-\x2F \x3A-\x40 \x5B-\x60 \x7B-\xFF])/sprintf("%%%02x",ord($1))/eg;
+  s/([\x00-\x2F \x3A-\x40 \x5B-\x60 \x7B-\xFF])/sprintf("%%%02X",ord($1))/eg;
   return $_;
 }
 
@@ -557,6 +557,14 @@ HttpUtils_Connect2NonblockingSSL($$)
     }
 
     $hash->{hu_sslAdded} = $hash->{keepalive} ? 1 : 2;
+
+    Log 4, "alpn_selected:".$hash->{conn}->alpn_selected()
+      if($par->{SSL_alpn_protocols} &&
+         $hash->{conn}->can('alpn_selected'));
+    Log 4, "next_proto_negotiated:".$hash->{conn}->next_proto_negotiated()
+      if($par->{SSL_npn_protocols} &&
+         $hash->{conn}->can('next_proto_negotiated'));
+
     return HttpUtils_Connect2($hash); # Continue with HTML-Processing
   };
 

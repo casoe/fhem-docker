@@ -2,7 +2,7 @@
 #
 # Developed with VSCodium and richterger perl plugin.
 #
-#  (c) 2017-2022 Copyright: Marko Oldenburg (fhemdevelopment at cooltux dot net)
+#  (c) 2017-2023 Copyright: Marko Oldenburg (fhemdevelopment at cooltux dot net)
 #  All rights reserved
 #
 #   Special thanks goes to comitters:
@@ -25,7 +25,7 @@
 #  GNU General Public License for more details.
 #
 #
-# $Id: 82_LGTV_WebOS.pm 25900 2022-03-31 04:52:08Z CoolTux $
+# $Id: 82_LGTV_WebOS.pm 27575 2023-05-16 02:31:41Z CoolTux $
 #
 ###############################################################################
 package FHEM::LGTV_WebOS;
@@ -368,7 +368,7 @@ __END__
   ],
   "release_status": "stable",
   "license": "GPL_2",
-  "version": "v3.6.5",
+  "version": "v3.6.9",
   "author": [
     "Marko Oldenburg <fhemdevelopment@cooltux.net>"
   ],
