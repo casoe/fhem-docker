@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_MQTT2_DEVICE.pm 26860 2022-12-16 08:13:49Z rudolfkoenig $
+# $Id: 10_MQTT2_DEVICE.pm 27674 2023-06-12 08:33:06Z rudolfkoenig $
 package main;
 
 use strict;
@@ -307,10 +307,14 @@ MQTT2_JSON($;$)
 }
 
 sub
-MQTT2_getCmdHash($)
+MQTT2_getCmdHash($$)
 {
-  my ($list) = @_;
+  my ($hash, $list) = @_;
   my (%h, @cmd);
+
+  $list = AnalyzePerlCommand($hash ? $hash->{CL} : undef, $1)
+        if($list =~ m/^{(.*)}/s);    #133903
+
   map { 
     my ($k,$v) = split(" ",$_,2);
     push @cmd, $k;
@@ -365,7 +369,7 @@ MQTT2_DEVICE_Get($@)
   return "Not enough arguments for get" if(!defined($a[1]));
   my $name = $hash->{NAME};
 
-  my ($gets,$cmdList) = MQTT2_getCmdHash(AttrVal($name, "getList", ""));
+  my ($gets,$cmdList) = MQTT2_getCmdHash($hash, AttrVal($name, "getList", ""));
   return "Unknown argument $a[1], choose one of $cmdList" if(!$gets->{$a[1]});
   return undef if(IsDisabled($name));
   Log3 $hash, 3, "MQTT2_DEVICE get ".join(" ", @a);
@@ -395,7 +399,7 @@ MQTT2_DEVICE_Set($@)
   return "Not enough arguments for set" if(!defined($a[1]));
   my $name = $hash->{NAME};
 
-  my ($sets,$cmdList) = MQTT2_getCmdHash(AttrVal($name, "setList", ""));
+  my ($sets,$cmdList) = MQTT2_getCmdHash($hash, AttrVal($name, "setList", ""));
   my $cmdName = $a[1];
   return MQTT2_DEVICE_addPos($hash,@a) if($cmdName eq "addPos"); # hidden cmd
   my $cmd = $sets->{$cmdName};
@@ -417,13 +421,12 @@ MQTT2_DEVICE_Set($@)
   if(!$ssl) {
     readingsSingleUpdate($hash, "state", $cmdSE, 1);
 
-  } else {
+  } elsif($ssl ne "ignore") {
     if($ssl =~ m/\b$cmdName\b/) {
       $hash->{skipStateFormat} = 1;
       readingsSingleUpdate($hash, "state", "set_$cmdSE", 1);
       delete($hash->{skipStateFormat});
     } else {
-      shift(@a);
       unshift(@a, "set");
       readingsSingleUpdate($hash, $cmdName, join(" ",@a), 1);
     }
@@ -457,7 +460,7 @@ MQTT2_DEVICE_Attr($$)
     return undef;
   }
 
-  if($attrName =~ m/(.*)List/) {
+  if($attrName =~ m/^(get|set|reading)List/) {
     my $atype = $1;
     if($type eq "del") {
       MQTT2_DEVICE_delReading($dev) if($atype eq "reading");
@@ -531,8 +534,8 @@ MQTT2_DEVICE_Attr($$)
   if($attrName eq "periodicCmd") {
     if($type eq "set") {
       if($init_done) {
-        my ($gets,undef) = MQTT2_getCmdHash(AttrVal($dev, "getList", ""));
-        my ($sets,undef) = MQTT2_getCmdHash(AttrVal($dev, "setList", ""));
+        my ($gets,undef) = MQTT2_getCmdHash($hash, AttrVal($dev,"getList",""));
+        my ($sets,undef) = MQTT2_getCmdHash($hash, AttrVal($dev,"setList",""));
         for my $np (split(" ", $param)) {
           return "$np ist not of the form cmd:period" if($np !~ m/(.*):(.*)/);
           return "$1 is neither a get nor a set command"
@@ -558,7 +561,7 @@ MQTT2_DEVICE_periodic()
   my $name = $hash->{NAME};
   my $param = AttrVal($name, "periodicCmd", "");
   return if(!$param);
-  my ($gets,undef) = MQTT2_getCmdHash(AttrVal($name, "getList", ""));
+  my ($gets,undef) = MQTT2_getCmdHash($hash, AttrVal($name, "getList", ""));
   my $cnt = ++$hash->{periodicCounter};
   for my $np (split(" ", $param)) {
     next if($np !~ m/(.*):(.*)/ || $cnt % int($2));
@@ -1130,6 +1133,9 @@ zigbee2mqtt_devStateIcon255($;$$)
           MQTT message will be sent.</li>
         <li>SetExtensions is activated</li>
         <li>if the topic name ends with :r, then the retain flag is set</li>
+        <li>if the whole argument is enclosed in {}, then it is evaluated as a
+          perl expression. The string returned will be interpreted as described
+          above.</li>
       </ul>
       </li><br>
 
@@ -1142,7 +1148,9 @@ zigbee2mqtt_devStateIcon255($;$$)
       in the list will set a reading named after the command, with the word set
       and the command parameters as its value.<br><br>
       If this attribute is not defined, then a set command will set the state
-      reading to the name of the command.
+      reading to the name of the command.<br>
+      If this attribute is set to ignore, then a set command will not affect any
+      reading in the device.
       </li><br>
 
   </ul>

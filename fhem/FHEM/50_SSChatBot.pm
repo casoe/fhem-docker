@@ -1,5 +1,5 @@
 ########################################################################################################################
-# $Id: 50_SSChatBot.pm 27073 2023-01-16 19:34:26Z DS_Starter $
+# $Id: 50_SSChatBot.pm 27598 2023-05-20 17:20:59Z DS_Starter $
 #########################################################################################################################
 #       50_SSChatBot.pm
 #
@@ -113,7 +113,8 @@ BEGIN {
           readingsBulkUpdate
           readingsBulkUpdateIfChanged 
           readingsEndUpdate         
-          setKeyValue  
+          setKeyValue
+          toJSON
           urlDecode
           FW_wname          
         )
@@ -135,6 +136,8 @@ BEGIN {
 
 # Versions History intern
 my %vNotesIntern = (
+  "1.15.0" => "19.05.2023  compatibility to DSM starting with DSM 7.2, Forum: https://forum.fhem.de/index.php?msg=1276303 ",
+  "1.14.0" => "08.04.2023  prepared for new Setter deletePostId, loglevel for HttpUtils ",
   "1.13.0" => "14.01.2023  new attr spareHost, sparePort ",
   "1.12.1" => "28.11.2020  fix cannot send after received anything, fix greedy regex in _botCGIcheckData ",
   "1.12.0" => "23.11.2020  generate event CHAT_INITIALIZED when users are once loaded, Forum: https://forum.fhem.de/index.php/topic,105714.msg1103700.html#msg1103700 ".
@@ -199,10 +202,11 @@ my $queueStartFn = "FHEM::SSChatBot::getApiSites";                              
 my $enctourl     = { map { sprintf("\\x{%02x}", $_) => sprintf( "%%%02X", $_ ) } ( 0 ... 255 ) };    # Standard Hex Codes zu UrlEncode, z.B. \x{c2}\x{b6} -> %C2%B6 -> ¶
 
 my %hset = (                                                                # Hash für Set-Funktion
+    asyncSendItem    => { fn => \&_setasyncSendItem    },
     botToken         => { fn => \&_setbotToken         }, 
+    deletePostId     => { fn => \&_setDeletePostId     },
     listSendqueue    => { fn => \&listSendqueue        },   
     purgeSendqueue   => { fn => \&purgeSendqueue       },
-    asyncSendItem    => { fn => \&_setasyncSendItem    },
     restartSendqueue => { fn => \&_setrestartSendqueue },
 );
 
@@ -445,8 +449,9 @@ sub Set {
   else {
       $setlist = "Unknown argument $opt, choose one of ".
                  "botToken ".
+                 #"deletePostId ".
                  "listSendqueue:noArg ".
-                 ($idxlist?"purgeSendqueue:-all-,-permError-,$idxlist ":"purgeSendqueue:-all-,-permError- ").
+                 ($idxlist ? "purgeSendqueue:-all-,-permError-,$idxlist " : "purgeSendqueue:-all-,-permError- ").
                  "restartSendqueue ".
                  "asyncSendItem:textField-long "
                  ;
@@ -579,6 +584,59 @@ sub _setasyncSendItem {
       
       addSendqueue ($params);
   }
+   
+  getApiSites($name);
+      
+return;
+}
+
+######################################################################################################
+#                                          Setter deletePostId
+#  Sending Beispiel:
+#  post_id: XXXXXXXXXXXX
+#  real_delete: false
+#  api: SYNO.Chat.Post
+#  method: delete
+#  version: 8
+#
+######################################################################################################
+sub _setDeletePostId {                                                     
+  my $paref = shift;
+  my $hash  = $paref->{hash};
+  my $name  = $paref->{name};
+  my $aref  = $paref->{aref};
+  
+  delete $hash->{HELPER}{RESENDFORCE};                                                      # Option 'force' löschen (könnte durch restartSendqueue gesetzt sein)      
+  
+  if(!$hash->{HELPER}{USERFETCHED}) {
+      return qq{The registered Synology Chat users are unknown. Please retrieve them first with "get $name chatUserlist".};
+  }
+  
+  my $postid   = q{};
+  my $cmd      = join " ", map { my $p = $_; $p =~ s/\s//xg; $p; } @$aref;     ## no critic 'Map blocks'
+  my ($arr,$h) = parseParams($cmd);
+  
+  if($arr) {
+      my @t = @{$arr};
+      shift @t; shift @t;
+      $postid = join ' ', @t;
+  }
+  
+  if ($postid !~ /^[0-9]+$/) {
+      return qq{The Post Id is incorrect. It must consist only of digits.};
+  }
+  
+  # Eintrag zur SendQueue hinzufügen
+  # Werte: (name,opmode,method,postid)
+  my $params = { 
+      name       => $name,
+      opmode     => 'delPostId',
+      method     => 'delete',
+      userid     => 'dummy',                                                               # wird nicht gebraucht, aber von SMUtils/addSendqueue verlangt
+      postid     => $postid
+  };
+  
+  addSendqueue ($params);
    
   getApiSites($name);
       
@@ -1030,15 +1088,19 @@ return chatOp ($name);
 #                                     Ausführung Operation
 #############################################################################################
 sub chatOp {  
-   my $name         = shift;
-   my $hash         = $defs{$name};
-   my $inprot       = $hash->{INPROT};
-   my $inaddr       = $hash->{INADDR};
-   my $inport       = $hash->{INPORT};
-   my $external     = $hash->{HELPER}{API}{EXTERNAL}{NAME}; 
-   my $externalpath = $hash->{HELPER}{API}{EXTERNAL}{PATH};
-   my $externalver  = $hash->{HELPER}{API}{EXTERNAL}{VER};
-   my ($url,$httptimeout,$param,$error,$errorcode);
+   my $name        = shift;
+   my $hash        = $defs{$name};
+   my $inprot      = $hash->{INPROT};
+   my $inaddr      = $hash->{INADDR};
+   my $inport      = $hash->{INPORT};
+   my $extapi      = $hash->{HELPER}{API}{EXTERNAL}{NAME}; 
+   my $extapipath  = $hash->{HELPER}{API}{EXTERNAL}{PATH};
+   my $exapiver    = $hash->{HELPER}{API}{EXTERNAL}{VER};
+   my $postapi     = $hash->{HELPER}{API}{POST}{NAME}; 
+   my $postapipath = $hash->{HELPER}{API}{POST}{PATH};
+   my $postapiver  = $hash->{HELPER}{API}{POST}{VER};
+   
+   my ($url,$param,$postid,$error,$errorcode);
    
    # Token abrufen
    my ($success, $token) = getCredentials($hash, 0, "botToken");
@@ -1062,49 +1124,79 @@ sub chatOp {
    my $text        = $data{SSChatBot}{$name}{sendqueue}{entries}{$idx}{text};
    my $attachment  = $data{SSChatBot}{$name}{sendqueue}{entries}{$idx}{attachment};
    my $fileUrl     = $data{SSChatBot}{$name}{sendqueue}{entries}{$idx}{fileUrl};
+   my $httptimeout = AttrVal ($name, "httptimeout", 20);
+   my $humethod    = 'GET';                                                                        # HttpUtils Methode Get/Post
    
    Log3($name, 4, "$name - start SendQueue entry index \"$idx\" ($hash->{OPMODE}) for operation."); 
-
-   $httptimeout   = AttrVal($name, "httptimeout", 20);
-   
    Log3($name, 5, "$name - HTTP-Call will be done with httptimeout: $httptimeout s");
 
    if ($opmode =~ /^chatUserlist$|^chatChannellist$/x) {
-      $url = "$inprot://$inaddr:$inport/webapi/$externalpath?api=$external&version=$externalver&method=$method&token=\"$token\"";
+      $url = qq($inprot://$inaddr:$inport/webapi/$extapipath?api=$extapi&version=$exapiver&method=$method&token="$token");
    }
-   
-   if ($opmode eq "sendItem") {
+   elsif ($opmode eq 'sendItem') {
       # Form: payload={"text": "a fun image", "file_url": "http://imgur.com/xxxxx" "user_ids": [5]} 
       #       payload={"text": "First line of message to post in the channel" "user_ids": [5]}
       #       payload={"text": "Check this!! <https://www.synology.com|Click here> for details!" "user_ids": [5]}
       
-      $url  = "$inprot://$inaddr:$inport/webapi/$externalpath?api=$external&version=$externalver&method=$method&token=\"$token\"";
-      $url .= "&payload={";
-      $url .= "\"text\": \"$text\","          if($text);
-      $url .= "\"file_url\": \"$fileUrl\","   if($fileUrl);
-      $url .= "\"attachments\": $attachment," if($attachment);
-      $url .= "\"user_ids\": [$userid]"       if($userid);
-      $url .= "}";
+      $url  = qq($inprot://$inaddr:$inport/webapi/$extapipath?api=$extapi&version=$exapiver&method=$method&token="$token");
+      $url .= qq(&payload={);
+      $url .= qq("text": "$text",)            if($text);
+      $url .= qq("file_url": "$fileUrl",)     if($fileUrl);
+      $url .= qq("attachments": $attachment,) if($attachment);
+      $url .= qq("user_ids": [$userid])       if($userid);
+      $url .= qq(});
    }
-
+   elsif ($opmode eq 'delPostId') {
+       $method    = $data{SSChatBot}{$name}{sendqueue}{entries}{$idx}{method};
+       $postid    = $data{SSChatBot}{$name}{sendqueue}{entries}{$idx}{postid};
+       $humethod  = 'POST';
+       
+       $url       = "$inprot://$inaddr:$inport/webapi/$postapipath";
+       
+   }
+   else {
+       return;
+   }
+   
    my $part = $url;
    
    if(AttrVal($name, "showTokenInLog", "0") == 1) {
-       Log3($name, 4, "$name - Call-Out: $url");
+       Log3 ($name, 4, "$name - Call-Out >$humethod<: $url");
    } 
    else {
        $part =~ s/$token/<secret>/x;
-       Log3($name, 4, "$name - Call-Out: $part");
+       Log3 ($name, 4, "$name - Call-Out >$humethod<: $part");
    }
+   
+   $url = formString ($url, 'url');
    
    $param = {
        url      => $url,
        timeout  => $httptimeout,
        hash     => $hash,
-       method   => "GET",
+       method   => $humethod,
        header   => "Accept: application/json",
        callback => \&chatOp_parse
    };
+   
+   if ($opmode eq 'delPostId') {             
+       $param->{data}{post_id}     = $postid;
+       $param->{data}{real_delete} = 'false';
+       $param->{data}{api}         = $postapi;
+       $param->{data}{method}      = $method;
+       $param->{data}{version}     = $postapiver;
+       
+       Log3 ($name, 4, "$name - POST data:\n".Dumper $param->{data});
+       
+       $param->{header} = { "Content-Type" => "application/x-www-form-urlencoded; charset=UTF-8",
+                            "X-SYNO-TOKEN" => "matqxr5d.zxVY",
+                            "Cookie"       => 'io=F0f-zmlbaFNRC9uAAAAR; stay_login=1; smid=pW89VtXv5-Fv4O9Q4nPnN5fMZsIOX6pnS5ZEph8rQFlAzEAK3rD8BkH-vVev7Fs8yQG7yqlOgicbu0RFHr2dRA; id=I5WTEdH4py4aK_pRuXDxwLmA24Gv4yjKNRF5XhBl5vgCLn6_6ag4_2Sw_rM0oxEnER_OW5UyiQ5h8HIOgYgkLI',
+                          },      
+   }
+   
+   if (AttrVal ($name, 'verbose', 3) >= 5) {
+       $param->{loglevel} = 2;
+   }
    
    HttpUtils_NonblockingGet ($param);   
 
@@ -1169,12 +1261,11 @@ sub chatOp_parse {
            readingsBulkUpdate          ($hash, "state",     "active");                    
            readingsEndUpdate           ($hash,1);   
        } 
-       else {
-           # die API-Operation war fehlerhaft
-           # Errorcode aus JSON ermitteln
+       else {                                                               # die API-Operation war fehlerhaft, Errorcode aus JSON ermitteln
            $errorcode = $data->{'error'}->{'code'};
            $cherror   = $data->{'error'}->{'errors'};                       # vom Chat gelieferter Fehler
            $error     = expErrors($hash,$errorcode);                        # Fehlertext zum Errorcode ermitteln
+           
            if ($error =~ /not\sfound\sfor\serror\scode:/x) {
                $error .= " New error: ".($cherror // "");
            }
@@ -1394,7 +1485,13 @@ sub formString {
   my $func = shift;
   my ($replacements,$pat);
     
-  if($func ne "attachement") {
+  if ($func eq 'url') {
+      $replacements = {
+          '"' => "%22",
+          " " => "%20",
+      }
+  }
+  elsif ($func ne 'attachement') {
       $replacements = {
           '"'       => "´",                         # doppelte Hochkomma sind im Text nicht erlaubt
           " H"      => "%20H",                      # Bug in HttpUtils(?) wenn vor großem H ein Zeichen + Leerzeichen vorangeht

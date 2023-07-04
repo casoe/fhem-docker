@@ -1,5 +1,5 @@
 ##############################################
-# $Id: DevIo.pm 26055 2022-05-17 20:12:20Z rudolfkoenig $
+# $Id: DevIo.pm 27247 2023-02-18 21:22:32Z rudolfkoenig $
 package main;
 
 use strict;
@@ -280,8 +280,9 @@ DevIo_SimpleWrite($$$;$)
 
   } elsif($hash->{TCPDev}) {
     if($hash->{WEBSOCKET}) {
-      $msg = Encode::encode('UTF-8', $msg) if($unicodeEncoding && !$hash->{binary});
-      $msg = DevIo_MaskWS($hash->{binary} ? 0x2:0x1, $msg)
+      $msg = Encode::encode('UTF-8', $msg)
+        if($unicodeEncoding && !$hash->{binary});
+      $msg = DevIo_MaskWS($hash->{binary} ? 0x2:0x1, $msg);
     }
     syswrite($hash->{TCPDev}, $msg);
 

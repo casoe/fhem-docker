@@ -1,4 +1,4 @@
-# $Id: OpenWeatherMapAPI.pm 27004 2023-01-08 16:21:07Z CoolTux $
+# $Id: OpenWeatherMapAPI.pm 27659 2023-06-06 19:06:36Z CoolTux $
 ###############################################################################
 #
 # Developed with VSCodium and richterger perl plugin
@@ -788,6 +788,7 @@ sub _FillSelfHashWithWeatherResponseForOnecallDaily {
                 'moonset'    => strftime(
                     "%a, %H:%M", localtime( $data->{daily}->[$i]->{moonset} )
                 ),
+                'summary'     => $data->{daily}->[$i]->{summary},
                 'temperature' =>
                   int( sprintf( "%.0f", $data->{daily}->[$i]->{temp}->{day} ) ),
                 'temperature_morn' => int(
@@ -951,7 +952,7 @@ sub _CallWeatherCallbackFn {
 
     #     print 'Dumperausgabe: ' . Dumper $self;
     ### Aufruf der callbackFn
-    return ::Weather_RetrieveCallbackFn( $self->{devName} );
+    return FHEM::Core::Weather::RetrieveCallbackFn( $self->{devName} );
 }
 
 sub _ErrorHandling {
@@ -1031,7 +1032,7 @@ sub _strftimeWrapper {
 	  ],
   "release_status": "stable",
   "license": "GPL_2",
-  "version": "v3.2.6",
+  "version": "v3.2.7",
   "author": [
     "Marko Oldenburg <fhemdevelopment@cooltux.net>"
   ],

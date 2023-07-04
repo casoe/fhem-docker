@@ -1,5 +1,5 @@
 #############################################
-# $Id: 98_DOIF.pm 26938 2023-01-01 18:13:32Z Damian $
+# $Id: 98_DOIF.pm 27616 2023-05-25 17:55:36Z Damian $
 #
 # This file is part of fhem.
 #
@@ -183,7 +183,7 @@ sub DOIF_UpdateCell
   my $retStyle="";
   my $reg="";
   my $VALUE="";
-  if ($doifId =~ /.*_(.*)_c_(.*)_(.*)_(.*)_(.*)$/) {
+  if ($doifId =~ /.*_(.*)_c_(.*)_(.*)_(.*)_(.*)$/) { 
     my $command=$hash->{$1}{table}{$2}{$3}{$4}{$5};
     eval ($command);
     if ($@) {
@@ -1077,7 +1077,7 @@ sub AggrIntDoIf
     $result=$num;
   }
   if ($mode eq "#") {
-    if ($format eq "d") {
+    if (defined $result and $format eq "d") {
       $result = ($result =~ /(-?\d+(\.\d+)?)/ ? $1 : 0);
       $result = round ($result,$place) if (defined $place);
     } 
@@ -1247,7 +1247,7 @@ sub ReadingValDoIf
     $r=$defs{$name}{READINGS}{$reading}{VAL};
     $r="" if (!defined($r));
     if ($regExp) {
-      if ($regExp =~ /^(avg|med|diff|inc)(\d*)/) {
+      if ($regExp =~ /^(avg|med|diffpsec|diff|inc)(\d*)/) {
         my @a=@{$hash->{accu}{"$name $reading"}{value}};
         my $func=$1;      
         my $dim=$2;
@@ -1256,7 +1256,7 @@ sub ReadingValDoIf
         @a=splice (@a, -$num,$num);
         if ($func eq "avg" or $func eq "med") {
           return ($r) if (!@a);
-        } elsif ($func eq "diff" or $func eq "inc") {
+        } elsif ($func eq "diff" or $func eq "diffpsec" or $func eq "inc") {
           return (0) if (@a <= 1);
         }
         if ($func eq "avg") {
@@ -1272,6 +1272,10 @@ sub ReadingValDoIf
             } else {
               return ($vals[int($num/2) - 1] + $vals[int($num/2)])/2;
             }
+        } elsif ($func eq "diffpsec") {
+          my @t=@{$hash->{accu}{"$name $reading"}{time}};
+          @t=splice (@t, -$num,$num);
+          return (int(($a[-1]-$a[0])/($t[-1]-$t[0])*1000000)/1000000);
         } elsif ($func eq "diff") {
           return (($a[-1]-$a[0]));
         } elsif  ($func eq "inc") {
@@ -1295,9 +1299,21 @@ sub ReadingValDoIf
            $hours=$num;
          }
         }
-        setValue_collect($hash,\%{$hash->{collect}{"$name $reading"}{$hours}});
+        if (!defined $hash->{collect}{"$name $reading"}{$hours}) {
+          return(undef);
+        }
+        DOIF_setValue_collect($hash,\%{$hash->{collect}{"$name $reading"}{$hours}});
         return (\%{$hash->{collect}{"$name $reading"}{$hours}});
-      } elsif ($regExp =~ /^d(\d)?/) {
+      } elsif ($regExp =~ /^((bar|barAvg)(\d*)(day|week|month|year|decade))/) {
+        my $bartype=$2;
+        my $num = $3;  
+        my $period = $4;
+        if (!defined $hash->{$bartype}{"$name $reading"}{"$num $period"}) {
+          return(undef);
+        }
+        DOIF_setValue_bar($hash,\%{$hash->{$bartype}{"$name $reading"}{"$num $period"}});
+        return (\%{$hash->{$bartype}{"$name $reading"}{"$num $period"}});
+      } elsif ($regExp =~ /^d(\d)?$/) {
         my $round=$1;
         $r = ($r =~ /(-?\d+(\.\d+)?)/ ? $1 : 0);
         $r = round ($r,$round) if (defined $round); 
@@ -1330,38 +1346,246 @@ sub accu_setValue
     my $r=ReadingsVal($name,$reading,0);
     $r = ($r =~ /(-?\d+(\.\d+)?)/ ? $1 : 0);
     push (@{$a},$r);
+    if (defined $hash->{accu}{"$name $reading"}{time}) {
+      my $t=$hash->{accu}{"$name $reading"}{time};
+      shift (@{$t}) if (@{$t} >= $dim);
+      #push (@{$t},time_str2num(ReadingsTimestamp($name,$reading,"")));
+      my ($seconds, $microseconds) = gettimeofday();
+      push (@{$t},$seconds+$microseconds/1000000);
+    }
   }
 }
 
-sub DOIF_collect_save_values {
+sub DOIF_save_readings {
   my ($hash)=@_;
   foreach my $key (keys %{$defs{$hash->{NAME}}{READINGS}}) {
-    delete $defs{$hash->{NAME}}{READINGS}{$key} if ($key =~ /^\.col/);
+    delete $defs{$hash->{NAME}}{READINGS}{$key} if ($key =~ /^(\.col|\.bar)/);
   }
-  foreach my $dev_reading (keys %{$hash->{collect}}) {
-    foreach my $hours (keys %{$hash->{collect}{"$dev_reading"}}) {
-      if (ref($hash->{collect}{$dev_reading}{$hours}{values}) eq "ARRAY") {
-        my @va=@{$hash->{collect}{$dev_reading}{$hours}{values}};
-        my @ta=@{$hash->{collect}{$dev_reading}{$hours}{times}};
-        for (@va) { $_ = "" if (!defined $_); };
-        for (@ta) { $_ = "" if (!defined $_); };
-        my $dim=$hash->{collect}{$dev_reading}{$hours}{dim};
-        my $devReading=$dev_reading;
-        $devReading =~ s/ /_/g;
-        ::readingsSingleUpdate($hash,".col_".$dim."_".$devReading."_".$hours."_values",join(",",@va),0);
-        ::readingsSingleUpdate($hash,".col_".$dim."_".$devReading."_".$hours."_times",join(",",@ta),0);
+  DOIF_collect_save_values($hash);
+  DOIF_bar_save_values($hash);
+}
+
+
+sub DOIF_collect_save_values {
+  my ($hash)=@_;
+  if (defined $hash->{collect}) {
+    foreach my $dev_reading (keys %{$hash->{collect}}) {
+      foreach my $hours (keys %{$hash->{collect}{"$dev_reading"}}) {
+        if (ref($hash->{collect}{$dev_reading}{$hours}{values}) eq "ARRAY") {
+          my @va=@{$hash->{collect}{$dev_reading}{$hours}{values}};
+          my @ta=@{$hash->{collect}{$dev_reading}{$hours}{times}};
+          for (@va) { $_ = "" if (!defined $_); };
+          for (@ta) { $_ = "" if (!defined $_); };
+          my $dim=$hash->{collect}{$dev_reading}{$hours}{dim};
+          my $devReading=$dev_reading;
+          $devReading =~ s/ /_/g;
+          ::readingsSingleUpdate($hash,".col_".$dim."_".$devReading."_".$hours."_values",join(",",@va),0);
+          ::readingsSingleUpdate($hash,".col_".$dim."_".$devReading."_".$hours."_times",join(",",@ta),0);
+        }
       }
     }
   }
 } 
 
+sub DOIF_bar_save_values {
+  my ($hash)=@_;
+  foreach my $bartype ("bar","barAvg") {
+    if (defined $hash->{$bartype}) {
+      foreach my $dev_reading (keys %{$hash->{$bartype}}) {
+        foreach my $num_period (keys %{$hash->{$bartype}{"$dev_reading"}}) {
+          if (ref($hash->{$bartype}{$dev_reading}{$num_period}{values}) eq "ARRAY") {
+            DOIF_setValue_bar($hash,\%{$hash->{$bartype}{$dev_reading}{$num_period}});
+            my @va=@{$hash->{$bartype}{$dev_reading}{$num_period}{values}};
+            for (@va) { $_ = "" if (!defined $_); };
+            my $dim=$hash->{$bartype}{$dev_reading}{$num_period}{dim};
+            my $last_period2=$hash->{$bartype}{$dev_reading}{$num_period}{last_period2};
+            my $last_period1=$hash->{$bartype}{$dev_reading}{$num_period}{last_period1};
+            my $devReading=$dev_reading;
+            $devReading =~ s/ /_/g;
+            my $numPeriod=$num_period;
+            $numPeriod =~ s/ /_/g;
+            ::readingsSingleUpdate($hash,".".$bartype."_".$devReading."_".$numPeriod."_values","$last_period1,$last_period2,".join(",",@va),0);
+          }
+        }
+      }
+    }
+  }
+} 
 
-sub setValue_collect
+sub DOIF_setColvalue 
 {
-  my ($hash,$collect)=@_;
+  my ($collect,$seconds,$value,$optimize)=@_;  
+  my $dim=${$collect}{dim};
+  my $hours=${$collect}{hours};
+  my $va=${$collect}{values};
+  my $ta=${$collect}{times};
+  
+  my $seconds_per_slot=$hours*3600/$dim;
+  my $slot_nr=int ($seconds/$seconds_per_slot);
+  my $last_slot=int(${$collect}{time}/$seconds_per_slot);   
+  my $last_value;
+
+  my $diff_slots=$last_slot-$slot_nr;
+  if ($diff_slots >= 0) {
+    if ($diff_slots < $dim) {
+      my $pos=$dim-1-$diff_slots;
+      if (defined $optimize or $pos > 1) {
+        for (my $i=$pos-1;$i>=0;$i--) {
+          if (defined (${$va}[$i])) {
+            $last_value=${$va}[$i];
+            last;
+          }
+        }
+      }
+      if (!defined $optimize or !defined ${$va}[$pos] or !defined $last_value or (abs($value-$last_value) >  abs(${$va}[$pos]-$last_value))) {
+        ${$va}[$pos]=$value;
+        ${$ta}[$pos]=$seconds;
+      }
+    }
+  }
+}
+
+sub DOIF_get_file_data
+{
+  my ($file) = @_;
+  my $fh;
+  if(!open($fh, $file)) {
+    return "Can't open $file: $!";
+  }
+  my @tpl=<$fh>;
+  close $fh;
+  my $cmd=join("",@tpl);
+  $cmd =~ s/\r//g;
+  return ($cmd);
+}
+
+sub DOIF_modify_card_data
+{
+  my ($name,$device,$reading,$colBarDes,$timeOffset,$valueData)=@_;
+  DOIF_card_data (undef,$name,$device,$reading,$colBarDes,$timeOffset,$valueData);
+}
+
+sub DOIF_set_card_data
+{
+  my ($name,$device,$reading,$colBarDes,$timeOffset,$valueData)=@_;
+  DOIF_card_data (1,$name,$device,$reading,$colBarDes,$timeOffset,$valueData);
+}
+  
+sub DOIF_card_data
+{
+  my ($delOpt,$name,$device,$reading,$colBarDes,$timeOffset,$valueData)=@_;
+  my $collect=ReadingValDoIf($defs{$name},$device,$reading,'',$colBarDes);
+  if (!defined $collect) {
+    return ("undefined  $name, $device, $reading, $colBarDes combination");
+  }
+  DOIF_delete_values ($collect) if (defined $delOpt);
+  return(DOIF_setCardValues($defs{$name},$delOpt,ReadingValDoIf($defs{$name},$device,$reading,'',$colBarDes),$timeOffset,$valueData));
+}
+
+sub DOIF_setCardValues 
+{
+  my ($hash,$optimize,$collect,$timeOffset,$valueData)=@_;
+  my $seconds;
+  my $type=${$collect}{type};
+  if (!defined $timeOffset or $timeOffset eq "") {
+    $timeOffset=0;
+  }
+  ##if ($valueData !~ /^\d\d\d\d/) {
+  ##  return("invalid syntax: $valueData");
+  ##}
+  if ($type eq "bar") {
+    DOIF_setValue_bar($hash,$collect);
+  } else {
+    DOIF_setValue_collect($hash,$collect);
+  }
+  my @data;
+  if ($valueData =~ /\n/) {
+    @data=split (/[\n]/,$valueData);
+  } else {
+    @data=split (/[\,]/,$valueData);
+  }
+  my $out="";
+  for (my $i=0;$i < scalar (@data);$i++) {
+    if ($data[$i] !~ /\s*#/) {
+      if ($data[$i] =~ /(.*)[\s;]+([\S^;]*)$/) {
+        my $dateTime = $1;
+        my $value = $2;
+        $value =~ s/\,/\./g;
+        my $time=DOIF_time_sec($dateTime);
+        if (defined $time) {
+          if ($type eq "bar") {
+            DOIF_setBarvalue ($collect,$time+$timeOffset,$value);
+          } else {
+            DOIF_setColvalue ($collect,$time+$timeOffset,$value,$optimize);
+          }
+        } else {
+          $out.="error at: $data[$i]\n";
+        }
+      } else {
+          $out.="error at: $data[$i]\n";
+      }
+    }
+  }
+  if ($type eq "bar") {
+    DOIF_setValue_bar($hash,$collect,undef,1);
+  } else {
+    DOIF_setValue_collect($hash,$collect,1);
+  }
+  if ($out eq "") {
+    return;
+  } else {
+    return ($out);
+  }
+}
+
+sub DOIF_delete_card_data
+{
+  my ($name,$device,$reading,$colBarDes)=@_;
+  my $collect=ReadingValDoIf($defs{$name},$device,$reading,'',$colBarDes);
+  if (!defined $collect) {
+    return ("undefined  $name, $device, $reading, $colBarDes combination");
+  }
+  DOIF_delete_values($collect);
+  return(undef);
+}
+
+
+sub DOIF_delete_values
+{
+  my ($a)=@_;
+  @{${$a}{values}}=();
+  @{${$a}{times}}=();
+  
+  delete ${$a}{max_value}; 
+  delete ${$a}{max_value_slot}; 
+  delete ${$a}{max_value_time}; 
+  delete ${$a}{min_value}; 
+  delete ${$a}{min_value_slot}; 
+  delete ${$a}{min_value_time}; 
+ 
+  delete ${$a}{average_value}; 
+ # delete ${$a}{begin_period}; 
+ # delete ${$a}{last_period1}; 
+ # delete ${$a}{last_period2}; 
+  
+  if (${$a}{type} eq "col") {
+    ${$a}{values}[${$a}{dim}-1]=undef;
+    ${$a}{times}[${$a}{dim}-1]=undef;
+  } elsif (${$a}{type} eq "bar") {
+    ${$a}{values}[${$a}{dim}*${$a}{num}-1]=undef;
+  }
+}
+
+sub DOIF_setValue_collect
+{
+  my ($hash,$collect,$statistic)=@_;
+  if (!defined ${$collect}{dim}) {
+    return;
+  }
   my $name=${$collect}{name};
   my $reading=${$collect}{reading};
   my $hours=${$collect}{hours};
+  my $change;
 
   my $r=ReadingsVal($name,$reading,0);
   if (defined ${$collect}{output}) {
@@ -1372,69 +1596,91 @@ sub setValue_collect
       readingsSingleUpdate ($hash, "error", "${$collect}{output}, ".$@,1);
     }
   }
+  
   my ($seconds, $microseconds) = gettimeofday();
-  $r = ($r =~ /(-?\d+(\.\d+)?)/ ? $1 : "N/A");
+  
+  if (defined $r) {
+    $r = ($r =~ /(-?\d+(\.\d+)?)/ ? $1 : "N/A");
+  } else {
+    $r="N/A";
+  }
+  
   ${$collect}{value}=$r;
   ${$collect}{time}=$seconds;
   
-  my $diff_slots=1;
+  my $diff_slots=0;
   my $last_slot;
 
   my $dim=${$collect}{dim};
   my $va=${$collect}{values};
   my $ta=${$collect}{times};
   
-  if ($r ne "N/A") {
-    my $seconds_per_slot=$hours*3600/$dim;
-     
-    if (@{$ta} == $dim) {
-      $last_slot=int (${$ta}[-1]/$seconds_per_slot);
-    }
-    my $slot_nr=int ($seconds/$seconds_per_slot);
-    if (defined $last_slot) {
-      $diff_slots=$slot_nr-$last_slot;
-      if ($diff_slots > 0) {
-        if ($diff_slots >= $dim) {
-          ${$collect}{last_value}=${$collect}{value} if (defined ${$collect}{value});
-          @{$va}=();
-          @{$ta}=();
-          ${$collect}{last}=undef;
-        } else {
-          my @rv=splice (@{$va},0,$diff_slots);
-          my @rt=splice (@{$ta},0,$diff_slots);
-          if ($diff_slots > 1 and !defined ${$va}[$dim-$diff_slots] and defined ${$collect}{last} and ${$va}[$dim-$diff_slots-1] != ${$collect}{last}) {
-            ${$va}[$dim-$diff_slots]=${$collect}{last};
-            ${$ta}[$dim-$diff_slots]=(int(${$ta}[$dim-$diff_slots-1]/$seconds_per_slot)+1)*$seconds_per_slot;
-          }
-          ${$collect}{last}=undef;
-          for (my $i=@rv-1;$i>=0;$i--) {
-            if (defined ($rv[$i])) {
-              ${$collect}{last_value}=$rv[$i];
-              last;
-            }
-          }
+
+  my $seconds_per_slot=$hours*3600/$dim;
+   
+  my $slot_nr=int ($seconds/$seconds_per_slot);
+  
+  if (defined ${$collect}{last_slot}) {
+    $last_slot=${$collect}{last_slot};
+  } elsif (defined ${$va}[$dim-1]) {
+    $last_slot=int (${$ta}[-1]/$seconds_per_slot);
+  }
+  
+  if (defined $last_slot) {
+    $diff_slots=$slot_nr-$last_slot;
+  }
+  
+  if ($diff_slots > 0) {
+    $change=1;
+    if ($diff_slots >= $dim) {
+      ${$collect}{last_value}=${$collect}{value} if (defined ${$collect}{value});
+      @{$va}=();
+      @{$ta}=();
+    } else {
+      my @rv=splice (@{$va},0,$diff_slots);
+      my @rt=splice (@{$ta},0,$diff_slots);
+      for (my $i=@rv-1;$i>=0;$i--) {
+        if (defined ($rv[$i])) {
+          ${$collect}{last_value}=$rv[$i];
+          last;
         }
       }
     }
-
-    ##${$collect}{avg} = defined ${$collect}{max_value} ? (${$collect}{max_value}-${$collect}{min_value})/2 + ${$collect}{min_value}: $r;
-    
-    if (!defined ${$va}[$dim-1] or !defined ${$collect}{last_v} or (abs($r-${$collect}{last_v}) >  abs(${$va}[$dim-1]-${$collect}{last_v}))) {
- ##   if (!defined ${$va}[$dim-1] or ($r >= ${$collect}{avg} and $r > ${$va}[$dim-1] or $r < ${$collect}{avg} and $r < ${$va}[$dim-1])) {
-      ${$va}[$dim-1]=$r;
-      ${$ta}[$dim-1]=$seconds;
-    } elsif (${$va}[$dim-1] != $r) {
-       ${$collect}{last}=$r;
-    }
   }
-   
+  
+  if (!defined ${$va}[$dim-1] or !defined ${$collect}{last_v} or (abs($r-${$collect}{last_v}) >  abs(${$va}[$dim-1]-${$collect}{last_v}))) {
+    if ($r ne "N/A") {
+      if (!defined ${$va}[$dim-1] or ${$va}[$dim-1] != $r) {
+        $change=1;
+        ${$va}[$dim-1]=$r;
+      }
+     # ${$collect}{last_v}=$r
+    } else { 
+      ${$va}[$dim-1]=undef;
+    }
+    ${$ta}[$dim-1]=$seconds;
+    ${$collect}{last_slot}=$slot_nr;
+  }
+  
+  
+  if (defined $statistic or defined $change) {
+    DOIF_statistic_col ($collect)
+  }
+} 
+
+sub DOIF_statistic_col 
+{   
+  my ($collect)=@_;
   my $maxVal;
   my $maxValTime;
   my $maxValSlot;
   my $minVal;
   my $minValTime;
   my $minValSlot;
-
+  my $dim=${$collect}{dim};
+  my $va=${$collect}{values};
+  my $ta=${$collect}{times};
+  
   for (my $i=0;$i<@{$va};$i++) {
     my $value=${$va}[$i];
     my $time=${$ta}[$i];
@@ -1459,15 +1705,22 @@ sub setValue_collect
       last;
     }
   }
-
-  ${$collect}{max_value}=$maxVal;
-  ${$collect}{max_value_time}=$maxValTime;
-  ${$collect}{max_value_slot}=$maxValSlot;
+  delete ${$collect}{max_value};
+  delete ${$collect}{max_value_time};
+  delete ${$collect}{max_value_slot};
+  delete ${$collect}{min_value};
+  delete ${$collect}{min_value_time};
+  delete ${$collect}{min_value_slot};
   
-  ${$collect}{min_value}=$minVal;
-  ${$collect}{min_value_time}=$minValTime;
-  ${$collect}{min_value_slot}=$minValSlot;
-  
+  if (defined $maxVal) {
+    ${$collect}{max_value}=$maxVal;
+    ${$collect}{max_value_time}=$maxValTime;
+    ${$collect}{max_value_slot}=$maxValSlot;
+    
+    ${$collect}{min_value}=$minVal;
+    ${$collect}{min_value_time}=$minValTime;
+    ${$collect}{min_value_slot}=$minValSlot;
+  }
   if (defined ${$collect}{last_value}) {
     if (${$collect}{last_value} > $maxVal) {
       ${$collect}{last_value}=$maxVal;
@@ -1477,6 +1730,271 @@ sub setValue_collect
   }
 }
 
+sub DOIF_time_sec($)
+{
+  my ($dateTime) = @_;
+  my @a;
+  my ($sec,$min,$hour,$mday,$month,$year,$wday,$yday,$isdst);
+  if ($dateTime =~/^(\d\d\d\d)(?:.(.*))?/) {
+    $year=$1;
+    ($month,$mday,$hour,$min,$sec) = split(/[\D]/, $2) if (defined $2);
+  } elsif ($dateTime =~/(\d\d).(\d\d).(\d\d\d\d)(?:.(\d\d):(\d\d)(?::(\d\d))?)?/) {
+    $mday=$1;
+    $month=$2;
+    $year=$3;
+    $hour=$4;
+    $min=$5;
+    $sec=$6;
+  } else {
+    return (undef);
+  }
+ 
+  $month=1 if (!defined $month);
+  $mday=1 if (!defined $mday);
+  $hour=0 if (!defined $hour);
+  $min=0 if (!defined $min);
+  $sec=0 if (!defined $sec);
+  
+  return mktime($sec,$min,$hour,$mday,$month-1,$year-1900,0,0,-1);
+}
+
+sub DOIF_statistic_bar
+{
+  my ($bar)=@_;
+  my $num=${$bar}{num};
+  my $numOrig=${$bar}{numOrig};
+  my $dim=${$bar}{dim};
+  my $maxVal;
+  my $minVal;
+  my $maxValSlot;
+  my $minValSlot;
+  my $sum=0;
+  my $numb=0;
+  my $period2=${$bar}{last_period2};
+  my $period1=${$bar}{last_period1};
+  my $va=${$bar}{values};
+  
+  for (my $i=0;$i<@{$va};$i++) {
+    my $value=${$va}[$i];
+  #  if (defined $value) {
+    if (defined $value and ($numOrig != 1 or (int($i/$dim) == 0 or $i % $dim > $period1 or $i % $dim == $period1 and !defined ${$va}[$period1]))) {
+      $numb++;
+      $sum+=$value;
+      if (!defined $maxVal or $value > $maxVal) {
+         $maxVal=$value;
+         $maxValSlot=$i;
+      }
+      if (!defined $minVal or $value < $minVal) {
+         $minVal=$value;
+         $minValSlot=$i;
+      }
+    }
+  }
+  
+  delete ${$bar}{max_value};
+  delete ${$bar}{max_value_slot};
+  delete ${$bar}{min_value};
+  delete ${$bar}{min_value_slot};
+  delete ${$bar}{average_value};
+  
+  if ($numb > 0) {
+    ${$bar}{max_value}=$maxVal;
+    ${$bar}{max_value_slot}=$maxValSlot;
+    ${$bar}{min_value}=$minVal;
+    ${$bar}{min_value_slot}=$minValSlot;
+    ${$bar}{average_value}=$sum/$numb;
+    if (${$bar}{period} eq "decade") {
+      ${$bar}{max_value_time}=((${$bar}{last_period2}-int($maxValSlot/$dim))*10+($maxValSlot % $dim));
+      ${$bar}{min_value_time}=((${$bar}{last_period2}-int($minValSlot/$dim))*10+($minValSlot % $dim));
+    } elsif (${$bar}{period} eq "year") {
+      ${$bar}{max_value_time}=qw(Jan Feb Mär Apr Mai Jun Jul Aug Sep Okt Nov Dez)[$maxValSlot % $dim]." ".(($period2-int($maxValSlot/$dim)) % 100);
+      ${$bar}{min_value_time}=qw(Jan Feb Mär Apr Mai Jun Jul Aug Sep Okt Nov Dez)[$minValSlot % $dim]." ".(($period2-int($minValSlot/$dim)) % 100);
+    } elsif (${$bar}{period} eq "month") {
+     # ${$bar}{max_value_time}=(($maxValSlot % $dim)+1).". ".qw(Jan Feb Mär Apr Mai Jun Jul Aug Sep Okt Nov Dez)[($period2-int($maxValSlot/$dim)) % 12];
+      ${$bar}{max_value_time}=sprintf("%02d.%02d",(($maxValSlot % $dim)+1),($period2-int($maxValSlot/$dim)) % 12+1);
+      ${$bar}{min_value_time}=sprintf("%02d.%02d",(($minValSlot % $dim)+1),($period2-int($minValSlot/$dim)) % 12+1);
+    } elsif (${$bar}{period} eq "week") {
+      my ($sec,$min,$hour,$mday,$month,$year,$wday,$yday)=gmtime(($period2-int($maxValSlot/$dim))*604800+(($maxValSlot % $dim)-3)*86400);
+      ${$bar}{max_value_time}=sprintf("%02d.%02d",$mday,$month+1);
+      ($sec,$min,$hour,$mday,$month,$year,$wday,$yday)=gmtime(($period2-int($minValSlot/$dim))*604800+(($minValSlot % $dim)-3)*86400);
+      #${$bar}{min_value_time}=sprintf("%s %02d.%02d",qw(So Mo Di Mi Do Fr Sa)[$wday],$mday,$month+1);
+      ${$bar}{min_value_time}=sprintf("%02d.%02d",$mday,$month+1);
+    } elsif (${$bar}{period} eq "day") {
+      my ($sec,$min,$hour,$mday,$month,$year,$wday,$yday)=gmtime(($period2-int($maxValSlot/$dim))*86400+(($maxValSlot % $dim))*3600);
+      ${$bar}{max_value_time}=sprintf("%s %02d:",qw(So Mo Di Mi Do Fr Sa)[$wday],$hour);
+      ($sec,$min,$hour,$mday,$month,$year,$wday,$yday)=gmtime(($period2-int($minValSlot/$dim))*86400+(($minValSlot % $dim))*3600);
+      ${$bar}{min_value_time}=sprintf("%s %02d:",qw(So Mo Di Mi Do Fr Sa)[$wday],$hour);
+    }
+  }
+}
+
+sub DOIF_setPeriod
+{
+  my ($seconds,$period)=@_;
+
+  my $period1;
+  my $period2;
+  my $begin_period2;
+
+ # $seconds+=5*3600+30*60;
+  my ($sec,$min,$hour,$mday,$month,$year,$wday,$yday,$isdst) = localtime($seconds);
+  $year+=1900;
+  if ($period eq "decade") {
+    $period1=$year%10;
+    $period2=int($year/10);
+    $begin_period2=($period2)."-";
+  } elsif ($period eq "year") {
+    $period1=$month;
+    $period2=$year;
+    $begin_period2=$year;
+  } elsif ($period eq "month") {
+    $period1=$mday-1;
+    $period2=$month+$year*12;
+    $begin_period2=qw(Jan Feb Mär Apr Mai Jun Jul Aug Sep Okt Nov Dez)[$month];
+  } else {
+    my ($gsec,$gmin,$ghour,$gmday,$gmon,$gyear,$gwday,$gyday)  = gmtime($seconds);
+    $gyear+=1900;
+    my $offset=($min - $gmin)/60 + $hour - $ghour + 24 * ($year - $gyear || $yday - $gyday); # time zone offset
+    if ($period eq "week") {
+      $period1=$wday == 0 ? 6: $wday-1;
+      $period2=int(($seconds+3*86400+$offset*3600)/604800);
+      ($sec,$min,$hour,$mday,$month,$year,$wday,$yday) = gmtime($period2*604800-3*86400);
+      $begin_period2=sprintf("%02d.%02d-",$mday,$month+1);
+    } elsif ($period eq "day") {
+      $period1=$hour;
+      $period2=int(($seconds+$offset*3600)/86400);
+      #($sec,$min,$hour,$mday,$month,$year,$wday,$yday,$isdst) = localtime($period2*86400+($isdst+$offset)*3600);
+      #$begin_period2=sprintf("%02d.%02d",$mday,$month+1);
+      $begin_period2=qw(So Mo Di Mi Do Fr Sa)[$wday];
+    }
+  }
+  return ($period1,$period2,$begin_period2);
+}
+
+sub DOIF_setBarPosValue
+{
+  my ($bar,$pos,$value)=@_;  
+  my $va=${$bar}{values};
+  if (defined ${$bar}{barType} and ${$bar}{barType} eq "barAvg") {
+    if (defined ${$va}[$pos] and defined ${$bar}{value_pos} and $pos == ${$bar}{value_pos}) {
+      ${$bar}{value_sum}+=$value;
+      ${$bar}{value_num}++;
+      ${$va}[$pos]=${$bar}{value_sum}/${$bar}{value_num};
+    } else {
+      ${$bar}{value_pos}=$pos;
+      ${$bar}{value_sum}=$value;
+      ${$bar}{value_num}=1;
+      ${$va}[$pos]=$value;
+    }
+  } else {  
+    ${$va}[$pos]=$value;
+  }
+}
+
+
+sub DOIF_setBarvalue 
+{
+  my ($bar,$seconds,$value)=@_;  
+  my $period=${$bar}{period};
+  my $num=${$bar}{num};
+  my $dim=${$bar}{dim};
+
+  my ($period1,$period2)=DOIF_setPeriod($seconds,$period);
+     
+  if (defined ${$bar}{last_period2} and $period2 <= ${$bar}{last_period2}) {
+    my $diff=(${$bar}{last_period2} - $period2);
+    if ($diff < $num) {
+      DOIF_setBarPosValue($bar,$diff*$dim+$period1,$value);
+    }
+  }
+}
+
+sub DOIF_setValue_bar
+{
+  my ($hash,$bar,$trigger,$statistic)=@_;
+  if (!defined ${$bar}{dim}) {
+    return;
+  }
+  my $name=${$bar}{name};
+  my $reading=${$bar}{reading};
+  my $period=${$bar}{period};
+  my $num=${$bar}{num};
+  my $dim=${$bar}{dim};
+  my $timeOffset=${$bar}{timeOffset};
+  
+  my $r=ReadingsVal($name,$reading,0);
+  if (defined ${$bar}{output}) {
+    $_=$r;
+    $r=eval(${$bar}{output});
+    if ($@) {
+      Log3 ($hash->{NAME},4 , "$hash->{NAME}: $@");
+      readingsSingleUpdate ($hash, "error", "${$bar}{output}, ".$@,1);
+    }
+  }
+  
+  my ($seconds, $microseconds) = gettimeofday();
+  my ($period1,$period2,$begin_period2)=DOIF_setPeriod($seconds,$period);
+
+  if (defined $r) { 
+    $r = ($r =~ /(-?\d+(\.\d+)?)/ ? $1 : "N/A");
+  } else {
+    $r="N/A";
+  }
+
+  if (defined $trigger) {
+    if ($r ne "N/A") {
+     # if (${$bar}{counter}) {
+     #   if (!defined ${$bar}{last_period1}) {
+     #     ${$bar}{last_period1}=$period1;
+     #   } elsif (${$bar}{last_period1} <= $period1) {
+     #     ${$bar}{last_counter}=$r;
+     #   }
+     #   ${$bar}{value}=${$bar}{last_counter}-$r;
+     # } else {
+        ${$bar}{value}=$r;
+     # }
+    }
+  }
+
+
+  my $va=${$bar}{values};
+  my $change="";
+  
+  if (defined ${$bar}{last_period2} and ${$bar}{last_period2} < $period2) {
+    my @empty;
+    my $diff=($period2-${$bar}{last_period2});
+    if ($diff < $num) {
+      $empty [$diff*$dim-1]=undef;
+      splice (@{$va},($num-$diff)*$dim);        
+      splice (@{$va},0,0,@empty);
+    } else {
+      @{$va}=();
+      ${$va}[$num*$diff-1]=undef;
+    }
+    $change=1;
+  }
+
+  ${$bar}{last_period2}=$period2;
+  ${$bar}{last_period1}=$period1;
+  ${$bar}{begin_period2}=$begin_period2;
+ 
+
+  
+  ${$bar}{value}=$r;
+  if (defined $trigger and $r ne "N/A") {
+    if ($timeOffset == 0) {
+      DOIF_setBarPosValue($bar,$period1,${$bar}{value})
+      #${$va}[$period1]=${$bar}{value};
+    } else {
+      DOIF_setBarvalue ($bar,$seconds+$timeOffset,${$bar}{value});
+    }      
+    $change=1;
+  }
+  
+  if ($change or defined $statistic) {
+    DOIF_statistic_bar ($bar)
+  }
+}
 
 sub EvalAllDoIf($$)
 {
@@ -1613,7 +2131,7 @@ sub ReplaceEventDoIf($)
 
 sub ReplaceReadingDoIf
 {
-  my ($hash,$element) = @_;
+  my ($hash,$element,$cond) = @_;
   my $beginning;
   my $tailBlock;
   my $err;
@@ -1661,16 +2179,17 @@ sub ReplaceReadingDoIf
           $regExp=$1;
           $output=$2;
           return ($regExp,"no round brackets in regular expression") if ($regExp !~ /.*\(.*\)/);
-        } elsif ($format =~ /^((avg|med|diff|inc)(\d*))/) {
+        } elsif ($format =~ /^((avg|med|diffpsec|diff|inc)(\d*))/) {
            AddRegexpTriggerDoIf($hash,"accu","","accu",$name,$reading);
            $regExp =$1;
            my $dim=$3;
            $dim=2 if (!defined $dim or !$dim);
-           if (defined $hash->{accu}{"$name $reading"}{dim}) {
-             $hash->{accu}{"$name $reading"}{dim}=$hash->{accu}{"$name $reading"}{dim} < $dim ? $dim : $hash->{accu}{"$name $reading"}{dim};
-           } else {
+           if (!defined $hash->{accu}{"$name $reading"}{dim} or $hash->{accu}{"$name $reading"}{dim} != $dim) {
+#             $hash->{accu}{"$name $reading"}{dim}=$hash->{accu}{"$name $reading"}{dim} != $dim ? $dim : $hash->{accu}{"$name $reading"}{dim};
+#           } else {
              $hash->{accu}{"$name $reading"}{dim}=$dim;
              @{$hash->{accu}{"$name $reading"}{value}}=();
+             @{$hash->{accu}{"$name $reading"}{time}}=() if ($2 eq "diffpsec");
            }
         } elsif ($format =~ /^((\d*)col(\d*)(\w?))(?::(.*))?/) {
            $regExp =$1;
@@ -1678,39 +2197,101 @@ sub ReplaceReadingDoIf
            my $num=$3;
            my $time=$4;
            $output=$5;
-           my $hours=24;
-           if ($num ne "") {
-             if($time eq "d") {
-               $hours=24*$num;
-             }elsif ($time eq "w") {
-               $hours=24*$num*7;
-             } else {
-               $hours=$num;
+          if (defined $cond and $cond >= -7 and $cond <= -4) { #DOIF_Readings,event_Readings,uiTable,uiState
+             my $hours=24;
+             if ($num ne "") {
+               if($time eq "d") {
+                 $hours=24*$num;
+               }elsif ($time eq "w") {
+                 $hours=24*$num*7;
+               } else {
+                 $hours=$num;
+               }
              }
-           }
-           AddRegexpTriggerDoIf($hash,"collect","","collect",$name,$reading);
-           if (ref($hash->{collect}{"$name $reading"}{$hours}{values}) ne "ARRAY" or $dim != $hash->{collect}{"$name $reading"}{$hours}{dim}) {
-             delete $hash->{collect}{"$name $reading"}{$hours};
-             $hash->{collect}{"$name $reading"}{$hours}{hours}=$hours;
-             $hash->{collect}{"$name $reading"}{$hours}{dim}=$dim;
-             $hash->{collect}{"$name $reading"}{$hours}{animate}= (defined $hash->{card}{animate} and $hash->{card}{animate} eq "1") ? 1 :0;
-             my $values=::ReadingsVal($hash->{NAME},".col_".$hash->{collect}{"$name $reading"}{$hours}{dim}."_".$name."_".$reading."_".$hours."_values","");
-             my $times=::ReadingsVal($hash->{NAME},".col_".$hash->{collect}{"$name $reading"}{$hours}{dim}."_".$name."_".$reading."_".$hours."_times","");
-             my $va;
-             my $ta;
-             @{$va}=split (",",$values);
-             for (@{$va}) { $_ = undef if ($_ eq ""); };
-             @{$ta}=split (",",$times);
-             for (@{$ta}) { $_ = undef if ($_ eq ""); };
-             $hash->{collect}{"$name $reading"}{$hours}{values}=$va;
-             $hash->{collect}{"$name $reading"}{$hours}{times}=$ta;
-             $hash->{collect}{"$name $reading"}{$hours}{dim}=$dim;
-             $hash->{collect}{"$name $reading"}{$hours}{name}=$name;
-             $hash->{collect}{"$name $reading"}{$hours}{reading}=$reading;
-           }
-           $hash->{collect}{"$name $reading"}{$hours}{output}=$output if ($output);
-           setValue_collect($hash,\%{$hash->{collect}{"$name $reading"}{$hours}});
-        } elsif ($format =~ /^(d[^:]*)(?::(.*))?/) {
+             AddRegexpTriggerDoIf($hash,"collect","","collect",$name,$reading);
+             if (ref($hash->{collect}{"$name $reading"}{$hours}{values}) ne "ARRAY" or $dim != $hash->{collect}{"$name $reading"}{$hours}{dim}) {
+               delete $hash->{collect}{"$name $reading"}{$hours};
+               $hash->{collect}{"$name $reading"}{$hours}{hours}=$hours;
+               $hash->{collect}{"$name $reading"}{$hours}{dim}=$dim;
+               $hash->{collect}{"$name $reading"}{$hours}{animate}= (defined $hash->{card}{animate} and $hash->{card}{animate} eq "1") ? 1 :0;
+               my $values=::ReadingsVal($hash->{NAME},".col_".$hash->{collect}{"$name $reading"}{$hours}{dim}."_".$name."_".$reading."_".$hours."_values","");
+               my $times=::ReadingsVal($hash->{NAME},".col_".$hash->{collect}{"$name $reading"}{$hours}{dim}."_".$name."_".$reading."_".$hours."_times","");
+               my $va;
+               my $ta;
+               @{$va}=split (",",$values);
+               for (@{$va}) { $_ = undef if ($_ eq ""); };
+               @{$ta}=split (",",$times);
+               for (@{$ta}) { $_ = undef if ($_ eq ""); };
+               $hash->{collect}{"$name $reading"}{$hours}{values}=$va;
+               $hash->{collect}{"$name $reading"}{$hours}{times}=$ta;
+               $hash->{collect}{"$name $reading"}{$hours}{dim}=$dim;
+               $hash->{collect}{"$name $reading"}{$hours}{name}=$name;
+               $hash->{collect}{"$name $reading"}{$hours}{reading}=$reading;
+               $hash->{collect}{"$name $reading"}{$hours}{type}="col";
+             }
+             if (!defined $output or $output eq "") {
+              delete $hash->{collect}{"$name $reading"}{$hours}{output};
+             } else {
+              $hash->{collect}{"$name $reading"}{$hours}{output}=$output;
+             }
+             DOIF_setValue_collect($hash,\%{$hash->{collect}{"$name $reading"}{$hours}},1);
+          }
+        } elsif ($format =~ /^((bar|barAvg)(\d*)(day|week|month|year|decade))(-?\d*)?(?::(.*))?/) {
+           $regExp = $1;
+           my $bartype=$2;
+           my $num = $3;  
+           my $period = $4;
+           my $timeOffset = $5;
+           $output = $6;
+           if (defined $cond and $cond >= -7 and $cond <= -4) { #DOIF_Readings,event_Readings,uiTable,uiState
+             my $dim;
+             if ($period eq "decade") {
+               $dim=10;
+             } elsif ($period eq "year") {
+               $dim=12;
+             } elsif ($period eq "month") {
+               $dim=31;
+             } elsif ($period eq "week") {
+               $dim=7;
+             } elsif ($period eq "day") {
+               $dim=24;
+             }
+             AddRegexpTriggerDoIf($hash,$bartype,"",$bartype,$name,$reading);
+             if (ref($hash->{$bartype}{"$name $reading"}{"$num $period"}{values}) ne "ARRAY")  {
+               delete $hash->{$bartype}{"$name $reading"}{"$num $period"};
+               my $values=::ReadingsVal($hash->{NAME},".".$bartype."_".$name."_".$reading."_".$num."_".$period."_values","");
+               my $va;
+               my $vadim=($num == 1 ? 2 : $num)*$dim;
+               if ($values ne "") {
+                 ($hash->{$bartype}{"$name $reading"}{"$num $period"}{last_period1},$hash->{$bartype}{"$name $reading"}{"$num $period"}{last_period2},@{$va})=split (",",$values);
+                 if (@{$va} < $vadim) {
+                   ${$va}[$vadim-1]=undef;
+                 }
+                 for (@{$va}) { $_ = undef if (defined $_ and $_ eq ""); };
+               } else {
+                 ${$va}[$vadim-1]=undef;
+               }
+               $hash->{$bartype}{"$name $reading"}{"$num $period"}{values} = $va;
+               $hash->{$bartype}{"$name $reading"}{"$num $period"}{numOrig} = $num;
+               $hash->{$bartype}{"$name $reading"}{"$num $period"}{num} = $num == 1 ? 2 : $num;
+               $hash->{$bartype}{"$name $reading"}{"$num $period"}{period} = $period;
+               $hash->{$bartype}{"$name $reading"}{"$num $period"}{name} = $name;
+               $hash->{$bartype}{"$name $reading"}{"$num $period"}{reading} = $reading;
+               #$hash->{$bartype}{"$name $reading"}{"$num $period"}{counter}=$counter;
+               
+               $hash->{$bartype}{"$name $reading"}{"$num $period"}{dim} = $dim;
+               $hash->{$bartype}{"$name $reading"}{"$num $period"}{type} = "bar";
+               $hash->{$bartype}{"$name $reading"}{"$num $period"}{barType} = $bartype;
+            } 
+            if (!defined $output or $output eq "") {
+              delete $hash->{$bartype}{"$name $reading"}{"$num $period"}{output};
+            } else {
+              $hash->{$bartype}{"$name $reading"}{"$num $period"}{output} = $output;
+            }
+            $hash->{$bartype}{"$name $reading"}{"$num $period"}{timeOffset} = (defined $timeOffset and $timeOffset ne "") ? $timeOffset : 0; 
+            DOIF_setValue_bar($hash,\%{$hash->{$bartype}{"$name $reading"}{"$num $period"}},undef,1);            
+          }
+        } elsif ($format =~ /^(d\d?)(?::(.*))?/) {
           $regExp =$1;
           $output=$2;
         }else {
@@ -1740,10 +2321,10 @@ sub ReplaceReadingDoIf
   }
 }
 
-sub ReplaceReadingEvalDoIf($$$)
+sub ReplaceReadingEvalDoIf
 {
-  my ($hash,$element,$eval) = @_;
-  my ($block,$err,$device,$reading,$internal)=ReplaceReadingDoIf($hash,$element);
+  my ($hash,$element,$eval,$cond) = @_;
+  my ($block,$err,$device,$reading,$internal)=ReplaceReadingDoIf($hash,$element,$cond);
   return ($block,$err) if ($err);
   if ($eval) {
    #   return ("[".$element."]","") if(!$defs{$device});
@@ -1822,6 +2403,7 @@ sub setDOIF_Reading
   $hash->{helper}{event}=join(",",@{$eventa}) if ($eventa);
 
   my $ret = eval $hash->{$ReadingType}{$DOIF_Reading};
+
   if ($@) {
     $@ =~ s/^(.*) at \(eval.*\)(.*)$/$1,$2/;
     $ret="error in $ReadingType: ".$@;
@@ -1831,6 +2413,9 @@ sub setDOIF_Reading
     Log3 ($hash->{NAME},3 , "$hash->{NAME}: warning in $ReadingType: $DOIF_Reading");
   } 
   $lastWarningMsg="";
+  if (!defined $ret) {
+    return;
+  }
   if ($ReadingType eq "event_Readings") {
     readingsSingleUpdate ($hash,$DOIF_Reading,$ret,1);
   } elsif ($ret ne ReadingsVal($hash->{NAME},$DOIF_Reading,"") or !defined $defs{$hash->{NAME}}{READINGS}{$DOIF_Reading}) {
@@ -1910,7 +2495,7 @@ sub ReplaceAllReadingsDoIf
       } else {
         $trigger=0 if (substr($block,0,7) eq "\$DEVICE");
         if ($block =~ /^(\$DEVICE|[a-z0-9._]*[a-z._]+[a-z0-9._]*)($|:.+$|,.+$)/i) {
-          ($block,$err,$device,$reading,$internal)=ReplaceReadingEvalDoIf($hash,$block,$eval);
+          ($block,$err,$device,$reading,$internal)=ReplaceReadingEvalDoIf($hash,$block,$eval,$condition);
           return ($block,$err) if ($err);
           if ($condition >= 0) {
             if ($trigger) {
@@ -2058,11 +2643,14 @@ ParseCommandsDoIf($$$)
 sub DOIF_weekdays($$)
 {
   my ($hash,$weekdays)=@_;
-  my @days=split(',',AttrVal($hash->{NAME},"weekdays","So|Su,Mo,Di|Tu,Mi|We,Do|Th,Fr,Sa,WE,AT|WD,MWE|TWE"));
+  my @days=split(',',AttrVal($hash->{NAME},"weekdays","So|Su,Mo,Di|Tu,Mi|We,Do|Th,Fr,Sa,WE,AT|WD,MWE|TWE,MAT|TWD"));
+  
   for (my $i=@days-1;$i>=0;$i--)
   {
-    $weekdays =~ s/$days[$i]/$i/;
+    my $wd = $i==10 ? "X" : $i;
+    $weekdays =~ s/$days[$i]/$wd/;
   }
+
   return($weekdays);
 }
 
@@ -2192,7 +2780,7 @@ sub DOIF_time {
     }
   }
   if ($ret == 1) {
-    return 1 if ($days eq "" or $days =~ /$wday/ or ($days =~ /7/ and $we) or ($days =~ /8/ and !$we) or ($days =~ /9/ and $twe));
+    return 1 if ($days eq "" or $days =~ /$wday/ or ($days =~ /7/ and $we) or ($days =~ /8/ and !$we) or ($days =~ /9/ and $twe) or ($days =~ /X/ and !$twe));
   }
   return 0;
 }
@@ -2213,7 +2801,7 @@ sub DOIF_time_once {
   my $we=DOIF_we($wday);
   my $twe=DOIF_tomorrow_we($wday);
   if ($flag) {
-    return 1 if ($days eq "" or $days =~ /$wday/ or ($days =~ /7/ and $we) or ($days =~ /8/ and !$we) or ($days =~ /9/ and $twe));
+    return 1 if ($days eq "" or $days =~ /$wday/ or ($days =~ /7/ and $we) or ($days =~ /8/ and !$we) or ($days =~ /9/ and $twe) or ($days =~ /X/ and !$twe));
   }
   return 0;
 }
@@ -2885,9 +3473,7 @@ DOIF_Notify($$)
   return "" if (!$hash->{helper}{globalinit});
   
   if ($dev->{NAME} eq "global" and (EventCheckDoif($dev->{NAME},"global",$eventa,'^SAVE$'))) {
-    if (defined $hash->{collect}) {
-      DOIF_collect_save_values($hash);
-    }
+    DOIF_save_readings($hash);
   }
   
   #return "" if (!$hash->{itimer}{all} and !$hash->{devices}{all} and !keys %{$hash->{Regex}});
@@ -2935,13 +3521,25 @@ DOIF_Notify($$)
       my $readingregex=CheckRegexpDoIf($hash,"collect",$dev->{NAME},"collect",$eventa,$eventas,$reading);
       if (defined $readingregex) {
         foreach my $hours (keys %{$hash->{collect}{"$device $readingregex"}}){
-          setValue_collect($hash,\%{$hash->{collect}{"$device $readingregex"}{$hours}});
+          DOIF_setValue_collect($hash,\%{$hash->{collect}{"$device $readingregex"}{$hours}});
         }
       }
     }
   }
-
   
+  foreach my $bartype ("bar","barAvg") {
+    if (defined $hash->{Regex}{$bartype}{"$dev->{NAME}"}) {
+      my $device=$dev->{NAME};
+      foreach my $reading (keys %{$hash->{Regex}{$bartype}{$device}{$bartype}}) {
+        my $readingregex=CheckRegexpDoIf($hash,$bartype,$dev->{NAME},$bartype,$eventa,$eventas,$reading);
+        if (defined $readingregex) {
+          foreach my $period (keys %{$hash->{$bartype}{"$device $readingregex"}}){
+            DOIF_setValue_bar($hash,\%{$hash->{$bartype}{"$device $readingregex"}{$period}},1);
+          }
+        }
+      }
+    }
+  }
 
   if (defined CheckRegexpDoIf($hash,"cond",$dev->{NAME},"",$eventa,$eventas)) {
     $hash->{helper}{cur_cmd_nr}="Trigger  $dev->{NAME}" if (AttrVal($hash->{NAME},"selftrigger","") ne "all");
@@ -3315,7 +3913,7 @@ sub DOIF_SetTimer {
     $next_time+=86400;
   }
   ($sec,$min,$hour,$mday,$month,$year,$wday,$yday,$isdst) = localtime($next_time);
-  if ($isdst_now != $isdst) {
+  if ($isdst_now != $isdst and !$rel) {
     if ($isdst_now == 1) {
       $next_time+=3600 if ($isdst == 0);
     } else {
@@ -3452,7 +4050,7 @@ sub DOIF_Perlblock
   my ($hash,$table,$tail,$subs) =@_;
   my ($beginning,$perlblock,$err,$i);
   $i=0;
-  while($tail =~ /(?:^|\n)\s*(\w*)\s*\{/g) {
+  while($tail =~ /(?:^|\n)\s*([\w\.\/\-]*)\s*\{/g) {
     my $blockname=$1;
     ($beginning,$perlblock,$err,$tail)=GetBlockDoIf($tail,'[\{\}]');
     if ($err) {
@@ -3912,9 +4510,8 @@ DOIF_Shutdown
 {
   my ($hash) = @_;
   DOIF_killBlocking($hash);
-  if (defined $hash->{collect}) {
-    DOIF_collect_save_values($hash);
-  }
+  
+  DOIF_save_readings($hash);
   return undef;
 }
 
@@ -3955,7 +4552,7 @@ DOIF_Set($@)
   } elsif ($arg eq "enable" ) {
       #delete ($defs{$hash->{NAME}}{READINGS}{mode});
       if ($hash->{MODEL} ne "Perl") {
-        readingsSingleUpdate ($hash,"state",ReadingsVal($pn,"last_cmd",""),0) if (ReadingsVal($pn,"last_cmd","") ne "");
+        readingsSingleUpdate ($hash,"state",ReadingsVal($pn,"last_cmd",""),1) if (ReadingsVal($pn,"last_cmd","") ne "");
         delete ($defs{$hash->{NAME}}{READINGS}{last_cmd});
       }
       readingsSingleUpdate ($hash,"mode","enabled",1)
@@ -4529,7 +5126,7 @@ sub format_value {
   my ($val,$min,$dec)=@_;
   my $format;
   my $value=$val;
-  if ($val eq "") {
+  if (!defined $val or $val eq "" or $val eq "N/A") {
     $val="N/A";
     $format='%s';
     $value=$min;
@@ -4580,20 +5177,18 @@ sub get_color {
   return(int($color),$minColor,$maxColor);
 }
 
-sub footer {
-  
-  
-}
 
 sub plot {
   
   my ($collect,$min_a,$max_a,$minColor,$maxColor,$dec,$func,$steps,$x_prop,$chart_dim,$noColor,$lmm,$ln,$lr,$plot,$bwidth,$footerPos,$fill,$pos,$anchor,$unitColor,$unit)=@_;
   
+  $lmm=42 if (!defined $lmm or $lmm eq "");
+
   my $points="";
   my $v;
   my $last;
   my $out="";
-  my $xpos;
+  my $yNull;
   my $nullColor;
   my $nullProp;
   my $topVal;
@@ -4615,12 +5210,17 @@ sub plot {
   my $last_value=${$collect}{last_value};
   my $minValTime = ${$collect}{min_value_time};
   my $minValSlot = ${$collect}{min_value_slot};
+  my $averageVal = ${$collect}{average_value};
   my $hours = ${$collect}{hours};
   my $time = ${$collect}{time};
   my $dim=${$collect}{dim};
-  my $animate=(${$collect}{animate} eq "1") ? '<animate attributeName="opacity" values="0.0;1;0.0" dur="2s" repeatCount="indefinite"/></circle>':'</circle>';
+  my $type=${$collect}{type};
+  my $period=${$collect}{period};
+  my $period1=${$collect}{last_period1};
+  my $num=${$collect}{num};
+  my $numOrig=${$collect}{numOrig};
+  my $animate=(defined ${$collect}{animate} and ${$collect}{animate} eq "1") ? '<animate attributeName="opacity" values="0.0;1;0.0" dur="2s" repeatCount="indefinite"/></circle>':'</circle>';
 
-  
   my $min;
   my $max;
   if (ref($min_a) eq "ARRAY") {
@@ -4634,6 +5234,8 @@ sub plot {
   }
   my ($format,$value);
   ($format,$value,$val)=format_value($val,$min,$dec);
+  
+  my $decform='%1.'.$dec.'f';
 
   $minVal=$value if (!defined $minVal);
   $maxVal=$value if (!defined $maxVal);
@@ -4676,7 +5278,7 @@ sub plot {
   my $opacity=0.4;
   my $minopacity=0.05;
   if ($minPlot < 0 and $maxPlot > 0) {
-    $xpos=50-int($n*10)/10;
+    $yNull=50-int($n*10)/10;
     $topVal=($maxVal > 0 ? $maxVal : 0);
     $bottomVal=($minVal < 0 ? $minVal : 0);
     ($nullColor)=get_color(0,$min,$max,$minColor,$maxColor,$func);
@@ -4685,13 +5287,13 @@ sub plot {
     $bottomOpacity=($bottomVal==0 ? $minopacity: $opacity);
     $nullOpacity=$minopacity;
   } elsif ($maxPlot <= 0) {
-    $xpos=0;
+    $yNull=0;
     $topVal=$maxPlot;
     $topOpacity=0;
     $bottomOpacity=$opacity;
     $bottomVal=$minVal;
   } else {
-    $xpos=50;
+    $yNull=50;
     $topVal=$maxVal;
     $topOpacity=$opacity;
     $bottomOpacity=$minopacity;
@@ -4703,115 +5305,207 @@ sub plot {
   
   my ($maxValColor)=get_color(${$collect}{max_value},$min,$max,$minColor,$maxColor,$func);
   my ($minValColor)=get_color(${$collect}{min_value},$min,$max,$minColor,$maxColor,$func);
+  my ($averageValColor)=get_color(${$collect}{average_value},$min,$max,$minColor,$maxColor,$func);
   
   $out.= '<defs>';
-  if (!defined $unitColor) {
-    $out.= sprintf('<linearGradient id="gradplotLight_%s_%s_%s" x1="0" y1="0" x2="0" y2="1">',$topValColor,$bottomValColor,(defined $lr ? $lr:0));
-    $out.= sprintf('<stop offset="0" style="stop-color:%s;stop-opacity:%s"/>',color($topValColor,$lr),$topOpacity);
-    $out.= sprintf('<stop offset="%s" style="stop-color:%s;stop-opacity:%s"/>',$nullProp,color($nullColor,$lr),$nullOpacity) if (defined $nullProp);
-    $out.= sprintf('<stop offset="1" style="stop-color:%s;stop-opacity:%s"/></linearGradient>',color($bottomValColor,$lr),$bottomOpacity);
-    
-    $out.= sprintf('<linearGradient id="gradplot_%s_%s_%s" x1="0" y1="0" x2="0" y2="1">',$topValColor,$bottomValColor,(defined $lr ? $lr:0));
-    for (my $i=0; $i<=1;$i+=0.10) {
-      my ($color)=get_color(($topVal-$bottomVal)*(1-$i)+$bottomVal,$min,$max,$minColor,$maxColor,$func);
-      $out.= sprintf('<stop offset="%s" style="stop-color:%s;stop-opacity:1"/>',$i,color($color,$lr));
-    }
-    $out.= '</linearGradient>';
+    if ($type eq "bar") {
+    $out.= '<linearGradient id="graddark" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:rgb(32,32,32);stop-opacity:0.5"/><stop offset="1" style="stop-color:rgb(32, 32, 32);stop-opacity:0.9"/></linearGradient>';
+    $out.= '<linearGradient id="gradbright" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:rgb(32,32,32);stop-opacity:0"/><stop offset="1" style="stop-color:rgb(32, 32, 32);stop-opacity:0.8"/></linearGradient>';
   } else {
-    $out.= sprintf('<linearGradient id="gradplotLight_%s" x1="0" y1="0" x2="0" y2="1">',$unitColor);
-    $out.= sprintf('<stop offset="0" style="stop-color:%s;stop-opacity:%s"/>',$unitColor,$topOpacity);
-    $out.= sprintf('<stop offset="%s" style="stop-color:%s;stop-opacity:%s"/>',$nullProp,$unitColor,$nullOpacity) if (defined $nullProp);
-    $out.= sprintf('<stop offset="1" style="stop-color:%s;stop-opacity:%s"/></linearGradient>',$unitColor,$bottomOpacity);
+    if (!defined $unitColor) {
+      $out.= sprintf('<linearGradient id="gradplotLight_%s_%s_%s" x1="0" y1="0" x2="0" y2="1">',$topValColor,$bottomValColor,(defined $lr ? $lr:0));
+      $out.= sprintf('<stop offset="0" style="stop-color:%s;stop-opacity:%s"/>',color($topValColor,$lr),$topOpacity);
+      $out.= sprintf('<stop offset="%s" style="stop-color:%s;stop-opacity:%s"/>',$nullProp,color($nullColor,$lr),$nullOpacity) if (defined $nullProp);
+      $out.= sprintf('<stop offset="1" style="stop-color:%s;stop-opacity:%s"/></linearGradient>',color($bottomValColor,$lr),$bottomOpacity);
+      
+      $out.= sprintf('<linearGradient id="gradplot_%s_%s_%s" x1="0" y1="0" x2="0" y2="1">',$topValColor,$bottomValColor,(defined $lr ? $lr:0));
+      for (my $i=0; $i<=1;$i+=0.10) {
+        my ($color)=get_color(($topVal-$bottomVal)*(1-$i)+$bottomVal,$min,$max,$minColor,$maxColor,$func);
+        $out.= sprintf('<stop offset="%s" style="stop-color:%s;stop-opacity:1"/>',$i,color($color,$lr));
+      }
+      $out.= '</linearGradient>';
+    } else {
+      $out.= sprintf('<linearGradient id="gradplotLight_%s" x1="0" y1="0" x2="0" y2="1">',$unitColor);
+      $out.= sprintf('<stop offset="0" style="stop-color:%s;stop-opacity:%s"/>',$unitColor,$topOpacity);
+      $out.= sprintf('<stop offset="%s" style="stop-color:%s;stop-opacity:%s"/>',$nullProp,$unitColor,$nullOpacity) if (defined $nullProp);
+      $out.= sprintf('<stop offset="1" style="stop-color:%s;stop-opacity:%s"/></linearGradient>',$unitColor,$bottomOpacity);
+    }
   }
   $out.= '</defs>';
+  
   if ($noColor ne "-1") {
     for (my $i=0;$i<=5;$i++) {
       my $v=($maxPlot-$minPlot)*(1-$i*0.2)+$minPlot;
       my ($color)= get_color($v,$min,$max,$minColor,$maxColor,$func); 
-      $out.= sprintf('<text text-anchor="%s" x="%s" y="%s" style="fill:%s;font-size:7px;%s">%s</text>',$anchor,$pos,$i*10+2,$noColor eq "1" ? "#CCCCCC":color($color,$lmm),"",sprintf($format,$v)); 
+      $out.= sprintf('<text text-anchor="%s" x="%s" y="%s" style="fill:%s;font-size:7px;%s">%s</text>',$anchor,$pos,$i*10+2,$noColor eq "1" ? "#CCCCCC":color($color,$lmm),"",sprintf($decform,$v)); 
     } 
   }
   
-  my $j=0;
-  if (@{$a} > 0) {
-    if (!defined ${$a}[0]) {
-      if (defined $last_value) {
-        $v=$last_value;
-      } else {
-        for ($j=0;$j<@{$a};$j++) {
-          if (defined ${$a}[$j]) {
-           $v=${$a}[$j];
-           last;
+  my $footer="";
+
+  if ($type eq "bar") {
+    my $dimdev;
+    if ($period eq "month") {
+      $dimdev=32;
+    } elsif ($period eq "day") {
+      $dimdev=26;
+    } else {
+      $dimdev=$dim; 
+    }
+    my $wide=$chart_dim/$dimdev;
+
+    my $barOffset=0.8;
+    my $barsWide=$wide*0.85;
+    my $barWide=int(100*$barsWide/(($numOrig-1)*$barOffset+1))/100;
+    my $xBar=$barWide*$barOffset;
+
+
+
+     my $xOffset;
+    if ($period eq "month" or $period eq "day") {
+      $xOffset=$wide*0.6;
+    } else {
+      $xOffset=$wide*0.08;    
+    }
+    
+#    $out.=sprintf('<polyline points="0,%s %s,%s"  style="stroke:#CCCCCC; stroke-width:0.3; stroke-opacity:0.7" />',$yNull,$chart_dim,$yNull);
+    
+    if ($averageVal) {
+      my $yAverage=50-int(($averageVal*$m+$n)*10)/10;
+      $out.=sprintf('<polyline points="0,%s %s,%s"  style="stroke:%s; stroke-width:0.3; stroke-opacity:1" />',$yAverage,$chart_dim,$yAverage,color($averageValColor,$lmm));
+    }
+    
+    for (my $i=0; $i < $numOrig;$i++) {
+      for (my $j=0; $j < $dim; $j++) {
+        my $num;
+        if ($numOrig == 1) {
+          ##if ($j < $period1 or $j == $period1 and defined ${$a}[($i)*$dim+$j]) {
+          if (defined ${$a}[($i)*$dim+$j]) {
+            $num = 1;
+          } else {
+            $num = 2;
+          }
+        } else {
+          $num=$numOrig;
+        }         
+        my $y=${$a}[($num-1-$i)*$dim+$j];
+        if (defined $y) {   
+          my $y_pos=int(($y*$m+$n)*10)/10-(50-$yNull);
+          my ($color)=get_color($y,$min,$max,$minColor,$maxColor,$func);
+          my $x=int(($xOffset+$j*$wide+$i*$xBar)*10)/10;
+          if ($y > 0) {
+            $out.= sprintf('<rect x="%s" y="%s" width="%s" height="%s" rx="0.5" ry="0.5" style="fill:%s" opacity="1"/>',$x,$yNull-$y_pos,$barWide,$y_pos,defined $unitColor ? $unitColor:color($color));
+            $out.= sprintf('<rect x="%s" y="%s" width="%s" height="%s" rx="0.5" ry="0.5" style="fill:url(#grad%s)"/>',$x,$yNull-$y_pos+0.1,$barWide,$y_pos-0.1,($i==$num-1 ? "bright" : "dark"));
+          } else {
+             $out.= sprintf('<rect x="%s" y="%s" width="%s" height="%s" rx="0.5" ry="0.5" style="fill:%s" opacity="1"/>',$x,$yNull,$barWide,-$y_pos,defined $unitColor ? $unitColor:color($color));
+             $out.= sprintf('<rect x="%s" y="%s" width="%s" height="%s" rx="0.5" ry="0.5" style="fill:url(#grad%s)"/>',$x,$yNull,$barWide,-$y_pos-0.1,($i==$num-1 ? "bright" : "dark"));
           }
         }
-      }   
-    } else {
-      $v=${$a}[0];
+      }
     }
-
-    $points.=$j*$x_prop.",$xpos ";
-    $last=(50-int(($v*$m+$n)*10)/10);
-    $points.=$j*$x_prop.",$last ";
-    $j++;
     
-    for (my $i=$j;$i<@{$a};$i++) {
-      if (defined ${$a}[$i]) {
-        $points.=$i*$x_prop.",$last " if (!defined ${$a}[$i-1] or $steps eq "1"); 
-        $last=(50-int((${$a}[$i]*$m+$n)*10)/10);
-        $points.=$i*$x_prop.",$last ";
-      }
-    }
-    if ($val ne "N/A") {
-      $points.=$chart_dim.",".$last." " if ($steps eq "1");
-      $points.=$chart_dim.",".(50-int(($val*$m+$n)*10)/10)." ";
-    }
-    if (!defined $unitColor) {
-      $out.=sprintf('<path d="M%s,%s L',$chart_dim,$xpos);
-      $out.= $points;
-      $out.= sprintf('" style="fill:url(#gradplotLight_%s_%s_%s);stroke:url(#gradplot_%s_%s_%s);stroke-width:0.4;stroke-opacity:1" />',$topValColor,$bottomValColor,(defined $lr ? $lr:0),$topValColor,$bottomValColor,(defined $lr ? $lr:0));
-    } else {
-      $out.=sprintf('<path d="M%s,%s L',$chart_dim,$xpos);
-      $out.= $points;
-      $out.= sprintf('" style="fill:url(#gradplotLight_%s);stroke:%s;stroke-width:0.4;stroke-opacity:1" />',$unitColor,$unitColor);
-    }
-  }
-  $out.=sprintf('<polyline points="0,%s %s,%s"  style="stroke:gray; stroke-width:0.3; stroke-opacity:1" />',$xpos,$chart_dim,$xpos);
+    $out.=sprintf('<polyline points="0,%s %s,%s"  style="stroke:#CCCCCC; stroke-width:0.3; stroke-opacity:0.7" />',$yNull,$chart_dim,$yNull);
 
-  ##$out.=sprintf('<circle cx="%s" cy="%s" r="2" fill="%s"  opacity="0.7" />',$maxValSlot*$x_prop,(50-int((${$a}[$maxValSlot]*$m+$n)*10)/10),defined $unitColor ? $unitColor:color($maxValColor,$ln)) if (defined $maxValSlot);
-  my ($x1,$y1)=($maxValSlot*$x_prop,(50-int((${$a}[$maxValSlot]*$m+$n)*10)/10)-2.3);
-  $out.=sprintf('<path d="M%s %s L%s %s L%s %s Z" fill="%s" opacity="0.5"/>',$x1,$y1,$x1+2.4,$y1+4.3,$x1-2.4,$y1+4.3, defined $unitColor ? $unitColor:color($maxValColor,$ln)) if (defined $maxValSlot);
- 
- ##$out.=sprintf('<circle cx="%s" cy="%s" r="2" fill="%s"  opacity="0.7"/>,',$minValSlot*$x_prop,(50-int((${$a}[$minValSlot]*$m+$n)*10)/10),defined $unitColor ? $unitColor:color($minValColor,$ln)) if (defined $minValSlot);
-  ($x1,$y1)=($minValSlot*$x_prop,(50-int((${$a}[$minValSlot]*$m+$n)*10)/10)+2.3);
-  $out.=sprintf('<path d="M%s %s L%s %s L%s %s Z" fill="%s" opacity="0.5"/>',$x1,$y1,$x1+2.4,$y1-4.3,$x1-2.4,$y1-4.3, defined $unitColor ? $unitColor:color($minValColor,$ln)) if (defined $minValSlot);
-  
-  $out.=sprintf(('<circle cx="%s" cy="%s" r="2" fill="%s"  opacity="0.5">'.$animate),$chart_dim,(50-int(($value*$m+$n)*10)/10),defined $unitColor ? $unitColor:color($currColor,$ln)) if ($val ne "N/A");
-  
-  my $footer="";
-  
-  if ($footerPos) {
-    if (defined $maxValTime) {
+    my ($x1,$y1);
+    if (defined $maxValSlot) {
+    # ($x1,$y1)=(int(($xOffset+($maxValSlot % $dim)*$wide+($numOrig-1-int ($maxValSlot / $dim))*$xBar+$barWide/2)*10)/10 ,(50-int((${$a}[$maxValSlot]*$m+$n)*10)/10)-2.3);
+      ($x1,$y1)=(int(($xOffset+($maxValSlot % $dim)*$wide+($numOrig-1-($numOrig == 1 ?  0: int ($maxValSlot / $dim)))*$xBar+$barWide/2)*10)/10 ,(50-int((${$a}[$maxValSlot]*$m+$n)*10)/10)-2.3);
+      $out.=sprintf('<path d="M%s %s L%s %s L%s %s Z" fill="%s" opacity="0.5"/>',$x1,$y1,$x1+2.4,$y1+4.3,$x1-2.4,$y1+4.3, defined $unitColor ? $unitColor:color($maxValColor,$ln));
+    #  ($x1,$y1)=(int(($xOffset+($minValSlot % $dim)*$wide+($numOrig-1-int($minValSlot / $dim))*$xBar+$barWide/2)*10)/10,(50-int((${$a}[$minValSlot]*$m+$n)*10)/10)+2.3);
+      ($x1,$y1)=(int(($xOffset+($minValSlot % $dim)*$wide+($numOrig-1-($numOrig == 1 ?  0: int ($minValSlot / $dim)))*$xBar+$barWide/2)*10)/10,(50-int((${$a}[$minValSlot]*$m+$n)*10)/10)+2.3);
+      $out.=sprintf('<path d="M%s %s L%s %s L%s %s Z" fill="%s" opacity="0.5"/>',$x1,$y1,$x1+2.4,$y1-4.3,$x1-2.4,$y1-4.3, defined $unitColor ? $unitColor:color($minValColor,$ln)) if (defined $minValSlot);
+    }
+    
+    
+    if ($footerPos) {
       $footer.= sprintf('<text text-anchor="start" x="12" y="%s" style="fill:%s;font-size:8px"><tspan style="fill:#CCCCCC">%s</tspan></text>',$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", $unit);
-      if ($hours > 168) {
-        $footer.= sprintf('<text text-anchor="start" x="43" y="%s" style="fill:%s;font-size:8px">&#x25B2<tspan style="fill:#CCCCCC">%s</tspan></text>',$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%d.%m %H:%M",localtime($maxValTime)));
-      } else {
-        $footer.= sprintf('<text text-anchor="start" x="45" y="%s" style="fill:%s;font-size:8px">&#x25B2<tspan style="fill:#CCCCCC">%s</tspan></text>',$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%a",localtime($maxValTime)));
-        $footer.= sprintf('<text text-anchor="start" x="65" y="%s" style="fill:#CCCCCC;font-size:8px">%s</text>',$footerPos,::strftime("%H:%M",localtime($maxValTime)));
+      if (defined $maxValSlot) {
+        $footer.= sprintf('<text text-anchor="start" x="43" y="%s" style="fill:%s;font-size:8px">&#x00D8</text>',$footerPos,defined $unitColor ? $unitColor : "#CCCCCC");
+        $footer.= sprintf('<text text-anchor="end" x="%s" y="%s" style="fill:%s;font-size:8px;%s">%s</text>',$bwidth/2-15,$footerPos,color($averageValColor,$lmm),"",sprintf($decform,$averageVal));
+        $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:%s;font-size:8px">&#x25B2<tspan style="fill:#CCCCCC">%s</tspan></text>',$bwidth/2-15,$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", $maxValTime) ;
+        $footer.= sprintf('<text text-anchor="end" x="%s" y="%s" style="fill:%s;font-size:8px;%s">%s</text>',$bwidth/2+42.5,$footerPos,color($maxValColor,$lmm),"",sprintf($decform,${$collect}{max_value}));
+        $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px"><tspan style="fill:%s">&#x25BC</tspan>%s</text>',$bwidth/2+42.5,$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", $minValTime);
+        $footer.= sprintf('<text text-anchor="end" x="%s" y="%s" style="fill:%s;font-size:8px;%s">%s</text>', $bwidth+8,$footerPos,color($minValColor,$lmm),"",sprintf($decform,${$collect}{min_value}));
       }
-      $footer.= sprintf('<text text-anchor="end" x="%s" y="%s" style="fill:%s;font-size:8px;%s">%s</text>',$bwidth/2+25.5,$footerPos,color($maxValColor,$lmm),"",sprintf($format,${$collect}{max_value}));
     }
-    if (defined $minValTime) {
-      if ($hours > 168) {
-       ## $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px">&#x2022<tspan style="fill:%s">&#x25BC</tspan>%s</text>',$bwidth/2+25,$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%d.%m %H:%M",localtime($minValTime)));
-        $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px"><tspan style="fill:%s">&#x25BC</tspan>%s</text>',$bwidth/2+25.5,$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%d.%m %H:%M",localtime($minValTime)));
+  } else { # col
+    my $j=0;
+    if (@{$a} > 0) {
+      if (!defined ${$a}[0]) {
+        if (defined $last_value) {
+          $v=$last_value;
+        } else {
+          for ($j=0;$j<@{$a};$j++) {
+            if (defined ${$a}[$j]) {
+             $v=${$a}[$j];
+             last;
+            }
+          }
+        }   
       } else {
-        $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px"><tspan style="fill:%s">&#x25BC</tspan>%s</text>',$bwidth/2+25.5,$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%a",localtime($minValTime)));
-        $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px">%s</text>',$bwidth/2+46,$footerPos,::strftime("%H:%M",localtime($minValTime)));
+        $v=${$a}[0];
       }
-      $footer.= sprintf('<text text-anchor="end" x="%s" y="%s" style="fill:%s;font-size:8px;%s">%s</text>', $bwidth+8,$footerPos,color($minValColor,$lmm),"",sprintf($format,${$collect}{min_value}));
-    }
-  }
 
+      $points.=$j*$x_prop.",$yNull ";
+      $last=(50-int(($v*$m+$n)*10)/10);
+      $points.=$j*$x_prop.",$last ";
+      $j++;
+      
+      for (my $i=$j;$i<@{$a};$i++) {
+        if (defined ${$a}[$i]) {
+          $points.=$i*$x_prop.",$last " if (!defined ${$a}[$i-1] or $steps eq "1"); 
+          $last=(50-int((${$a}[$i]*$m+$n)*10)/10);
+          $points.=$i*$x_prop.",$last ";
+        }
+      }
+      if ($val ne "N/A") {
+        $points.=$chart_dim.",".$last." " if ($steps eq "1");
+        $points.=$chart_dim.",".(50-int(($val*$m+$n)*10)/10)." ";
+      }
+      if (!defined $unitColor) {
+        $out.=sprintf('<path d="M%s,%s L',$chart_dim,$yNull);
+        $out.= $points;
+        $out.= sprintf('" style="fill:url(#gradplotLight_%s_%s_%s);stroke:url(#gradplot_%s_%s_%s);stroke-width:0.4;stroke-opacity:1" />',$topValColor,$bottomValColor,(defined $lr ? $lr:0),$topValColor,$bottomValColor,(defined $lr ? $lr:0));
+      } else {
+        $out.=sprintf('<path d="M%s,%s L',$chart_dim,$yNull);
+        $out.= $points;
+        $out.= sprintf('" style="fill:url(#gradplotLight_%s);stroke:%s;stroke-width:0.4;stroke-opacity:1" />',$unitColor,$unitColor);
+      }
+    }
+    $out.=sprintf('<polyline points="0,%s %s,%s"  style="stroke:gray; stroke-width:0.3; stroke-opacity:1" />',$yNull,$chart_dim,$yNull);
+
+    if (defined $maxValSlot) {
+      my ($x1,$y1)=($maxValSlot*$x_prop,(50-int((${$a}[$maxValSlot]*$m+$n)*10)/10)-2.3);
+      $out.=sprintf('<path d="M%s %s L%s %s L%s %s Z" fill="%s" opacity="0.5"/>',$x1,$y1,$x1+2.4,$y1+4.3,$x1-2.4,$y1+4.3, defined $unitColor ? $unitColor:color($maxValColor,$ln));
+      ($x1,$y1)=($minValSlot*$x_prop,(50-int((${$a}[$minValSlot]*$m+$n)*10)/10)+2.3);
+      $out.=sprintf('<path d="M%s %s L%s %s L%s %s Z" fill="%s" opacity="0.5"/>',$x1,$y1,$x1+2.4,$y1-4.3,$x1-2.4,$y1-4.3, defined $unitColor ? $unitColor:color($minValColor,$ln));
+    }
+    
+    $out.=sprintf(('<circle cx="%s" cy="%s" r="2" fill="%s"  opacity="0.5">'.$animate),$chart_dim,(50-int(($value*$m+$n)*10)/10),defined $unitColor ? $unitColor:color($currColor,$ln)) if ($val ne "N/A");
+    
+    if ($footerPos) {
+      $footer.= sprintf('<text text-anchor="start" x="12" y="%s" style="fill:%s;font-size:8px"><tspan style="fill:#CCCCCC">%s</tspan></text>',$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", $unit);
+      if (defined $maxValTime) {
+        if ($hours > 168) {
+          $footer.= sprintf('<text text-anchor="start" x="43" y="%s" style="fill:%s;font-size:8px">&#x25B2<tspan style="fill:#CCCCCC">%s</tspan></text>',$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%d.%m %H:%M",localtime($maxValTime)));
+        } else {
+          $footer.= sprintf('<text text-anchor="start" x="45" y="%s" style="fill:%s;font-size:8px">&#x25B2<tspan style="fill:#CCCCCC">%s</tspan></text>',$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%a",localtime($maxValTime)));
+          $footer.= sprintf('<text text-anchor="start" x="65" y="%s" style="fill:#CCCCCC;font-size:8px">%s</text>',$footerPos,::strftime("%H:%M",localtime($maxValTime)));
+        }
+        $footer.= sprintf('<text text-anchor="end" x="%s" y="%s" style="fill:%s;font-size:8px;%s">%s</text>',$bwidth/2+25.5,$footerPos,color($maxValColor,$lmm),"",sprintf($decform,${$collect}{max_value}));
+      }
+      if (defined $minValTime) {
+        if ($hours > 168) {
+         ## $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px">&#x2022<tspan style="fill:%s">&#x25BC</tspan>%s</text>',$bwidth/2+25,$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%d.%m %H:%M",localtime($minValTime)));
+          $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px"><tspan style="fill:%s">&#x25BC</tspan>%s</text>',$bwidth/2+25.5,$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%d.%m %H:%M",localtime($minValTime)));
+        } else {
+          $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px"><tspan style="fill:%s">&#x25BC</tspan>%s</text>',$bwidth/2+25.5,$footerPos,defined $unitColor ? $unitColor : "#CCCCCC", ::strftime("%a",localtime($minValTime)));
+          $footer.= sprintf('<text text-anchor="start" x="%s" y="%s" style="fill:#CCCCCC;font-size:8px">%s</text>',$bwidth/2+46,$footerPos,::strftime("%H:%M",localtime($minValTime)));
+        }
+        $footer.= sprintf('<text text-anchor="end" x="%s" y="%s" style="fill:%s;font-size:8px;%s">%s</text>', $bwidth+8,$footerPos,color($minValColor,$lmm),"",sprintf($decform,${$collect}{min_value}));
+      }
+    }
+  } # col
   return($out,$footer);
 }
 
@@ -4824,106 +5518,153 @@ sub card
   my @value2;
   my @unit1;
   my @unit2;
-  my $colcount=0;
-  my $col2count=0;
+  my @colcount=();
+  my @col2count=();
   
   my $hours;
   my $time;
   my $dim;
+  my $type;
+  my $period;
+  my $period1;
+  my $period2;  
+  my $begin_period2;
   
+
   if (!defined $col) {
-    return("");
+    return("no definition at collect parameter");
   }
   
   if (ref($col) eq "ARRAY") {
     for (my $i=0;$i< @{$col};$i++) {
-      if (ref (${$col}[$i]) eq "HASH") {
+      delete $value1[$i]{ring};
+      if (ref (${$col}[$i]) eq "ARRAY") {
+        $value1[$i]{value}=${$col}[$i][0];
+        $value1[$i]{min}=${$col}[$i][1];
+        $value1[$i]{max}=${$col}[$i][2];
+        $value1[$i]{minColor}=${$col}[$i][3];
+        $value1[$i]{maxColor}=${$col}[$i][4];
+        $value1[$i]{unit}=${$col}[$i][5];
+        $value1[$i]{func}=${$col}[$i][6];
+        $value1[$i]{decfont}=${$col}[$i][7];
+        $value1[$i]{model}=${$col}[$i][8];
+      } elsif (ref (${$col}[$i]) eq "HASH") {
         $value1[$i]=${$col}[$i];
-        $colcount++;
+        if (@colcount < 2) { 
+          $value1[$i]{ring}=1;
+        }
+        push(@colcount,$i);
         if (!defined $dim) {
+          $type=$value1[$i]{type};
           $hours=$value1[$i]{hours};
           $time=$value1[$i]{time};
           $dim=$value1[$i]{dim};
+          $period=$value1[$i]{period};
+          $period1=$value1[$i]{last_period1};
+          $period2=$value1[$i]{last_period2};
+          $begin_period2=$value1[$i]{begin_period2};
         }
       } else {
         $value1[$i]{value}=${$col}[$i];
       }
     }
-  } else {
-    if (ref ($col) eq "HASH") {
-      $colcount++;
-      $value1[0]=$col;
-      if (!defined $dim) {
-        $hours=$value1[0]{hours};
-        $time=$value1[0]{time};
-        $dim=$value1[0]{dim};
-      }
-    } else {
-      $value1[0]{value}=$col;
+  } elsif (ref ($col) eq "HASH") {
+    $value1[0]=$col;
+    $value1[0]{ring}=1;
+    push(@colcount,0);
+    if (!defined $dim) {
+      $type=$value1[0]{type};
+      $hours=$value1[0]{hours};
+      $time=$value1[0]{time};
+      $dim=$value1[0]{dim};
+      $period=$value1[0]{period};
+      $period1=$value1[0]{last_period1};
+      $period2=$value1[0]{last_period2};
+      $begin_period2=$value1[0]{begin_period2};
     }
-  }  
+  } else {
+    if ($col eq "") {
+      return ("not defined collect reading");
+    } else {
+      return ("wrong definition at collect parameter, return value: $col");
+    }
+   # $value1[0]{value}=$col;
+  }
  
   if (ref($unit_a) eq "ARRAY") {
     for (my $i=0;$i < @{$unit_a};$i++) {
       $unit1[$i]=${$unit_a}[$i];
     }
-  } else {
-    if (!defined $unit_a) {
+  } elsif (!defined $unit_a) {
       $unit1[0]="";
-    } else {
+  } else {
       $unit1[0]=$unit_a;
-    }
   }
+
   if (defined $col2) {
     if (ref($col2) eq "ARRAY") {
       for (my $i=0;$i< @{$col2};$i++) {
-        if (ref (${$col2}[$i]) eq "HASH") {
-          $value2[$i]=${$col2}[$i];
-          $col2count++;
-          if (!defined $dim) {
-            $hours=$value2[$i]{hours};
-            $time=$value2[$i]{time};
-            $dim=$value2[$i]{dim};
-          }
+        delete $value2[$i]{ring};
+        if (ref (${$col2}[$i]) eq "ARRAY") {
+          $value2[$i]{value}=${$col2}[$i][0];
+          $value2[$i]{min}=${$col2}[$i][1];
+          $value2[$i]{max}=${$col2}[$i][2];
+          $value2[$i]{minColor}=${$col2}[$i][3];
+          $value2[$i]{maxColor}=${$col2}[$i][4];
+          $value2[$i]{unit}=${$col2}[$i][5];
+          $value2[$i]{func}=${$col2}[$i][6];
+          $value2[$i]{decfont}=${$col2}[$i][7];
+          $value2[$i]{model}=${$col2}[$i][8];
+        } elsif (ref (${$col2}[$i]) eq "HASH") {
+            $value2[$i]=${$col2}[$i];
+            if (@colcount+@col2count < 2) { 
+              $value2[$i]{ring}=1;
+            }
+            push(@col2count,$i);
+            if (!defined $dim) {
+              $type=$value2[$i]{type};
+              $hours=$value2[$i]{hours};
+              $time=$value2[$i]{time};
+              $dim=$value2[$i]{dim};
+              $period=$value2[$i]{period};
+            }
         } else {
-          $value2[$i]{value}=${$col2}[$i];
+            $value2[$i]{value}=${$col2}[$i];
         }
       }
-    } else {
-      if (ref ($col2) eq "HASH") {
-        $col2count++;
+    } elsif (ref ($col2) eq "HASH") {
         $value2[0]=$col2;
+        delete $value2[0]{ring};
+        if (@colcount < 2) { 
+          $value2[0]{ring}=1;
+        }
+        push(@col2count,0);
         if (!defined $dim) {
+          $type=$value2[0]{type};
           $hours=$value2[0]{hours};
           $time=$value2[0]{time};
           $dim=$value2[0]{dim};
+          $period=$value2[0]{period};
         }  
-      } else {
-        $value2[0]{value}=$col2;
-      }
-    }  
+    } else {
+      return ("wrong definition at collect2 parameter: $col2");
+      #  $value2[0]{value}=$col2;
+    }
   }
   if (ref($unit_b) eq "ARRAY") {
     for (my $i=0;$i < @{$unit_b};$i++) {
       $unit2[$i]=${$unit_b}[$i];
     }
-  } else {
-    if (!defined $unit_b) {
+  } elsif (!defined $unit_b) {
       $unit2[0]="";
-    } else {
+  } else {
       $unit2[0]=$unit_b;
-    }
   }
-
   
-
-  if (!defined $value1[0]{value}) {
-    return("");
-  }
   if (!defined $dim) {
     return("");
   }
-  
+
   my $bheight=73;
   my $htrans=0;
   
@@ -4969,11 +5710,13 @@ sub card
   }
   
   
-  my $chart_dim = $hring eq "" ? $bwidth-90: $bwidth-36 ;
+  my $chart_dim = ($hring eq "" and $type ne "bar") ? $bwidth-90: $bwidth-36 ;
   
-  $chart_dim += $colcount ? 0: 18;
+  $chart_dim+=8 if ($type eq "bar");
   
-  $chart_dim -= $col2count ? ($hring eq "1" ? 13 : 15):0;
+  $chart_dim += scalar @colcount ? 0: 18;
+  
+  $chart_dim -= scalar @col2count ? ($hring eq "1" ? 15 : 17):0;
   
   my $x_prop=int($chart_dim/$dim*100)/100;
   
@@ -4994,7 +5737,7 @@ sub card
    
   my ($lr,$lir,$lmm,$lu,$ln,$li);
   ($lr,$lir,$lmm,$lu,$ln,$li)=split (/,/,$lightness) if (defined $lightness);
-  
+
   my $head;
   #if (defined $header or $hring eq "1" or (@value1+@value2)>2) {
   if (defined $header or $hring eq "1") {
@@ -5057,8 +5800,6 @@ sub card
       }
     }
   }
-
-
   $out.= sprintf ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 0 %d %d" width="%d" height="%d" style="width:%dpx; height:%dpx;">',$bwidth,$bheight,$svg_width,$svg_height,$svg_width,$svg_height);
   $out.= '<defs>';
   $out.= '<linearGradient id="gradcardback" x1="0" y1="1" x2="0" y2="0"><stop offset="0" style="stop-color:rgb(32,32,32);stop-opacity:0.9"/><stop offset="1" style="stop-color:rgb(64, 64, 64);stop-opacity:0.9"/></linearGradient>';
@@ -5067,6 +5808,35 @@ sub card
   $out.= sprintf('<rect x="11" y="0" width="%d" height="%d" rx="2" ry="2" fill="url(#gradcardback)"/>',$bwidth-2,$bheight);
 
   $out.='<polyline points="11,23 '.($bwidth+9).',23"  style="stroke:gray; stroke-width:0.7" />' if (defined $head);
+
+  sub r_details {
+    my ($min,$max,$minColor,$maxColor,$unit,$unit0,$func,$decfont,$model,$value)=@_;
+        
+    my $r_min = defined $value->{min} ? $value->{min} : $min;
+    my $r_max = defined $value->{max} ? $value->{max} : $max;
+    my $r_minColor = defined $value->{minColor} ? $value->{minColor} : $minColor;
+    my $r_maxColor = defined $value->{maxColor} ? $value->{maxColor} : $maxColor;
+    my $r_unit = defined $value->{unit} ? $value->{unit} : (defined $unit ? $unit : $unit0);
+    my $r_unitColor = (split(",",$r_unit))[1];
+       $r_unit = (split(",",$r_unit))[0];
+    my $r_func = defined $value->{func} ? $value->{func} : $func;
+    my $r_decfont = defined $value->{decfont} ? $value->{decfont} : $decfont;
+    if (!defined $r_decfont) {
+      $r_decfont = "";  
+    } else {
+      if (defined $r_unitColor) {
+        my ($dec,$styleVal,$styleDesc,$unit)=split(",",$r_decfont);
+        $dec="" if (!defined $dec);
+        $styleVal="" if (!defined $styleVal);
+        $styleDesc="" if (!defined $styleDesc);
+        $unit="" if (!defined $unit);
+        $r_decfont="$dec,$styleVal,fill:$r_unitColor,$unit";
+      }
+    }
+    my $r_model = defined $value->{model} ? $value->{model} : $model;
+    return($r_min,$r_max,$r_minColor,$r_maxColor,$r_unit,$r_func,$r_decfont,$r_model);
+  }
+ 
   if (defined $head) {
     $out.= sprintf('<text text-anchor="start" x="%s" y="19" style="fill:#CCCCCC; font-size:12.5px;%s">%s</text>',defined $ic ? 34:14,$header_style,$header_txt) if (defined $header); 
     if (defined $icon and $icon ne "" and  $icon ne " ") {
@@ -5082,28 +5852,25 @@ sub card
       $out.='</g>';
     }
     $out.='<polyline points="11,23 '.($bwidth+9).',23"  style="stroke:gray; stroke-width:0.7" />';
-    if ($hring eq "1" or @value1 > 2) {
-      my $begin=0;
-      $begin= 2 if ($hring eq "" and @value1 > 2);
-      for (my $i=$begin;$i<@value1;$i++) {
-        $out.=sprintf('<g transform="translate(%s,1)">',defined $col2 ? $bwidth+7-(@value1+@value2-$i)*43 : $bwidth+7-(@value1-$i)*43);
-        my $unitColor=(split(",",$unit1[$i]))[1];
-        my $unit=(split(",",$unit1[$i]))[0];
-        $decfont="" if (!defined $decfont);
-        $out.= ui_Table::ring($value1[$i]{value},$min,$max,$minColor,$maxColor,$unit,"70,1",$func,(defined $unitColor ? $decfont.",,fill:".$unitColor:$decfont),$model,$lightness);
-        $out.='</g>';
+    my $j=0;
+    my $count_rings_head = @value1+@value2;
+    $count_rings_head -= (@colcount + @col2count >= 2 ? 2 : @colcount + @col2count) if ($hring ne "1");
+    for (my $i=0;$i<@value1;$i++) {
+      if (!defined $value1[$i]{ring} or $hring eq "1"){
+        $out .= sprintf('<g transform = "translate(%s,1)">',$bwidth+7-($count_rings_head-$j++)*43);
+        my ($r_min,$r_max,$r_minColor,$r_maxColor,$r_unit,$r_func,$r_decfont,$r_model)=r_details($min,$max,$minColor,$maxColor,$unit1[$i],$unit1[0],$func,$decfont,$model,\%{$value1[$i]});  
+        $out .=  ui_Table::ring($value1[$i]{value},$r_min,$r_max,$r_minColor,$r_maxColor,$r_unit,"70,1",$r_func,$r_decfont,$r_model,$lightness);
+        $out .= '</g>';
       }
     }
-    if (defined $col2 and (((@value1+@value2)>2 or $hring eq "1"))) {
-      my $begin=0;
-      $begin=1 if ($hring eq "" and @value1 == 1);           
-      for (my $i=$begin;$i<@value2;$i++) {
-        $out.=sprintf('<g transform="translate(%s,1)">',$bwidth+7-(@value2-$i)*43);
-        my $unitColor2=(split(",",$unit2[$i]))[1];
-        my $unit2=(split(",",$unit2[$i]))[0];
-        $decfont2="" if (!defined $decfont2);
-        $out.= ui_Table::ring($value2[$i]{value},$min2,$max2,$minColor2,$maxColor2,$unit2,"70,1",$func2,(defined $unitColor2 ? $decfont2.",,fill:".$unitColor2:$decfont2),$model,$lightness);
-        $out.='</g>';
+    if (defined $col2) {
+      for (my $i=0;$i<@value2;$i++) {
+        if (!defined $value2[$i]{ring} or $hring eq "1"){
+          $out .= sprintf('<g transform = "translate(%s,1)">',$bwidth+7-($count_rings_head-$j++)*43);
+          my ($r_min,$r_max,$r_minColor,$r_maxColor,$r_unit,$r_func,$r_decfont,$r_model)=r_details($min2,$max2,$minColor2,$maxColor2,$unit2[$i],$unit2[0],$func2,$decfont2,$model,\%{$value2[$i]});  
+          $out .=  ui_Table::ring($value2[$i]{value},$r_min,$r_max,$r_minColor,$r_maxColor,$r_unit,"70,1",$r_func,$r_decfont,$r_model,$lightness);
+          $out .= '</g>';
+        }
       }
     }
   }
@@ -5111,7 +5878,7 @@ sub card
   $out.= sprintf('<g transform="translate(0,%d)">',$htrans);
   $out.='<polyline points="11,73 '.($bwidth+9).',73"  style="stroke:gray; stroke-width:0.7" />' if (!$noFooter);
   $out.= sprintf('<svg width="%s" height="72">',$chart_dim+84);
-  $out.= sprintf('<g transform="translate(%s,8) scale(1) ">',$colcount ? 35:17);
+  $out.= sprintf('<g transform="translate(%s,8) scale(1) ">', scalar @colcount ? 35:17);
 
   $out.= '<rect x="-2" y="-3" width="'.($chart_dim+4).'" height="56" rx="1" ry="1" fill="url(#gradcardback)"/>';
 
@@ -5119,150 +5886,225 @@ sub card
     my $y=$i*10;
     $out.=sprintf('<polyline points="0,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1"/>',$y,$chart_dim,$y);
   }
-  
-  my $timebeginn=$time-$hours*3600;
-  
-  my $scale;
-  my $scale_strokes;
-  my $description=4;
-  my $strokes=12;
-  
-  my $div = $hours > 168 ? ($hours % 168 == 0 ? 168 : ($hours % 24 == 0 ? 24 : 1)):1;
-  
-  if ($div==168 and $hours/$div/2 == 1) {  #2w
-    $description=7;
-    $strokes=$description;
-  } elsif ($hours <= 168*7) {
-    for (my $i=7;$i>=3;$i--) {
-      if  ($hours/$div % $i == 0) {
-        $description=$i;
-        if ($div == 168 and $chart_dim > 130) {
-          $strokes=$description*7;
-        } else {
-          $strokes=$description;
-        }
-        last;
-      }
-    }
-  }
-  $scale=$hours/$description;
-  $scale_strokes=$hours/$strokes;
-  if ($hours > 2) {
-    my ($sec,$minutes,$hour,$mday,$month,$year,$wday,$yday,$isdst) = localtime($timebeginn);
-    my $beginhour=int($hour/$scale)*$scale;
-    my $diffsec=($hour-$beginhour)*3600+$minutes*60+$sec;
-    my $pos=(1-$diffsec/($scale*3600))*$chart_dim/$description-$x_prop;
-    my $pos_strokes=(1-$diffsec/($scale_strokes*3600))*$chart_dim/$strokes-$x_prop;    
-     
-    for (my $i=0;$i<=$strokes;$i++) {
-     my $x=int((($i)*($chart_dim/$strokes)+$pos_strokes)*10)/10;
-     $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0 and $x <= $chart_dim);
-    }
-    for (my $i=0;$i<$description;$i++) {
-      my $h=$beginhour+($i+1)*$scale;
-      $hour=($h >= 24 ? $h % 24:$h);
-      my $x=int((($i*($chart_dim/$description)+$pos))*10)/10;
-      if ($hours <= 2) {
-   #     $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%H:%M",localtime($time-$hours*3600*(1-$i/3))));
-      } elsif ($hours <= 168) {
-        if ($hour != 0) {
-          $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%02d:</text>',$x,$hour);
-        } else {
-          $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,substr(::strftime("%a",localtime($timebeginn+$h*3600)),0,2));
-        }
-      } elsif ($hours <= 168*7) {
-         $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%d.",localtime($timebeginn+$h*3600)));
-      } else {
-         $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%d.%m",localtime($timebeginn+$h*3600)));
-      }  
-    }
-  } else {
-    for (my $i=0;$i<=12;$i++) {
-      my $x=int((($i)*($chart_dim/12)+1)*10)/10;      
-      $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0 and $x <= $chart_dim);
-      for (my $i=0;$i<=3;$i++) {
-        my $x=int(($i*($chart_dim/3)-1)*10)/10;
-        $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x+2,::strftime("%H:%M",localtime($time-$hours*3600*(1-$i/3))));
-      }
-    }
-  }
+
   my ($outplot,$outfooter);
   my @outfooter;
-  
-  my $minVal;
-  my $maxVal;
-  for (my $i=0;$i< @value1;$i++) {
-    if (defined ($value1[$i]{dim})) {
-      my $min=defined $value1[$i]{min_value} ? $value1[$i]{min_value} : $value1[$i]{value};
-      my $max=defined $value1[$i]{max_value} ? $value1[$i]{max_value} : $value1[$i]{value};
-      $minVal=$min if (!defined $minVal or $min < $minVal);
-      $maxVal=$max if (!defined $maxVal or $max > $maxVal);
+
+  if ($type eq "bar") {
+    my ($sec,$minutes,$hour,$mday,$month,$year,$wday,$yday,$isdst); 
+    my @desc;
+    my @monthDays;
+    my $x;
+    my $dimplot=$dim;
+    if ($period eq "decade") {
+      @desc= qw(0 1 2 3 4 5 6 7 8 9);
+    } elsif ($period eq "year") {
+      @desc= qw(Jan Feb Mär Apr Mai Jun Jul Aug Sep Okt Nov Dez);
+    } elsif ($period eq "month") {
+      @desc=qw(01 03 05 07 09 11 13 15 17 19 21 23 25 27 29 31);
+      ($sec,$minutes,$hour,$mday,$month,$year,$wday,$yday,$isdst) = localtime();
+      @monthDays=qw(31 28 31 30 31 30 31 31 30 31 30 31);
+      $monthDays[1]=($year % 4 == 0 and $year % 100 != 0 or $year % 400 == 0) ? 29 : 28;
+      $dimplot=32;
+    } elsif ($period eq "week") {
+      @desc=qw(Mo Di Mi Do Fr Sa So);
+    } elsif ($period eq "day") {
+      $dimplot=26;
+      @desc=qw(00 02 04 06 08 10 12 14 16 18 20 22 24);
     }
-  }
-  my $j=0;
-  for (my $i=0;$i<@value1;$i++) {
-    if (defined ($value1[$i]{dim})) {
-      ($outplot,$outfooter) = plot ($value1[$i],[$min,$minVal],[$max,$maxVal],$minColor,$maxColor,$dec,$func,$steps,$x_prop,$chart_dim, $j == 0 ? $noColor:-1,$lmm,$ln,$lr,$plot,$bwidth,$noFooter eq "1" ? 0:84+$j*10,undef,-2.5,"end",(split(",",$unit1[$i]))[1],(split(",",$unit1[$i]))[0]);
-      $j++;
-      $out.=$outplot;
-      push (@outfooter,$outfooter);
+    
+    
+    
+    my $xOffset=0.5*$chart_dim/@desc;
+    $x=int(($xOffset+$period1*$chart_dim/$dimplot)*10)/10;
+    $out.= sprintf('<text text-anchor="end" x=-2.5 y=61 style="fill:#CCCCCC;font-size:7px;">%s</text>',$begin_period2); 
+    $out.= sprintf('<circle cx="%s" cy="53" r="1.5" fill=#CCCCCC  opacity="1"/>',$x);
+    for (my $i=0;$i<@desc;$i++) {
+      $x=int(($i+0.5)*$chart_dim/@desc*10)/10;
+      $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50);
+      $out.=sprintf('<text text-anchor="middle" x="%s" y="61" style="fill:%s;font-size:7px">%s</text>',$x,($period eq "month" and $desc[$i] > $monthDays[$month]) ? "#A0A0A0":"#CCCCCC",$desc[$i]);
     }
-  }
-  if (defined $col2) {
-    my $minVal2;
-    my $maxVal2;
-    for (my $i=0;$i< @value2;$i++) {
-      if (defined ($value2[$i]{dim})) {
-        my $min=defined $value2[$i]{min_value} ? $value2[$i]{min_value} : $value2[$i]{value};
-        my $max=defined $value2[$i]{max_value} ? $value2[$i]{max_value} : $value2[$i]{value};
-        $minVal2=$min if (!defined $minVal2 or $min < $minVal2);
-        $maxVal2=$max if (!defined $maxVal2 or $max > $maxVal2);
+    
+    if ($period eq "month") {
+      my $su=$period1+7-$wday;
+      my $first=$su % 7;
+      for (my $i=0;$i<5;$i++) {
+        my $day=$first+$i*7;
+        $x=int(($xOffset+($first+$i*7)*$chart_dim/$dimplot)*10)/10;  
+        $out.=sprintf('<polyline points="%s,63,%s,63"  style="stroke:#CCCCCC; stroke-width:1; stroke-opacity:1" />',$x-2,$x+2) if ($day < $monthDays[$month]);
       }
     }
-    my $offset=@outfooter*10;
+    
+    my $minVal;
+    my $maxVal;
+    for (my $i=0;$i< @value1;$i++) {
+      if (defined ($value1[$i]{dim})) {
+        my $min=defined $value1[$i]{min_value} ? $value1[$i]{min_value} : $value1[$i]{value} ne "N/A" ? $value1[$i]{value} : $min;
+        my $max=defined $value1[$i]{max_value} ? $value1[$i]{max_value} : $value1[$i]{value} ne "N/A" ? $value1[$i]{value} : $max;
+        $minVal=$min if (!defined $minVal or $min < $minVal);
+        $maxVal=$max if (!defined $maxVal or $max > $maxVal);
+      }
+    }
+    
     my $j=0;
-    for (my $i=0;$i<@value2;$i++) {
-      if (defined ($value2[$i]{dim})) {
-        ($outplot,$outfooter) = plot ($value2[$i],[$min2,$minVal2],[$max2,$maxVal2],$minColor2,$maxColor2,$dec2,$func2,$steps,$x_prop,$chart_dim, $j == 0 ? $noColor:-1,$lmm,$ln,$lr,$plot,$bwidth,$noFooter eq "1" ? 0:84+$offset+$j*10,undef,$chart_dim+3,"start",(split(",",$unit2[$i]))[1],(split(",",$unit2[$i]))[0]);
+    for (my $i=0;$i<@value1;$i++) {
+      if (defined $value1[$i]{dim}) {
+        ($outplot,$outfooter) = plot ($value1[$i],[$min,$minVal],[$max,$maxVal],$minColor,$maxColor,$dec,$func,$steps,$x_prop,$chart_dim, $noColor,$lmm,$ln,$lr,$plot,$bwidth,$noFooter eq "1" ? 0:84+$j*10,undef,-2.5,"end",(defined $unit1[$i]?(split(",",$unit1[$i]))[1] : undef),(defined $unit1[$i] ? ( split(",",$unit1[$i]))[0] : undef));
         $j++;
         $out.=$outplot;
         push (@outfooter,$outfooter);
       }
     }
-  }
-  $out.= '</g>';
-  $out.= '</svg>';
-
-  if ($hring eq "") {
-    $out.=sprintf('<g transform="translate(%s,6)">',$bwidth-49);
-    if (@value1 >= 2 ) {
-      my $unit_1=(split(",",$unit1[0]))[0];
-      my $unit_2=(split(",",$unit1[1]))[0];
-      my $unitColor=(split(",",$unit1[0]))[1];
-      my $unitColor2=(split(",",$unit1[1]))[1];
-      $decfont="" if (!defined $decfont);
-      $out.= ui_Table::ring2($value1[0]{value},$min,$max,$minColor,$maxColor,$unit_1,92,$func,defined $unitColor ? $decfont.",,fill:".$unitColor:$decfont,
-             $value1[1]{value},$min,$max,$minColor,$maxColor,$unit_2,$func,defined $unitColor2 ? $decfont.",,fill:".$unitColor2:$decfont,$lightness,(defined $head or !defined $icon) ? undef: $icon,$model);
-    } elsif (@value1 == 1 and @value2 >= 1) {
-        my $unit_1=(split(",",$unit1[0]))[0];
-        my $unit_2=(split(",",$unit2[0]))[0];
-        $out.= ui_Table::ring2($value1[0]{value},$min,$max,$minColor,$maxColor,$unit_1,92,$func,$decfont,$value2[0]{value},$min2,$max2,$minColor2,$maxColor2,$unit_2,$func2,$decfont2,$lightness,((defined $head or !defined $icon) ? undef: $icon),$model);
-    } else {
-        my $unit_1=(split(",",$unit1[0]))[0];
-        $out.= ui_Table::ring($value1[0]{value},$min,$max,$minColor,$maxColor,$unit_1,92,$func,$decfont,$model,$lightness,(defined $head or !defined $icon) ? undef: $icon);
+    $out.= '</g>';
+    $out.= '</svg>';
+  } else { ## col   
+    my $timebeginn=$time-$hours*3600;
+    
+    my $scale;
+    my $scale_strokes;
+    my $description=4;
+    my $strokes=12;
+    
+    my $div = $hours > 168 ? ($hours % 168 == 0 ? 168 : ($hours % 24 == 0 ? 24 : 1)):1;
+    
+    if ($div==168 and $hours/$div/2 == 1) {  #2w
+      $description=7;
+      $strokes=$description;
+    } elsif ($hours <= 168*7) {
+      for (my $i=7;$i>=3;$i--) {
+        if  ($hours/$div % $i == 0) {
+          $description=$i;
+          if ($div == 168 and $chart_dim > 130) {
+            $strokes=$description*7;
+          } else {
+            $strokes=$description;
+          }
+          last;
+        }
+      }
     }
-    $out.='</g>';
-    $out.=sprintf('<text text-anchor="middle" x="%s" y="68" style="fill:#CCCCCC;font-size:8px">%s</text>',$bwidth-21,::strftime("%H:%M:%S",localtime($time)));
-  }
-  
+    $scale=$hours/$description;
+    $scale_strokes=$hours/$strokes;
+    if ($hours > 2) {
+      my ($sec,$minutes,$hour,$mday,$month,$year,$wday,$yday,$isdst) = localtime($timebeginn);
+      my $beginhour=int($hour/$scale)*$scale;
+      my $diffsec=($hour-$beginhour)*3600+$minutes*60+$sec;
+      my $pos=(1-$diffsec/($scale*3600))*$chart_dim/$description-$x_prop;
+      my $pos_strokes=(1-$diffsec/($scale_strokes*3600))*$chart_dim/$strokes-$x_prop;    
+       
+      for (my $i=0;$i<=$strokes;$i++) {
+       my $x=int((($i)*($chart_dim/$strokes)+$pos_strokes)*10)/10;
+       $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0 and $x <= $chart_dim);
+      }
+      for (my $i=0;$i<$description;$i++) {
+        my $h=$beginhour+($i+1)*$scale;
+        $hour=($h >= 24 ? $h % 24:$h);
+        my $x=int((($i*($chart_dim/$description)+$pos))*10)/10;
+        if ($hours <= 2) {
+     #     $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%H:%M",localtime($time-$hours*3600*(1-$i/3))));
+        } elsif ($hours <= 168) {
+          if ($hour != 0) {
+            $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%02d:</text>',$x,$hour);
+          } else {
+            $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,substr(::strftime("%a",localtime($timebeginn+$h*3600)),0,2));
+          }
+        } elsif ($hours <= 168*7) {
+           $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%d.",localtime($timebeginn+$h*3600)));
+        } else {
+           $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x,::strftime("%d.%m",localtime($timebeginn+$h*3600)));
+        }  
+      }
+    } else {
+      for (my $i=0;$i<=12;$i++) {
+        my $x=int((($i)*($chart_dim/12)+1)*10)/10-2;      
+        $out.=sprintf('<polyline points="%s,%s %s,%s"  style="stroke:#505050; stroke-width:0.3; stroke-opacity:1" />',$x,0,$x,50) if ($x >= 0 and $x <= $chart_dim);
+        for (my $i=0;$i<=3;$i++) {
+          my $x=int(($i*($chart_dim/3)-1)*10)/10-2;
+          $out.=sprintf('<text text-anchor="middle" x="%s" y="60" style="fill:#CCCCCC;font-size:7px">%s</text>',$x+2,::strftime("%H:%M",localtime($time-$hours*3600*(1-$i/3))));
+        }
+      }
+    }
+    
+    my $minVal;
+    my $maxVal;
+    for (my $i=0;$i< @value1;$i++) {
+      if (defined ($value1[$i]{dim})) {
+        my $min=defined $value1[$i]{min_value} ? $value1[$i]{min_value} : $value1[$i]{value} ne "N/A" ? $value1[$i]{value} : $min;
+        my $max=defined $value1[$i]{max_value} ? $value1[$i]{max_value} : $value1[$i]{value} ne "N/A" ? $value1[$i]{value} : $max;
+        $minVal=$min if (!defined $minVal or $min < $minVal);
+        $maxVal=$max if (!defined $maxVal or $max > $maxVal);
+      }
+    }
+    my $j=0;
+    for (my $i=0;$i<@value1;$i++) {
+      if (defined $value1[$i]{dim}) {
+        ($outplot,$outfooter) = plot ($value1[$i],[$min,$minVal],[$max,$maxVal],$minColor,$maxColor,$dec,$func,$steps,$x_prop,$chart_dim, $j == 0 ? $noColor:-1,$lmm,$ln,$lr,$plot,$bwidth,$noFooter eq "1" ? 0:84+$j*10,undef,-2.5,"end",(defined $unit1[$i]?(split(",",$unit1[$i]))[1] : undef),(defined $unit1[$i] ? ( split(",",$unit1[$i]))[0] : undef));
+        $j++;
+        $out.=$outplot;
+        push (@outfooter,$outfooter);
+      }
+    }
+    if (defined $col2) {
+      my $minVal2;
+      my $maxVal2;
+      for (my $i=0;$i< @value2;$i++) {
+        if (defined ($value2[$i]{dim})) {
+          my $min=defined $value2[$i]{min_value} ? $value2[$i]{min_value} : $value2[$i]{value} ne "N/A" ? $value2[$i]{value} : $min;
+          my $max=defined $value2[$i]{max_value} ? $value2[$i]{max_value} : $value2[$i]{value} ne "N/A" ? $value2[$i]{value} : $max;
+          $minVal2=$min if (!defined $minVal2 or $min < $minVal2);
+          $maxVal2=$max if (!defined $maxVal2 or $max > $maxVal2);
+        }
+      }
+      my $offset=@outfooter*10;
+      my $j=0;
+      for (my $i=0;$i<@value2;$i++) {
+        if (defined $value2[$i]{dim}) {
+          ($outplot,$outfooter) = plot ($value2[$i],[$min2,$minVal2],[$max2,$maxVal2],$minColor2,$maxColor2,$dec2,$func2,$steps,$x_prop,$chart_dim, $j == 0 ? $noColor:-1,$lmm,$ln,$lr,$plot,$bwidth,$noFooter eq "1" ? 0:84+$offset+$j*10,undef,$chart_dim+3,"start",(defined $unit2[$i]?(split(",",$unit2[$i]))[1] : undef),(defined $unit2[$i] ? ( split(",",$unit2[$i]))[0] : undef));
+          $j++;
+          $out.=$outplot;
+          push (@outfooter,$outfooter);
+        }
+      }
+    }
+    $out.= '</g>';
+    $out.= '</svg>';
+
+    if ($hring eq "") {
+      $out.=sprintf('<g transform="translate(%s,6)">',$bwidth-49);
+      if (@colcount >= 2 ) {
+        my ($r_min1,$r_max1,$r_minColor1,$r_maxColor1,$r_unit1,$r_func1,$r_decfont1,$r_model)=r_details($min,$max,$minColor,$maxColor,$unit1[$colcount[0]],$unit1[$colcount[0]],$func,$decfont,$model,\%{$value1[$colcount[0]]});  
+        my ($r_min2,$r_max2,$r_minColor2,$r_maxColor2,$r_unit2,$r_func2,$r_decfont2)=r_details($min,$max,$minColor,$maxColor,$unit1[$colcount[1]],$unit1[$colcount[1]],$func,$decfont,$model,\%{$value1[$colcount[1]]});  
+        $out.= ui_Table::ring2($value1[$colcount[0]]{value},$r_min1,$r_max1,$r_minColor1,$r_maxColor1,$r_unit1,92,$r_func1,$r_decfont1,
+               $value1[$colcount[1]]{value},$r_min2,$r_max2,$r_minColor2,$r_maxColor2,$r_unit2,$r_func2,$r_decfont2,$lightness,(defined $head or !defined $icon) ? undef: $icon,$r_model);
+      } elsif (@colcount == 0 and @col2count >= 2 ) {
+        my ($r_min1,$r_max1,$r_minColor1,$r_maxColor1,$r_unit1,$r_func1,$r_decfont1,$r_model)=r_details($min2,$max2,$minColor2,$maxColor2,$unit2[$col2count[0]],$unit2[$col2count[0]],$func2,$decfont2,$model,\%{$value2[$colcount[0]]});  
+        my ($r_min2,$r_max2,$r_minColor2,$r_maxColor2,$r_unit2,$r_func2,$r_decfont2)=r_details($min2,$max2,$minColor2,$maxColor2,$unit2[$col2count[1]],$unit2[$col2count[1]],$func2,$decfont2,$model,\%{$value2[$colcount[1]]});  
+        $out.= ui_Table::ring2($value2[$col2count[0]]{value},$r_min1,$r_max1,$r_minColor1,$r_maxColor1,$r_unit1,92,$r_func1,$r_decfont1,
+               $value2[$col2count[1]]{value},$r_min2,$r_max2,$r_minColor2,$r_maxColor2,$r_unit2,$r_func2,$r_decfont2,$lightness,(defined $head or !defined $icon) ? undef: $icon,$r_model);
+      } elsif (@colcount == 1 and @col2count >= 1) {
+        my ($r_min1,$r_max1,$r_minColor1,$r_maxColor1,$r_unit1,$r_func1,$r_decfont1,$r_model)=r_details($min,$max,$minColor,$maxColor,$unit1[$colcount[0]],$unit1[$colcount[0]],$func,$decfont,$model,\%{$value1[$colcount[0]]});  
+        my ($r_min2,$r_max2,$r_minColor2,$r_maxColor2,$r_unit2,$r_func2,$r_decfont2)=r_details($min2,$max2,$minColor2,$maxColor2,$unit2[$col2count[0]],$unit2[$col2count[0]],$func2,$decfont2,$model,\%{$value2[$col2count[0]]});  
+        $out.= ui_Table::ring2($value1[$colcount[0]]{value},$r_min1,$r_max1,$r_minColor1,$r_maxColor1,$r_unit1,92,$r_func1,$r_decfont1,
+               $value2[$col2count[0]]{value},$r_min2,$r_max2,$r_minColor2,$r_maxColor2,$r_unit2,$r_func2,$r_decfont2,$lightness,(defined $head or !defined $icon) ? undef: $icon,$r_model);
+      } elsif (@colcount == 1 and @col2count == 0) {
+        my ($r_min,$r_max,$r_minColor,$r_maxColor,$r_unit,$r_func,$r_decfont,$r_model)=r_details($min,$max,$minColor,$maxColor,$unit1[$colcount[0]],$unit1[$colcount[0]],$func,$decfont,$model,\%{$value1[$colcount[0]]});  
+        $out.= ui_Table::ring($value1[$colcount[0]]{value},$r_min,$r_max,$r_minColor,$r_maxColor,$r_unit,92,$r_func,$r_decfont,$r_model,$lightness,(defined $head or !defined $icon) ? undef: $icon);
+      } elsif (@colcount == 0 and @col2count == 1) { 
+        my ($r_min,$r_max,$r_minColor,$r_maxColor,$r_unit,$r_func,$r_decfont,$r_model)=r_details($min2,$max2,$minColor2,$maxColor2,$unit2[$col2count[0]],$unit2[$col2count[0]],$func2,$decfont2,$model,\%{$value2[$col2count[0]]});  
+        $out.= ui_Table::ring($value2[$col2count[0]]{value},$r_min,$r_max,$r_minColor,$r_maxColor,$r_unit,92,$r_func,$r_decfont,$r_model,$lightness,(defined $head or !defined $icon) ? undef: $icon);
+      }
+      $out.='</g>';
+      $out.=sprintf('<text text-anchor="middle" x="%s" y="68" style="fill:#CCCCCC;font-size:8px">%s</text>',$bwidth-21,::strftime("%H:%M:%S",localtime($time)));
+    }
+  } # col
   if ($noFooter ne "1") {
     for (my $i=0;$i < @outfooter;$i++) {
       $out.=$outfooter[$i];
     }
   }
- 	$out.='</g>';
+  $out.='</g>';
   $out.= '</svg>';
-return ($out);
+  return ($out);
 }
 
 sub bar
@@ -5791,11 +6633,12 @@ sub ring_param {
     $mode=2;
   }
  
-  my ($dec,$fontformat,$unitformat);
-  ($dec,$fontformat,$unitformat)=split (/,/,$decfont,3) if (defined $decfont);
+  my ($dec,$fontformat,$unitformat,$unittext);
+  ($dec,$fontformat,$unitformat,$unittext)=split (/,/,$decfont,4) if (defined $decfont);
   $dec="" if (!defined $dec);
   $fontformat="" if (!defined $fontformat);
   $unitformat="" if (!defined $unitformat);
+  $unittext="" if (!defined $unittext);
   
   $min=0 if (!defined $min);
   $max=100 if (!defined $max);
@@ -5898,7 +6741,7 @@ sub ring_param {
   
 return ($min,$max,$beginColor,$endColor,$minCol,
        $maxCol,$nullColor,$minArc, $maxArc,$arcBegin,$arcEnd,$currColor,
-       $dec,$fontformat,$unitformat,$format,$val,
+       $dec,$fontformat,$unitformat,$unittext,$format,$val,
        $monochrom,$minMax,$innerRing,$pointer,$mode,$half,$size
        );
 }  
@@ -5909,7 +6752,7 @@ sub ring
   
   my ($min,$max,$beginColor,$endColor,$minCol,
        $maxCol,$nullColor,$minArc, $maxArc,$arcBegin,$arcEnd,$currColor,
-       $dec,$fontformat,$unitformat,$format,$val,
+       $dec,$fontformat,$unitformat,$unittext,$format,$val,
        $monochrom,$minMax,$innerRing,$pointer,$mode,$half,$size
       )=ring_param($val_a,$minVal,$maxVal,$minColor,$maxColor,$unit,$func,$decfont,$model,$sizeHalf);
   my $out;
@@ -6028,14 +6871,14 @@ sub ring
   my ($valInt,$valDec)=split(/\./,sprintf($format,$val));
 
   if (defined $valDec) {
-      $out.= sprintf('<text text-anchor="middle" x="41" y="%s" style="fill:%s;font-size:%spx;font-weight:bold;%s">%s<tspan style="font-size:85%%;">.%s</tspan></text>',
-                     ($icflag ? 41:$yNum),color($currColor,$ln),(defined $icon or $half eq "1") ? 15:18,$fontformat,$valInt,$valDec);
+      $out.= sprintf('<text text-anchor="middle" x="41" y="%s" style="fill:%s;font-size:%spx;font-weight:bold;%s">%s<tspan style="font-size:85%%;">.%s</tspan><tspan style="fill:%s;font-size:60%%;font-weight:normal;">%s</tspan></text>',
+                     ($icflag ? 41:$yNum),color($currColor,$ln),(defined $icon or $half eq "1") ? 14:15,$fontformat,$valInt,$valDec,color($currColor,$lu),$unittext);
   } else {
-    $out.= sprintf('<text text-anchor="middle" x="41" y="%s" style="fill:%s;font-size:%spx;font-weight:bold;%s">%s</text>',
-                   ($icflag ? 41:$yNum),color($currColor,$ln),(defined $icon or $half eq "1") ? 15:18,$fontformat,$valInt);
+    $out.= sprintf('<text text-anchor="middle" x="41" y="%s" style="fill:%s;font-size:%spx;font-weight:bold;%s">%s<tspan style="fill:%s;font-size:60%%;font-weight:normal;">%s</tspan></text>',
+                   ($icflag ? 41:$yNum),color($currColor,$ln),(defined $icon or $half eq "1") ? 14:15,$fontformat,$valInt,color($currColor,$lu),$unittext);
   }
   $out.= sprintf('<text text-anchor="middle" x="41" y="%s" style="fill:%s;font-size:%spx;%s">%s</text>',
-                 ($icflag ? 50.5:$yUnit),color($currColor,$lu),($icflag or $half eq "1") ? 8:10,$unitformat,$unit) if (defined $unit);
+                 ($icflag ? 50.5:$yUnit),color($currColor,$lu),($icflag or $half eq "1") ? 8:8,$unitformat,$unit) if (defined $unit);
   
   if ($minMax) {
     $out.= sprintf('<text text-anchor="middle" x="23" y="58" style="fill:%s;font-size:6px;%s">%s</text>',color($minCol,$lmm),($minMax eq "1" ? "":$minMax),$min);
@@ -6052,13 +6895,13 @@ sub ring2
   
   my ($min,$max,$beginColor,$endColor,$minCol,
        $maxCol,$nullColor,$minArc, $maxArc,$arcBegin,$arcEnd,$currColor,
-       $dec,$fontformat,$unitformat,$format,$val,
+       $dec,$fontformat,$unitformat,$unittext,$format,$val,
        $monochrom,$minMax,$innerRing,$pointer,$mode
      ) = ring_param($val_a,$minVal,$maxVal,$minColor,$maxColor,$unit,$func,$decfont,$model);
 
   my ($min2,$max2,$beginColor2,$endColor2,$minCol2,
        $maxCol2,$nullColor2,$minArc2,$maxArc2,$arcBegin2,$arcEnd2,$currColor2,
-       $dec2,$fontformat2,$unitformat2,$format2,$val2
+       $dec2,$fontformat2,$unitformat2,$unittext2,$format2,$val2
      ) = ring_param($val_a2,$minVal2,$maxVal2,$minColor2,$maxColor2,$unit2,$func2,$decfont2,$model);
   
   if ($monochrom eq "" or $monochrom eq "1") {
@@ -6067,13 +6910,6 @@ sub ring2
   }
   
   my $out;
- 
-##  my ($lr,$lir,$lmm,$lu,$ln,$li);
-##  ($lr,$lu,$ln,$li)=split (/,/,$lightness) if (defined $lightness);
-##  $lr=50 if (!defined $lr or $lr eq "");
-##  $lu=40 if (!defined $lu or $lu eq "");
-##  $ln=50 if (!defined $ln or $ln eq "");
-##  $li=40 if (!defined $li or $li eq "");
   
   my ($lr,$lir,$lmm,$lu,$ln,$li);
   ($lr,$lir,$lmm,$lu,$ln,$li)=split (/,/,$lightness) if (defined $lightness);
@@ -6194,22 +7030,22 @@ sub ring2
   my ($valInt,$valDec)=split(/\./,sprintf($format,$val));  
 
   if (defined $valDec) {
-    $out.= sprintf('<text text-anchor="middle" x="%s" y="29.5" style="fill:%s;font-size:%spx;font-weight:bold;%s">%s<tspan style="font-size:85%%;">.%s</tspan></text>',
-                   ($icflag ? 50:41),color($currColor,$ln),(defined ($icon) ? 13:14),$fontformat,$valInt,$valDec);
+    $out.= sprintf('<text text-anchor="middle" x="%s" y="29.5" style="fill:%s;font-size:%spx;font-weight:bold;%s">%s<tspan style="font-size:85%%;">.%s</tspan><tspan style="fill:%s;font-size:60%%;font-weight:normal;">%s</tspan></text>',
+                   ($icflag ? 50:41),color($currColor,$ln),(defined ($icon) ? 13:14),$fontformat,$valInt,$valDec,color($currColor,$lu),$unittext);
   } else {
-    $out.= sprintf('<text text-anchor="middle" x="%s" y="29.5" style="fill:%s;font-size:%spx;font-weight:bold;%s">%s</text>',
-                   ($icflag ? 50:41),color($currColor,$ln),(defined ($icon) ? 13:14),$fontformat,$valInt);
+    $out.= sprintf('<text text-anchor="middle" x="%s" y="29.5" style="fill:%s;font-size:%spx;font-weight:bold;%s">%s<tspan style="fill:%s;font-size:60%%;font-weight:normal;">%s</tspan></text>',
+                   ($icflag ? 50:41),color($currColor,$ln),(defined ($icon) ? 13:14),$fontformat,$valInt,color($currColor,$lu),$unittext);
   }
   $out.= sprintf('<text text-anchor="middle" x="41" y="16.5" style="fill:%s;font-size:8px;%s">%s</text>',color($currColor,$lu),$unitformat,$unit) if (defined $unit);
   
   my ($valInt2,$valDec2)=split(/\./,sprintf($format2,$val2));  
   
   if (defined $valDec2) {
-    $out.= sprintf('<text text-anchor="middle" x="%s" y="%s" style="fill:%s;font-size:%spx;font-weight:bold;%s">%s<tspan style="font-size:85%%;">.%s</tspan></text>',
-                   ($icflag ? 50:41),($icflag ? 41:42.5),color($currColor2,$ln),(defined ($icon) ? 12:13),$fontformat2,$valInt2,$valDec2);
+    $out.= sprintf('<text text-anchor="middle" x="%s" y="%s" style="fill:%s;font-size:%spx;font-weight:bold;%s">%s<tspan style="font-size:85%%;">.%s</tspan><tspan style="fill:%s;font-size:60%%;font-weight:normal;">%s</tspan></text>',
+                   ($icflag ? 50:41),($icflag ? 41:42.5),color($currColor2,$ln),(defined ($icon) ? 12:13),$fontformat2,$valInt2,$valDec2,color($currColor2,$lu),$unittext2);
   } else {
-    $out.= sprintf('<text text-anchor="middle" x="%s" y="%s" style="fill:%s;font-size:%spx;font-weight:bold;%s">%s</text>',
-                   ($icflag ? 50:41),($icflag ? 41:42.5),color($currColor2,$ln),(defined ($icon) ? 12:13),$fontformat2,$valInt2);
+    $out.= sprintf('<text text-anchor="middle" x="%s" y="%s" style="fill:%s;font-size:%spx;font-weight:bold;%s">%s<tspan style="fill:%s;font-size:60%%;font-weight:normal;">%s</tspan></text>',
+                   ($icflag ? 50:41),($icflag ? 41:42.5),color($currColor2,$ln),(defined ($icon) ? 12:13),$fontformat2,$valInt2,color($currColor2,$lu),$unittext2);
   }
   $out.= sprintf('<text text-anchor="middle" x="41" y="%s" style="fill:%s;font-size:8px;%s">%s</text>',($icflag ? 50:52),color($currColor2,$lu),$unitformat2,$unit2) if (defined $unit2);
   
@@ -6570,7 +7406,7 @@ Eine ausführliche Erläuterung der obigen Anwendungsbeispiele kann hier nachgel
   <a href="#DOIF_Ereignissteuerung_ueber_Auswertung_von_Events">Ereignissteuerung über Auswertung von Events</a><br>
   <a href="#DOIF_Angaben_im_Ausfuehrungsteil">Angaben im Ausführungsteil</a><br>
   <a href="#DOIF_Filtern_nach_Zahlen">Filtern nach Ausdrücken mit Ausgabeformatierung</a><br>
-  <a href="#DOIF_Reading_Funktionen">Durchschnitt, Median, Differenz, anteiliger Anstieg</a><br>
+  <a href="#DOIF_Reading_Funktionen">Durchschnitt, Median, Differenz, Änderungsrate, anteiliger Anstieg</a><br>
   <a href="#DOIF_aggregation">Aggregieren von Werten</a><br>
   <a href="#DOIF_Zeitsteuerung">Zeitsteuerung</a><br>
   <a href="#DOIF_Relative_Zeitangaben">Relative Zeitangaben</a><br>
@@ -6884,7 +7720,7 @@ Der Inhalt des Dummys Alarm soll in einem Text eingebunden werden:<br>
 Die Definition von regulären Ausdrücken mit Nutzung der Perl-Variablen $1, $2 usw. kann in der Perldokumentation nachgeschlagen werden.<br>
 <br>
 <a name="DOIF_Reading_Funktionen"></a><br>
-<b>Durchschnitt, Median, Differenz, anteiliger Anstieg</b>&nbsp;&nbsp;&nbsp;<a href="#DOIF_Inhaltsuebersicht">back</a><br>
+<b>Durchschnitt, Median, Differenz, Änderungsrate, anteiliger Anstieg</b>&nbsp;&nbsp;&nbsp;<a href="#DOIF_Inhaltsuebersicht">back</a><br>
 <br>
 Die folgenden Funktionen werden auf die letzten gesendeten Werte eines Readings angewendet. Das angegebene Reading muss Events liefern, damit seine Werte intern im Modul gesammelt und die Berechnung der angegenen Funktion erfolgen kann.<br>
 <br>
@@ -6892,7 +7728,7 @@ Syntax<br>
 <br>
 <code>[&lt;device&gt;:&lt;reading&gt;:&lt;function&gt;&lt;number of last values&gt;]</code><br>
 <br>
-&lt;number of last values&gt; ist optional. Wird sie nicht angegeben, so werden bei Durchschnitt/Differenz/Anstieg die letzten beiden Werte, bei Median die letzten drei Werte, ausgewertet.<br>
+&lt;number of last values&gt; ist optional. Wird sie nicht angegeben, so werden bei Durchschnitt/Differenz/Änderungsrate/Anstieg die letzten beiden Werte, bei Median die letzten drei Werte, ausgewertet.<br>
 <br>
 <u>Durchschnitt</u><br>
 <br>
@@ -6930,6 +7766,23 @@ Bsp.:<br>
 <br>
 Wenn die Temperaturdifferenz zwischen dem letzten und dem fünftletzten Wert um mindestens drei Grad fällt, dann Anweisung ausführen.<br>
 <br>
+<u>Änderungsrate</u><br>
+<br>
+Es wird die Änderungsrate (Veränderung pro Zeit) zwischen dem letzten und dem x-ten zurückliegenden Wert berechnet. Es wird der Differenzenquotient von zwei Werten und deren Zeitdifferenz gebildet. 
+Mit Hilfe dieser Funktion können momentane Verbräuche von Wasser, elektrischer Energie, Gas usw. bestimmt, ausgewertet oder visualisiert werden.<br>
+<br>
+Funktion: <b>diffpsec</b><br>
+<br>
+Berechnung:<br>
+<br>
+(letzter Wert - zurückliegender Wert)/(Zeitpunkt des letzten Wertes - Zeitpunkt des zurückliegenden Wertes)<br>
+<br>
+Bsp.:<br>
+<br>
+<code>define di_pv DOIF ([pv:total_feed:diffpsec]*3600 &gt; 1) (set heating on) DOELSE (set heating off)</code><br>
+<br>
+Wenn die momentane PV-Einspeise-Leistung mehr als 1 kW beträgt, dann soll die Heizung eingeschaltet werden, sonst soll sie ausgeschaltet werden. Das total_feed-Reading beinhaltet den PV-Ertrag in Wh.<br>
+<br>
 <u>anteiliger Anstieg</u><br>
 <br>
 Funktion: <b>inc</b><br>
@@ -6946,8 +7799,8 @@ Wenn die Feuchtigkeit im Bad der letzten beiden Werte um über zehn Prozent anst
 <br>
 Zu beachten:<br>
 <br>
-Der Durchschnitt/Median/Differenz/Anstieg werden bereits gebildet, sobald die ersten Werte eintreffen. Beim ersten Wert ist der Durchschnitt bzw. Median logischerweise der Wert selbst,
-Differenz und der Anstieg ist in diesem Fall 0. Die intern gesammelten Werte werden nicht dauerhaft gespeichert, nach einem Neustart sind sie gelöscht. Die angegebenen Readings werden intern automatisch für die Auswertung nach Zahlen gefiltert.<br> 
+Differenz/Änderungsrate/Anstieg werden gebildet, sobald zwei Werte eintreffen. Die intern gesammelten Werte werden nicht dauerhaft gespeichert, nach einem Neustart sind sie gelöscht. 
+Die angegebenen Readings werden intern automatisch für die Auswertung nach Zahlen gefiltert.<br> 
 <br>
 <a name="DOIF_Angaben_im_Ausfuehrungsteil"></a><br>
 <b>Angaben im Ausführungsteil (gilt nur für FHEM-Modus)</b>:&nbsp;&nbsp;&nbsp;<a href="#DOIF_Inhaltsuebersicht">back</a><br>
@@ -7219,24 +8072,24 @@ attr di_gong do always</code><br>
 <br>
 Hinter der Zeitangabe kann ein oder mehrere Wochentage getrennt mit einem Pipezeichen | angegeben werden. Die Syntax lautet:<br>
 <br>
-<code>[&lt;time&gt;|0123456789]</code> 0-9 entspricht: 0-Sonntag, 1-Montag, ... bis 6-Samstag sowie 7 für Wochenende und Feiertage (entspricht $we), 8 für Arbeitstage (entspricht !$we) und 9 für Wochenende oder Feiertag morgen (entspricht intern $twe)<br>
+<code>[&lt;time&gt;|0123456789X]</code> mit 0 Sonntag, 1 Montag, ... bis 6 Samstag, 7 Wochenende und Feiertage (entspricht $we), 8 Arbeitstag (entspricht !$we),9 Wochenende oder Feiertag morgen (entspricht intern $twe), X Arbeitstag morgen (entspricht intern !$twe)<br>
 <br>
 alternativ mit Buchstaben-Kürzeln:<br>
 <br>
-<code>[&lt;time&gt;|So Mo Di Mi Do Fr Sa WE AT MWE]</code> WE entspricht der Ziffer 7, AT der Ziffer 8 und MWE der Ziffer 9<br>
+<code>[&lt;time&gt;|So Mo Di Mi Do Fr Sa WE AT MWE MAT]</code> WE entspricht der Ziffer 7, AT der Ziffer 8, MWE der Ziffer 9, MAT dem Buchstaben X<br>
 <br>
 oder entsprechend mit englischen Bezeichnern:<br>
 <br>
-<code>[&lt;time&gt;|Su Mo Tu We Th Fr Sa WE WD TWE]</code><br>
+<code>[&lt;time&gt;|Su Mo Tu We Th Fr Sa WE WD TWE TWD]</code><br>
 <br>
 <li><a name="DOIF_weekdays"></a>
 Mit Hilfe des Attributes <code>weekdays</code> können beliebige Wochentagbezeichnungen definiert werden.<br>
 <a name="weekdays"></a><br>
 Die Syntax lautet:<br>
 <br>
-<code>weekdays &lt;Bezeichnung für Sonntag&gt;,&lt;Bezeichnung für Montag&gt;,...,&lt;Bezeichnung für Wochenende oder Feiertag&gt;,&lt;Bezeichnung für Arbeitstage&gt;,&lt;Bezeichnung für Wochenende oder Feiertag morgen&gt;</code><br>
+<code>weekdays &lt;Bezeichnung für Sonntag&gt;,&lt;Bezeichnung für Montag&gt;,...,&lt;Bezeichnung für Wochenende oder Feiertag&gt;,&lt;Bezeichnung für Arbeitstag&gt;,&lt;Bezeichnung für Wochenende oder Feiertag morgen&gt;,&lt;Bezeichnung für Arbeitstag morgen&gt;</code><br>
 <br>
-Beispiel: <code>di_mydoif attr weekdays Son,Mon,Die,Mit,Don,Fre,Sam,Wochenende,Arbeitstag,WochenendeMorgen</code><br>
+Beispiel: <code>di_mydoif attr weekdays Son,Mon,Die,Mit,Don,Fre,Sam,Wochenende,Arbeitstag,WochenendeMorgen,ArbeitstagMorgen</code><br>
 <br>
 <u>Anwendungsbeispiel</u>: Radio soll am Wochenende und an Feiertagen um 08:30 Uhr eingeschaltet und um 09:30 Uhr ausgeschaltet werden. Am Montag und Mittwoch soll das Radio um 06:30 Uhr eingeschaltet und um 07:30 Uhr ausgeschaltet werden. Hier mit englischen Bezeichnern:<br>
 <br>

@@ -1,4 +1,4 @@
-# $Id: 98_JsonMod.pm 24783 2021-07-21 22:37:12Z herrmannj $
+# $Id: 98_JsonMod.pm 27660 2023-06-06 20:03:18Z herrmannj $
 ###############################################################################
 #
 #     This file is part of fhem.
@@ -32,6 +32,10 @@ use List::Util qw( any );
 use Text::Balanced qw ( extract_codeblock extract_delimited extract_bracketed );
 use Time::Local qw( timelocal timegm );
 use Unicode::Normalize qw( NFD );
+# support system://'curl '
+use IPC::Open3;
+use Symbol 'gensym'; 
+
 
 #use Memory::Usage;
 
@@ -68,7 +72,7 @@ sub JsonMod_Define {
 	my ($hash, $def) = @_;
 	my ($name, $type, $source) = split /\s/, $def, 3;
 
-	my $cvsid = '$Id: 98_JsonMod.pm 24783 2021-07-21 22:37:12Z herrmannj $';
+	my $cvsid = '$Id: 98_JsonMod.pm 27660 2023-06-06 20:03:18Z herrmannj $';
 	$cvsid =~ s/^.*pm\s//;
 	$cvsid =~ s/Z\s\S+\s\$$/ UTC/;
 	$hash->{'SVN'} = $cvsid;
@@ -77,7 +81,7 @@ sub JsonMod_Define {
 	$hash->{'CRON'} = JsonMod::Cron->new();
 
 	return "no FUUID, is fhem up to date?" if (not $hash->{'FUUID'});
-	return "wrong source definition" if ($source !~ m/^(https:|http:|file:)/);
+	return "wrong source definition" if ($source !~ m/^(https:|http:|file:|system:)/);
 
 	$hash->{'CONFIG'}->{'SOURCE'} = $source;
 	#($hash->{'NOTIFYDEV'}) = devspec2array('TYPE=Global');
@@ -207,7 +211,8 @@ sub JsonMod_Attr {
 sub JsonMod_ReadPvtConfig {
 	my ($hash) = @_;
 
-	my sub clean {
+	# my sub clean {
+	local *clean = sub {
 		$hash->{'CONFIG'}->{'SECRET'} = {};
 		return;
 	};
@@ -247,6 +252,7 @@ sub JsonMod_DoReadings {
 	my ($hash, $data) = @_;
 	my $name = $hash->{'NAME'};
 
+	JsonMod_Logger($hash, 5, 'start JsonPath');
 	my $path = JsonMod::JSON::Path->new($data);
 
 	my $newReadings = {};
@@ -255,9 +261,13 @@ sub JsonMod_DoReadings {
 		$oldReadings->{$key} = 0;
 	};
 
+	# lexical subs are supected to cause segv under rare conditions, see forum #133135
+	# changed to localized globs
+
 	# sanitize reading names to comply with fhem naming conventions
 	# (allowed chars: A-Za-z/\d_\.-)
-	my sub sanitizedSetReading {
+	# my sub sanitizedSetReading {
+	local *sanitizedSetReading = sub {
 		my ($r, $v) = @_;
 
 		# convert into valid reading
@@ -270,9 +280,8 @@ sub JsonMod_DoReadings {
 		utf8::encode($r) if utf8::is_utf8($r);
 		$r =~ s/\s/_/g;	# whitespace 
 		$r =~ s/([^A-Za-z0-9\/_\.-])//g;
-		# prevent a totally stripped reading name
-		# todo, log it?
-		#$r = "_Identifier_$_index" unless($r);
+		# prevent a totally stripped reading name / todo, log it?
+		$r = "__CONVERSATION_ERROR__" unless($r);
 		$v //='';
 		utf8::encode($v) if utf8::is_utf8($v);
 		$newReadings->{$r} = $v;
@@ -280,7 +289,8 @@ sub JsonMod_DoReadings {
 		#printf "1 %s %s %s %s\n", $r, length($r), $v, length($v);
 	};
 
-	my sub concat {
+	# my sub concat {
+	local *concat = sub {
 		my @args = @_;
 		my $result = '';
 		foreach my $arg (@args) {
@@ -302,7 +312,7 @@ sub JsonMod_DoReadings {
 		$readingList =~ s/\//\\\//g; # escape slash forum 122166
 		($args, $readingList, $cmd) = extract_codeblock ($readingList, '()', '(?m)[^(]*');
 		$readingList =~ s/\\\//\//g; # revert escaped slash
-		$args =~ s/\\\//\//g; # revert escaped slash
+		$args =~ s/\\\//\//g if defined($args); # revert escaped slash
 		# say 'A:'.$args;
 		# say 'R:'.$readingList;
 		# say 'C:'.$cmd;
@@ -315,7 +325,8 @@ sub JsonMod_DoReadings {
 
 		# control warnings, required in multi()
 		my $warnings = 1;
-		my sub logWarnings {
+		# my sub logWarnings {
+		local *logWarnings = sub {
 			return unless ($warnings);
 			my ($msg) = @_;
 			$msg =~ s/at \(eval.*$//;
@@ -324,7 +335,8 @@ sub JsonMod_DoReadings {
 
 		if ($cmd eq 'single') {
 
-			my sub jsonPath {
+			# my sub jsonPath {
+			local *jsonPath = sub {
 				my ($propertyPath) = @_;
 				my $presult = $path->get($propertyPath)->getResultValue();
 				
@@ -338,7 +350,8 @@ sub JsonMod_DoReadings {
 				return undef;
 			};
 
-			my sub jsonPathf {
+			# my sub jsonPathf {
+			local *jsonPathf = sub {
 				my ($propertyPath, $format) = @_;
 				$format //= '%s';
 				my $presult = jsonPath($propertyPath);
@@ -348,7 +361,8 @@ sub JsonMod_DoReadings {
 				return undef;
 			};
 
-			my sub s1 {
+			# my sub s1 {
+			local *s1 = sub {
 				my ($readingValue, $readingName, $default) = @_;
 				$readingValue //= $default;
 				die ('missing reading name') unless ($readingName);
@@ -371,24 +385,30 @@ sub JsonMod_DoReadings {
 		} elsif ($cmd eq 'multi') {
 
 			my $resultSet;
+			my $resultNode;
 			my $resultObject;
 			my $index = 0;
 
-			my sub count {
+			local *node = sub {
+				return $resultNode;
+			};
+
+			local *count = sub {
 				return $index;
 			};
 
-			my sub index {
-				my @args = @_;
-				if (scalar @args > 1) {
-					return CORE::index($args[0], $args[1], $args[2]);
-				} else {
-					JsonMod_Logger($hash, 1, 'use of \'index()\' as item counter is depraced in \'%s%s\'. Replace with \'count\'.', $cmd, $args);
-					return $index;
-				};
-			};
+			# my sub index {
+			# 	my @args = @_;
+			# 	if (scalar @args > 1) {
+			# 		return CORE::index($args[0], $args[1], $args[2]);
+			# 	} else {
+			# 		JsonMod_Logger($hash, 1, 'use of \'index()\' as item counter is depraced in \'%s%s\'. Replace with \'count\'.', $cmd, $args);
+			# 		return $index;
+			# 	};
+			# };
 
-			my sub property {
+			# my sub property {
+			local *property = sub {
 				my ($propertyPath, $default) = @_;
 				#$default //= '';
 				return unless (defined($resultObject));
@@ -407,7 +427,8 @@ sub JsonMod_DoReadings {
 				return undef;
 			};
 
-			my sub propertyf {
+			# my sub propertyf {
+			local *propertyf = sub {
 				my ($propertyPath, $default, $format) = @_;
 				$format //= '%s';
 				my $presult = property($propertyPath, $default);
@@ -417,29 +438,39 @@ sub JsonMod_DoReadings {
 				return undef;
 			};
 
-			my sub jsonPath {
+			# my sub jsonPath {
+			local *jsonPath = sub {
 				my ($jsonPathExpression) = @_;
-				$resultSet = $path->get($jsonPathExpression)->getResultValue() unless (defined($resultSet));
+				# $resultSet = $path->get($jsonPathExpression)->getResultValue() unless (defined($resultSet));
+				$resultSet = $path->get($jsonPathExpression)->getResultList() unless (defined($resultSet));
 				return $jsonPathExpression;
 			};
 
-			my sub m2 {
+			# my sub m2 {
+			local *m2 = sub {
 				my ($jsonPathExpression, $readingName, $readingValue) = @_;
+				# print "in m2 $jsonPathExpression, $readingName, $readingValue\n";
 				sanitizedSetReading($readingName, $readingValue);
-				$index++;
+				# $index++;
 			};
 
-			my sub m1 {
+			# my sub m1 {
+			local *m1 = sub {
 				my ($jsonPathExpression, $readingName, $readingValue) = @_;
 
 				$warnings = 1;
 
 				if (ref($resultSet) eq 'ARRAY') {
-					foreach (@{$resultSet}) {
-						$resultObject = $_;
+					foreach my $res (@{$resultSet}) {
+						$resultNode = $res->[0];
+						$resultObject = $res->[1]; # value
+						# print "array: $resultNode $resultObject \n";
+						# use Data::Dumper;
+						# print Dumper $resultObject;
 						eval 'm2'.$args; warn $@ if $@;
+						$index++;
 					};
-				};				
+				};
 			};
 
 			{
@@ -459,7 +490,8 @@ sub JsonMod_DoReadings {
 
 			my $index = 0;
 
-			my sub c1 {
+			# my sub c1 {
+			local *c1 = sub {
 				my ($jsonPathExpression) = @_;
 				$jsonPathExpression //= '$..*';
 
@@ -562,12 +594,15 @@ sub JsonMod_ApiRequest {
 
 	my $source = $hash->{'CONFIG'}->{'SOURCE'};
 
-	# file
-	if ($source =~ m/^file:\/(.+)/) {
+	# abs: file:/// or file:/
+	# rel: file:
+	# non-comform file:// -> rel file:
+	if ($source =~ m/^file:[\/]{2}(.+)|^file:(.+)/) {
 		$hash->{'CONFIG'}->{'IN_REQUEST'} = 0;
 		$hash->{'API_LAST_RES'} = Time::HiRes::time();
-
-		my $filename = $1;
+		
+		my $filename = $1//$2;
+		# say "filename: $filename";
 		if (-e $filename) {
 			my $data;
 			open(my $fh, '<', $filename) or do {
@@ -588,8 +623,77 @@ sub JsonMod_ApiRequest {
 		} else {
 			$hash->{'SOURCE'} = sprintf('%s', $filename);
 			$hash->{'API_LAST_MSG'} = 404;
+			return;
 		};
 	};
+
+	# system: e.g. system://curl https://www.google.de
+	# must return valid json via pipe
+	if ($source =~ m/^system:\/\/(.+)/) {
+		my $cmd = $1;
+		my ($wtr, $rdr);  # pipes r+w
+		my $err = gensym();  # err
+
+		my $pid = open3($wtr, $rdr, $err, $cmd);
+		my $name = "JsonMod-System-$hash->{NAME}";
+
+		my ($data, $error);
+
+		my $select_rdr = {
+			FD => fileno($rdr),
+			NAME => $hash->{NAME}, # required in case fhem.pl executes delete
+			directReadFn => sub {
+				my $r = @_;
+				my $res;
+        		my $len = sysread $rdr, $res, 8192;
+				if ($len == 0) {
+					# reap zombie and retrieve exit status
+    				waitpid( $pid, 0 );
+    				my $child_exit_status = $?;
+					# my $child_exit_status = $? >> 8;
+					delete $selectlist{$name};
+					# delete $selectlist{$name.'-err'};
+					my $param = {
+						hash => $hash,
+						cron =>	$hash->{'CONFIG'}->{'CRON'},
+						code => $child_exit_status,
+					};
+					return JsonMod_ApiResponse($param, $error, $data);
+				} else {
+					$data .= $res;
+				}
+			}
+		};
+		$selectlist{$name} = $select_rdr;
+
+		# my $select_err = {
+		# 	FD => fileno($err),
+		# 	directReadFn => sub {
+		# 		my $r = @_;
+		# 		my $res;
+        # 		my $len = sysread $err, $res, 8192;
+		# 		# EOF
+		# 		if ($len == 0) {
+		# 			# reap zombie and retrieve exit status
+    	# 			waitpid( $pid, 0 );
+    	# 			my $child_exit_status = $?;
+		# 			# my $child_exit_status = $? >> 8;
+		# 			delete $selectlist{$name.'-rdr'};
+		# 			delete $selectlist{$name.'-err'};
+		# 			my $param = {
+		# 				hash => $hash,
+		# 				cron =>	$hash->{'CONFIG'}->{'CRON'},
+		# 				code => $child_exit_status,
+		# 			};
+		# 			JsonMod_ApiResponse($param, $e, $data);
+		# 		} else {
+		# 			$e .= $res;
+		# 		}
+		# 	}
+		# };
+		# $selectlist{$name.'-err'} = $select_err;
+		return;
+	}
 
 	my $param = {
 		'hash'		=>		$hash,
@@ -638,7 +742,8 @@ sub JsonMod_ApiResponse {
 	$hash->{'SOURCE'} = sprintf('%s (%s)', $url, $param->{'code'} //= '');
 	$hash->{'API_LAST_MSG'} = $param->{'code'} //= 'failed';
 
-	my sub doError {
+	# my sub doError {
+	local *doError = sub {
 		my ($msg) = @_;
 		$hash->{'API_LAST_MSG'} = $msg;
 		my $next = Time::HiRes::time() + 600;
@@ -652,7 +757,7 @@ sub JsonMod_ApiResponse {
 	};
 
 	my ($content, $encoding);
-	foreach my $header (split /\r\n/, $param->{'httpheader'}) {
+	foreach my $header (split /\r\n/, $param->{'httpheader'} //= '') {
 		last if (($content, $encoding) = $header =~ m/^Content-Type:\s([^;]+).*charset=(.+)/);
 	};
 
@@ -682,15 +787,19 @@ sub JsonMod_ApiResponse {
 		$data = $1;
 	};
 
+	JsonMod_Logger($hash, 5, 'start json decoding');
 	my $rs = JsonMod::JSON::StreamReader->new()->parse($data);
 	if (not $rs or ((ref($rs) ne 'HASH') and ref($rs) ne 'ARRAY')) {
 		return doError('invalid server response');
 	};
+	JsonMod_Logger($hash, 5, 'finished json decoding');
 
 	#use Memory::Usage;
 	#my $mu = Memory::Usage->new();
 	#$mu->record('before');
+	JsonMod_Logger($hash, 5, 'start do readings');
 	JsonMod_DoReadings($hash, $rs);
+	JsonMod_Logger($hash, 5, 'finished do readings');
 	#$mu->record('after');
 	#$mu->dump();
 
@@ -830,10 +939,21 @@ BEGIN {
 	};
 };
 
-
 sub new {
 	my $class = shift;
 	my $self = {};
+	$self->{'ESCAPE'} = {
+		'"'     => '"',
+		'\\'    => '\\',
+		'/'     => '/',
+		'b'     => "\x08",
+		'f'     => "\x0c",
+		'n'     => "\x0a",
+		'r'     => "\x0d",
+		't'     => "\x09",
+		'u2028' => "\x{2028}",
+		'u2029' => "\x{2029}"
+	};
 	bless $self, $class;
 	return $self;
 };
@@ -1308,7 +1428,6 @@ sub getResultNormalized {
 	foreach my $e (@{$self->{'nList'}}) {
 		print "$e\n";
 	};
-
 };
 
 sub getResultValue {
@@ -1698,7 +1817,8 @@ sub listDates {
 
 	#return [] if ($self->{R}++ > 25);
 
-	my sub daysOfMonth {
+	# my sub daysOfMonth {
+	local *daysOfMonth = sub {
 		my ($m, $y) = @_;
 		my (@d) = (0,31,28,31,30,31,30,31,31,30,31,30,31);
 		# leapyear
@@ -1772,7 +1892,16 @@ sub listDates {
 	<ul>
     	<code>define &lt;name&gt; JsonMod &lt;http[s]:example.com:/somepath/somefile.json&gt;</code>
     	<br><br>
-    	defines the device and set the source (file:/|http://|https://).
+    	defines the device and set the source (file:|http:|https:|system://).<br>
+		<br>files example:
+		<ul>
+		<li>file:[//]/path/file (absolute)</li>
+		<li>file:[//]path/file (realtive)</li>
+		</ul>
+		<br>system example:
+		<ul>
+		<li>system://curl -X POST "https://httpbin.org/anything" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"login":"my_login","password":"my_password"}'</li>
+		</ul>
 	</ul>
 	<br>
 
@@ -1864,11 +1993,22 @@ sub listDates {
 				</li>
 				<li>
 					count|count()<br>
-					<i>the old syntax index() is depraced but for a limited period of time still functional.</i>
 					Contains the index number of the current list element. 
-					Within 'multi()' instructions for generating reading names, ie by using concat('item_', count) or similar.
+					Within 'multi()' instructions for generating reading names, eg by using concat('item_', count) or similar.
 				</li>
-				within the expresiions single() and multi(), additional perl expressions may be used if required. 
+				<li>
+					node|node()<br>
+					Contains the normalized path expression of the current node. Required to access the keys of an object when iterating over a keys/value structure of an object. 
+					Within 'multi()' instructions eg for generating reading names from object keys.
+				</li>
+			</ul>
+			<br>within the expresiions single() and multi(), additional perl expressions may be used if required.<br><br>
+			Since the reading names are typically generated from the content of the JSON, it is the responsibility of the user to ensure that the fhem naming conventions are followed. JsonMod will make the following adjustments to the readings name if necessary and possible:
+			<ul>
+			<li>All non-ACSII characters are converted to an ASCII equivalent if possible</li>
+			<li>All forbidden characters are removed from the name</li>
+			<li>if a conversion fails, the name is set as "__CONVERSATION_ERROR__"</li>
+			<li>in case of multiple same reading names, the last one overwrites the previous one</li>
 			</ul>
 		</li>
 	</ul>

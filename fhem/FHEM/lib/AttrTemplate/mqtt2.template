@@ -1,5 +1,5 @@
 ###########################################
-# $Id: mqtt2.template 27028 2023-01-11 19:19:45Z Beta-User $
+# $Id: mqtt2.template 27582 2023-05-17 08:19:40Z Beta-User $
 #
 # Comments start with #. Empty lines are ignored.
 # Syntax of one entry: name: line, one optional filter: line, zero or more par: lines,  FHEM-Commands
@@ -55,8 +55,8 @@ setreading DEVICE attrTemplateVersion 20220110
 #MQTT2 IO ignoreRegexp
 #
 name:MQTT2_IO_ignoreRegexp_basic
-filter:TYPE=MQTT2_DEVICE
 desc:Adds a new ignoreRegexp to the courrent IO device of device it is applied to. This will prevent evaluation of incoming messages typically meant to go towards the hardware including branches with "cmnd" tasmota and "command" for shelly. <br>Additionally homeassistat discovery branch will be deactivated. <br>NOTE: early experimental version...
+filter:TYPE=MQTT2_DEVICE
 order:000002
 par:IODEVNAME;Name of the IO-Device; { InternalVal('DEVICE','LASTInputDev',AttrVal('DEVICE','IODev',InternalVal('DEVICE','IODev',undef)->{NAME})) }
 set DEVICE attrTemplate MQTT2_IO_ignoreRegexp_shelly \IODEVNAME=IODEVNAME
@@ -386,6 +386,7 @@ attr DEVICE webCmd toggle:on:off:brightness:ct:rgb
 attr DEVICE devicetopic BASE_TOPIC/DEV_ID
 attr DEVICE readingList $\DEVICETOPIC:.* { my $ret=json2nameValue($EVENT,'',$JSONMAP); $ret->{state}=lc($ret->{state}) if defined $ret->{state}; return $ret }
 attr DEVICE jsonMap color_temp:ct
+attr DEVICE getList power_on_behavior:noArg power_on_behavior $\DEVICETOPIC/get {"power_on_behavior": ""}
 attr DEVICE setList \
   on:noArg $\DEVICETOPIC/set {"brightness": BRIGHTNESS , "state":"ON", "color_temp": CTVALUE}\
   off:noArg $\DEVICETOPIC/set {"state":"OFF"}\
@@ -393,12 +394,13 @@ attr DEVICE setList \
   ct:colorpicker,CT,154,2,500 $\DEVICETOPIC/set {"color_temp":"$EVTPART1"}\
   warm:noArg $\DEVICETOPIC/set {"brightness": BRIGHTNESS , "color_temp": CTWARMVALUE}\
   white:noArg $\DEVICETOPIC/set {"brightness": BRIGHTNESS, "color_temp": CTWHITEVALUE}\
-  rgb:colorpicker,RGB {"$\DEVICETOPIC/set ".zigbee2mqtt_RGB2JSON($EVTPART1)}
+  rgb:colorpicker,RGB {"$\DEVICETOPIC/set ".zigbee2mqtt_RGB2JSON($EVTPART1)}\
+  power_on_behavior:on,off,toggle,previous $\DEVICETOPIC/set {"power_on_behavior": "$EVTPART1"}
 attr DEVICE userReadings rgb:color_y.* {Color::xyY2hex(ReadingsVal($name,'color_x',0),ReadingsVal($name,'color_y',0),ReadingsVal($name,'brightness',254))}
 attr DEVICE comment The specified ct and brightness values in on and warm etc. commands ​​can be adjusted at any time via the setList attribute
 set DEVICE attrTemplate speechcontrol_type_light_254
 attr DEVICE model zigbee2mqtt_light_rgbcct_rgb
-setreading DEVICE attrTemplateVersion 20221201
+setreading DEVICE attrTemplateVersion 20230410
 
 # zigbee2mqtt 2 channel dimmer device
 name:zigbee2mqtt_2channel_dimmer_split
@@ -755,6 +757,22 @@ deletereading -q DEVICE (?!associatedWith|IODev).*
 attr DEVICE model zigbee2mqtt_TempHumSensor
 setreading DEVICE attrTemplateVersion 20200904
 
+#contributed by chefschaffner, https://forum.fhem.de/index.php/topic,94495.msg1260253.html#msg1260253
+name:zigbee2mqtt_TempSensor
+desc: Temp sensor via zigbee2mqtt <br>Tested with: OWON THS317-ET Temperature Sensor
+filter:TYPE=MQTT2_DEVICE:FILTER=CID~zigbee.*
+order:L_07a1
+par:BASE_TOPIC;base topic set in configuration.yaml of the zigbee2mqtt bridge;{ AttrVal('DEVICE','devicetopic',AttrVal('DEVICE','readingList','')) =~ m,[\b]?([^/:]+)[/].+, ? $1 : undef }
+par:DEV_ID;name of the device in the zigbee2mqtt bridge;{ AttrVal('DEVICE','devicetopic',AttrVal('DEVICE','readingList','')) =~ m,[^/]+[/]([^/:]+).*, ? $1 : undef }
+par:ICON;ICON as set, defaults to temp_temperature;{ AttrVal('DEVICE','icon','temp_temperature') }
+attr DEVICE icon ICON
+attr DEVICE stateFormat {sprintf ("Temperature: %.1f°C", ReadingsVal($name,'temperature',0)) }
+attr DEVICE devicetopic BASE_TOPIC/DEV_ID
+attr DEVICE readingList $\DEVICETOPIC:.* { json2nameValue($EVENT,'',$JSONMAP) }
+deletereading -q DEVICE (?!associatedWith|IODev).*
+attr DEVICE model zigbee2mqtt_TempSensor
+setreading DEVICE attrTemplateVersion 20230126
+
 #by TomLee, https://forum.fhem.de/index.php/topic,116310.msg1105927.html#msg1105927
 name:zigbee2mqtt_human_body_movement
 desc: Human motion sensor via zigbee2mqtt <br>Tested with: Xiaomi MiJia human RTCGQ01LM body movement sensor (occupancy)
@@ -1012,6 +1030,23 @@ attr DEVICE model zigbee2mqtt_symfonsik_sound_controller
 attr DEVICE userReadings volume:brightness.* {int(ReadingsVal($name,"brightness",10)/2.55)}
 deletereading -q DEVICE (?!associatedWith|IODev).*
 setreading DEVICE attrTemplateVersion 20200904
+
+
+#based on contribution by RomanticBoy83: https://forum.fhem.de/index.php/topic,131980.msg1263455.html#msg1263455
+name:zigbee2mqtt_zigbee2mqtt_ir_interface
+desc: IR interface controlled by zigbee2mqtt <br>Tested with: Moes UFO-R11, https://www.zigbee2mqtt.io/devices/UFO-R11.html
+filter:TYPE=MQTT2_DEVICE:FILTER=CID~zigbee.*
+order:L_16m
+par:BASE_TOPIC;base topic set in configuration.yaml of the zigbee2mqtt bridge;{ AttrVal('DEVICE','devicetopic',AttrVal('DEVICE','readingList','')) =~ m,[\b]?([^/:]+)[/].+, ? $1 : undef }
+par:DEV_ID;name of the device in the zigbee2mqtt bridge;{ AttrVal('DEVICE','devicetopic',AttrVal('DEVICE','readingList','')) =~ m,[^/]+[/]([^/:]+).*, ? $1 : undef }
+par:ICON;ICON as set, defaults to it_remote;{ AttrVal("DEVICE","icon","it_remote") }
+attr DEVICE icon ICON
+attr DEVICE devicetopic BASE_TOPIC/DEV_ID
+attr DEVICE setList \
+  learn_ir_code:uzsuToggle,ON,OFF $\DEVICETOPIC/set {"learn_ir_code":"$EVTPART1"}\
+  ir_code_to_send:textField $\DEVICETOPIC/set {"ir_code_to_send":"$EVTPART1"}
+attr DEVICE model zigbee2mqtt_ir_interface
+setreading DEVICE attrTemplateVersion 20230227
 
 
 # Eurotronic Spirit ZigBee version
@@ -5244,6 +5279,7 @@ order:W_01
 { Svn_GetFile('contrib/AttrTemplate/99_attrT_WLED_Utils.pm', 'FHEM/99_attrT_WLED_Utils.pm', sub(){ CommandReload(undef, '99_attrT_WLED_Utils') }) }
 par:BASE_ID;BASE_ID typically is wled;{ AttrVal('DEVICE','readingList','') =~ m,([^:]+)[/][^/]+[/][^/]+:, ? $1 : undef }
 par:DEVNAME;Device name as configured;{ AttrVal('DEVICE','readingList','') =~ m,[^:]+[/]([^/]+)[/][^/]+:, ? $1 : undef }
+par:IPADDRESS;Insert Controller-IP ;{ my $ip =InternalVal('DEVICE',InternalVal('DEVICE','LASTInputDev',AttrVal('DEVICE','IODev',InternalVal('DEVICE','IODev',undef)->{NAME})).'_CONN',ReadingsVal('DEVICE','ip', ''));  $ip=~ m/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/x ? $1 : undef }
 par:ICON;ICON as set, defaults to hue_filled_iris;{ AttrVal('DEVICE','icon','hue_filled_iris') }
 attr DEVICE icon ICON
 attr DEVICE setList\
@@ -5286,9 +5322,10 @@ attr DEVICE webCmdLabel RGB:Brightness\
 attr DEVICE setStateList on off toggle dimdown dimup effect_prev effect_next effect_random palette_prev palette_next palette_random palette_reset effect_reset
 attr DEVICE comment For questions about the use of different widgets for color selection see discussion at https://forum.fhem.de/index.php/topic,98880.msg995308.html
 set DEVICE attrTemplate speechcontrol_type_light_255
+setreading DEVICE ip IPADDRESS
 farewell:template has been applied successfully. Note: webCmd and eventMap are just examples; adopt this to your needs.
 attr DEVICE model wled_controller
-setreading DEVICE attrTemplateVersion 20211220
+setreading DEVICE attrTemplateVersion 20230125
 
 
 
@@ -5496,22 +5533,38 @@ farewell:template has been applied successfully. <br>Note: In case you use an ex
 par:BASE_ID;BASE_ID as set on the esp;{ AttrVal('DEVICE','readingList','') =~ m,([^:]+)/version:, ? $1 : undef }
 par:ICON;ICON as set, defaults to solar;{ AttrVal('DEVICE','icon','solar') }
 attr DEVICE icon ICON
-attr DEVICE bridgeRegexp BASE_ID/([^/]+)/ch[0-9]+/.*:.* "BASE_ID_$1"
+attr DEVICE bridgeRegexp BASE_ID/([^/]+)/ch[0-9]+/.*:.* "BASE_ID_$1"\
+  BASE_ID/([^/]+)/(available|last_success|ack_pwr_limit):.* "BASE_ID_$1"
 attr DEVICE autocreate 1
 attr DEVICE readingList BASE_ID/version:.* version\
   BASE_ID/free_heap:.* free_heap\
   BASE_ID/uptime:.* uptime\
-  BASE_ID/device:.* device
+  BASE_ID/device:.* device\
+  BASE_ID/mqtt:.* mqtt\
+  BASE_ID/ip_addr:.* ip_addr\
+  BASE_ID/wifi_rssi:.* wifi_rssi\
+  BASE_ID/comm_start:.* comm_start\
+  BASE_ID/comm_stop:.* comm_stop\
+  BASE_ID/dis_night_comm:.* dis_night_comm\
+  BASE_ID/comm_disabled:.* comm_disabled\
+  BASE_ID/comm_dis_ts:.* comm_dis_ts\
+  BASE_ID/status:.* status\
+  BASE_ID/total/P_AC:.* P_AC\
+  BASE_ID/total/P_DC:.* P_DC\
+  BASE_ID/total/YieldDay:.* YieldDay\
+  BASE_ID/total/YieldTotal:.* YieldTotal
 attr DEVICE setStateList on off
 attr DEVICE model hoymiles_microinverter_hub_bridge
-setreading DEVICE attrTemplateVersion 20200812
+setreading DEVICE attrTemplateVersion 20230328
 { AttrTemplate_Initialize() }
+#   "setup/set_time",
+#   "setup/sync_ntp
 
 
 name:hoymiles_microinverter_inverter
 prereq:{my @devices=devspec2array('model=hoymiles_microinverter_hub_bridge');return 1 if $devices[0];return 0}
 filter:TYPE=MQTT2_DEVICE:FILTER=readingList=.*/ch0/U_AC:.*
-desc:Early version, device represents a single microinverter. Use this with "ahoy" firmware for ESP8266+nRF24L01+. Wait some time until the target device got <b>readings for channel 0</b> (AC part, refreshing your browser window may help to get them visible)!
+desc:Early version, device represents a single microinverter. Use this with "ahoy" firmware (since 0.5.99) for ESP8266+nRF24L01+. Wait some time until the target device got <b>readings for channel 0</b> (AC part, refreshing your browser window may help to get them visible)!
 order:W_061
 par:BASE_ID;BASE_ID as set on the esp (e.g. inverters). No CID;{ AttrVal('DEVICE','readingList','') =~ m,^\s*([^:\s]+)/[^/]+/ch0/U_AC:,m ? $1 : undef }
 par:INVERTERLONG_ID;INVERTERLONG_ID Base_Id plus inverter name as set in webinterface;{ AttrVal('DEVICE','readingList','') =~ m,^\s*([^:]+/[^/]+)/ch0/U_AC:,m ? $1 : undef }
@@ -5519,95 +5572,144 @@ par:INVERTER_NR;INVERTER_NR - order nr. in your setup. Note: numbering starts wi
 par:RADIO_SINGLE;inverter has just one channel;{ undef }
 par:RADIO_DOUBLE;inverter has two channels;{ undef }
 par:RADIO_QUATTRO;inverter has four channels;{ undef }
-par:ICON;ICON as set, defaults to solar;{ AttrVal('DEVICE','icon','solar') }
+par:ICON;ICON as set, defaults to measure_photovoltaic_inst;{ AttrVal('DEVICE','icon','measure_photovoltaic_inst') }
 attr DEVICE icon ICON
+{ Svn_GetFile('contrib/AttrTemplate/99_attrT_Ahoy_Utils.pm', 'FHEM/99_attrT_Ahoy_Utils.pm', sub(){ CommandReload(undef, '99_attrT_Ahoy_Utils') }) }
 deletereading -q DEVICE .*_.*
+attr DEVICE webCmd :
 option:{ RADIO_SINGLE }
-attr DEVICE readingList INVERTERLONG_ID/ch0/U_AC:.* U_AC\
+attr DEVICE devStateIcon {FHEM::attrT_Ahoy_Utils::devStateIcon($name,1)}
+attr DEVICE readingList INVERTERLONG_ID/available:.* available\
+  INVERTERLONG_ID/last_success:.* last_success\
+  INVERTERLONG_ID/ch0/U_AC:.* U_AC\
   INVERTERLONG_ID/ch0/I_AC:.* I_AC\
   INVERTERLONG_ID/ch0/P_AC:.* P_AC\
+  INVERTERLONG_ID/ch0/Q_AC:.* Q_AC\
+  INVERTERLONG_ID/ch0/F_AC:.* F_AC\
+  INVERTERLONG_ID/ch0/PF_AC:.* PF_AC\
+  INVERTERLONG_ID/ch0/P_DC:.* P_DC\
   INVERTERLONG_ID/ch0/Freq:.* Freq\
   INVERTERLONG_ID/ch0/Temp:.* temperature\
+  INVERTERLONG_ID/ch0/ALARM_MES_ID:.* ALARM_MES_ID\
+  INVERTERLONG_ID/ch0/LastAlarmCode:.* LastAlarmCode\
+  INVERTERLONG_ID/ch0/Efficiency:.* Efficiency\
   INVERTERLONG_ID/ch0/YieldDay:.* {}\
   INVERTERLONG_ID/ch0/YieldTotal:.* {}\
   INVERTERLONG_ID/ch0/FWVersion:.* FWVersion\
   INVERTERLONG_ID/ch0/FWBuildYear:.* FWBuildYear\
   INVERTERLONG_ID/ch0/FWBuildMonthDay:.* FWBuildMonthDay\
+  INVERTERLONG_ID/ch0/FWBuildHourMinute:.* FWBuildHourMinute\
   INVERTERLONG_ID/ch0/HWPartId:.* HWPartId\
-  INVERTERLONG_ID/ch0/PowerLimit:.* limit\
+  INVERTERLONG_ID/ch0/active_PowerLimit:.* limit\
   INVERTERLONG_ID/ch1/I_DC:.* I_DC\
   INVERTERLONG_ID/ch1/P_DC:.* P_DC\
-  INVERTERLONG_ID/ch1/YieldDay:.* YieldDay\
+  INVERTERLONG_ID/ch1/U_DC:.* U_DC\
+  INVERTERLONG_ID/ch1/Irradiation:.* Irradiation1\
+  INVERTERLONG_ID/ch1/YieldDay:.* YieldDay1\
   INVERTERLONG_ID/ch1/YieldTotal:.* YieldTotal
 option:{ RADIO_DOUBLE }
+attr DEVICE devStateIcon {FHEM::attrT_Ahoy_Utils::devStateIcon($name,2)}
 attr DEVICE readingList \
+  INVERTERLONG_ID/available:.* available\
+  INVERTERLONG_ID/last_success:.* last_success\
   INVERTERLONG_ID/ch0/U_AC:.* U_AC\
   INVERTERLONG_ID/ch0/I_AC:.* I_AC\
   INVERTERLONG_ID/ch0/P_AC:.* P_AC\
+  INVERTERLONG_ID/ch0/Q_AC:.* Q_AC\
+  INVERTERLONG_ID/ch0/F_AC:.* F_AC\
+  INVERTERLONG_ID/ch0/PF_AC:.* PF_AC\
+  INVERTERLONG_ID/ch0/P_DC:.* P_DC\
   INVERTERLONG_ID/ch0/Freq:.* Freq\
   INVERTERLONG_ID/ch0/Temp:.* temperature\
+  INVERTERLONG_ID/ch0/ALARM_MES_ID:.* ALARM_MES_ID\
+  INVERTERLONG_ID/ch0/LastAlarmCode:.* LastAlarmCode\
+  INVERTERLONG_ID/ch0/Efficiency:.* Efficiency\
   INVERTERLONG_ID/ch0/YieldDay:.* YieldDay\
   INVERTERLONG_ID/ch0/YieldTotal:.* YieldTotal\
   INVERTERLONG_ID/ch0/FWVersion:.* FWVersion\
   INVERTERLONG_ID/ch0/FWBuildYear:.* FWBuildYear\
   INVERTERLONG_ID/ch0/FWBuildMonthDay:.* FWBuildMonthDay\
+  INVERTERLONG_ID/ch0/FWBuildHourMinute:.* FWBuildHourMinute\
   INVERTERLONG_ID/ch0/HWPartId:.* HWPartId\
-  INVERTERLONG_ID/ch0/PowerLimit:.* limit\
+  INVERTERLONG_ID/ch0/active_PowerLimit:.* limit\
   INVERTERLONG_ID/ch1/I_DC:.* I_DC1\
   INVERTERLONG_ID/ch1/P_DC:.* P_DC1\
+  INVERTERLONG_ID/ch1/U_DC:.* U_DC1\
+  INVERTERLONG_ID/ch1/Irradiation:.* Irradiation1\
   INVERTERLONG_ID/ch1/YieldDay:.* YieldDay1\
   INVERTERLONG_ID/ch1/YieldTotal:.* YieldTotal1\
   INVERTERLONG_ID/ch2/I_DC:.* I_DC2\
   INVERTERLONG_ID/ch2/P_DC:.* P_DC2\
+  INVERTERLONG_ID/ch2/U_DC:.* U_DC2\
+  INVERTERLONG_ID/ch2/Irradiation:.* Irradiation2\
   INVERTERLONG_ID/ch2/YieldDay:.* YieldDay2\
   INVERTERLONG_ID/ch2/YieldTotal:.* YieldTotal2
 option:{ RADIO_QUATTRO }
+attr DEVICE devStateIcon {FHEM::attrT_Ahoy_Utils::devStateIcon($name)}
 attr DEVICE readingList \
+  INVERTERLONG_ID/available:.* available\
+  INVERTERLONG_ID/last_success:.* last_success\
   INVERTERLONG_ID/ch0/U_AC:.* U_AC\
   INVERTERLONG_ID/ch0/I_AC:.* I_AC\
   INVERTERLONG_ID/ch0/P_AC:.* P_AC\
+  INVERTERLONG_ID/ch0/P_AC:.* P_AC\
+  INVERTERLONG_ID/ch0/Q_AC:.* Q_AC\
+  INVERTERLONG_ID/ch0/F_AC:.* F_AC\
+  INVERTERLONG_ID/ch0/PF_AC:.* PF_AC\
+  INVERTERLONG_ID/ch0/P_DC:.* P_DC\
   INVERTERLONG_ID/ch0/Freq:.* Freq\
+  INVERTERLONG_ID/ch0/Temp:.* temperature\
+  INVERTERLONG_ID/ch0/ALARM_MES_ID:.* ALARM_MES_ID\
+  INVERTERLONG_ID/ch0/LastAlarmCode:.* LastAlarmCode\
+  INVERTERLONG_ID/ch0/Efficiency:.* Efficiency\
+  INVERTERLONG_ID/ch0/YieldDay:.* YieldDay\
   INVERTERLONG_ID/ch0/Temp:.* temperature\
   INVERTERLONG_ID/ch0/YieldDay:.* YieldDay\
   INVERTERLONG_ID/ch0/YieldTotal:.* YieldTotal\
   INVERTERLONG_ID/ch0/FWVersion:.* FWVersion\
   INVERTERLONG_ID/ch0/FWBuildYear:.* FWBuildYear\
   INVERTERLONG_ID/ch0/FWBuildMonthDay:.* FWBuildMonthDay\
+  INVERTERLONG_ID/ch0/FWBuildHourMinute:.* FWBuildHourMinute\
   INVERTERLONG_ID/ch0/HWPartId:.* HWPartId\
-  INVERTERLONG_ID/ch0/PowerLimit:.* limit\
+  INVERTERLONG_ID/ch0/active_PowerLimit:.* limit\
   INVERTERLONG_ID/ch1/I_DC:.* I_DC1\
   INVERTERLONG_ID/ch1/P_DC:.* P_DC1\
+  INVERTERLONG_ID/ch1/P_DC:.* P_DC1\
+  INVERTERLONG_ID/ch1/U_DC:.* U_DC1\
+  INVERTERLONG_ID/ch1/Irradiation:.* Irradiation1\
   INVERTERLONG_ID/ch1/YieldDay:.* YieldDay1\
   INVERTERLONG_ID/ch1/YieldTotal:.* YieldTotal1\
   INVERTERLONG_ID/ch2/I_DC:.* I_DC2\
   INVERTERLONG_ID/ch2/P_DC:.* P_DC2\
+  INVERTERLONG_ID/ch2/U_DC:.* U_DC2\
+  INVERTERLONG_ID/ch2/Irradiation:.* Irradiation2\
   INVERTERLONG_ID/ch2/YieldDay:.* YieldDay2\
   INVERTERLONG_ID/ch2/YieldTotal:.* YieldTotal2\
   INVERTERLONG_ID/ch3/I_DC:.* I_DC3\
   INVERTERLONG_ID/ch3/P_DC:.* P_DC3\
+  INVERTERLONG_ID/ch3/U_DC:.* U_DC3\
+  INVERTERLONG_ID/ch3/Irradiation:.* Irradiation3\
   INVERTERLONG_ID/ch3/YieldDay:.* YieldDay3\
   INVERTERLONG_ID/ch3/YieldTotal:.* YieldTotal3\
   INVERTERLONG_ID/ch4/I_DC:.* I_DC4\
   INVERTERLONG_ID/ch4/P_DC:.* P_DC4\
+  INVERTERLONG_ID/ch4/U_DC:.* U_DC4\
+  INVERTERLONG_ID/ch4/Irradiation:.* Irradiation4\
   INVERTERLONG_ID/ch4/YieldDay:.* YieldDay4\
   INVERTERLONG_ID/ch4/YieldTotal:.* YieldTotal4
 option:global
 attr DEVICE setList \
-  on:noArg BASE_ID/devcontrol/INVERTER_NR/0 on\
-  off:noArg BASE_ID/devcontrol/INVERTER_NR/1 off\
-  reboot:noArg BASE_ID/devcontrol/INVERTER_NR/2 restart\
-  limit BASE_ID/devcontrol/INVERTER_NR/11/0 $EVTPART1\
-  limit_pct:slider,2,1,100 BASE_ID/devcontrol/INVERTER_NR/11/1 $EVTPART1\
-  limit_persistent_abs BASE_ID/devcontrol/INVERTER_NR/11/256 $EVTPART1\
-  limit_persistent_pct:slider,2,1,100 BASE_ID/devcontrol/INVERTER_NR/11/257 $EVTPART1
+  reboot:noArg BASE_ID/ctrl/restart/INVERTER_NR\
+  limit BASE_ID/ctrl/limit/INVERTER_NR $EVTPART1W\
+  limit_pct:slider,2,1,100 BASE_ID/ctrl/limit/INVERTER_NR $EVTPART1
 attr DEVICE setStateList on off
 attr DEVICE model hoymiles_microinverter_inverter
-setreading DEVICE attrTemplateVersion 20200905
+setreading DEVICE attrTemplateVersion 20230517
 
 # contributed by tpm88, https://forum.fhem.de/index.php/topic,94495.msg1251265.html#msg1251265
 name:hoymiles_opendtu_hub_bridge
 filter:TYPE=MQTT2_DEVICE
-desc:Early version! Use this with "openDTU" firmware for ESP8266+nRF24L01+. For further details visit  https://github.com/tbnobody/OpenDTU and https://www.mikrocontroller.net/topic/525778. Resulting <b>device represents the interfacing ESP-MCU</b>, all inverters will be forwarded into own MQTT2_DEVICE instances.
+desc:Early version! Use this with "OpenDTU" firmware for ESP32+nRF24L01+. For further details visit  https://github.com/tbnobody/OpenDTU and https://www.mikrocontroller.net/topic/525778. Resulting <b>device represents the interfacing ESP-MCU</b>, all inverters will be forwarded into own MQTT2_DEVICE instances.
 order:W_07
 farewell:template has been applied successfully. Note: In case you use an external MQTT server or not exclusively use FHEM to send MQTT commands to your devices, it's highly recommended to extend the ignoreRegexp of your IO device! Could be something like "|devcontrol/[0-8]+/[0-8]+". For the single microinverters, please be patient, until the Readings concerning the AC will have been sent in.
 par:BASE_ID;Base topic as set in OpenDTU MQTT settings;{ AttrVal('DEVICE','readingList','') =~ m,([^:]+)/([^:]+)/name:, ? $1 : undef }
@@ -5630,7 +5732,7 @@ setreading DEVICE attrTemplateVersion 20221215
 name:hoymiles_opendtu_microinverter
 prereq:{my @devices=devspec2array('model=hoymiles_opendtu_hub_bridge');return 1 if $devices[0];return 0}
 filter:TYPE=MQTT2_DEVICE:FILTER=readingList=.*/status/producing:.*
-desc:Early version, device represents a single microinverter. Use this with "opendtu" firmware for ESP8266+nRF24L01+. Wait some time until the target device got <b>readings for channel 0</b> (AC part, refreshing your browser window may help to get them visible)!
+desc:Early version, device represents a single microinverter. Use this with "OpenDTU" firmware for ESP32+nRF24L01+. Wait some time until the target device got <b>readings for channel 0</b> (AC part, refreshing your browser window may help to get them visible)!
 order:W_071
 par:INVERTERLONG_ID;INVERTERLONG_ID Serieal Id of inverter as set in webinterface;{ AttrVal('DEVICE','readingList','') =~ m,^\s*([^:]+/[^/]+)/status/producing:,m ? $1 : undef }
 par:RADIO_SINGLE;inverter has just one channel;{ undef }

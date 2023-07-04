@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 01_FHEMWEB.pm 27089 2023-01-20 11:41:39Z rudolfkoenig $
+# $Id: 01_FHEMWEB.pm 27566 2023-05-14 08:52:22Z rudolfkoenig $
 package main;
 
 use strict;
@@ -7,7 +7,6 @@ use warnings;
 use TcpServerUtils;
 use HttpUtils;
 use Blocking;
-use Time::HiRes qw(gettimeofday);
 
 #########################
 # Forward declaration
@@ -48,7 +47,7 @@ sub FW_showRoom();
 sub FW_style($$);
 sub FW_submit($$@);
 sub FW_textfield($$$);
-sub FW_textfieldv($$$$);
+sub FW_textfieldv($$$$;$);
 sub FW_updateHashes();
 sub FW_visibleDevices(;$);
 sub FW_widgetOverride($$;$);
@@ -125,6 +124,7 @@ my $FW_encoding="UTF-8";
 my $FW_styleStamp=time();
 my %FW_svgData;
 my $FW_encodedByPlugin; # unicodeEncoding: data is encoded by plugin
+my $FW_needIsDay;
 
 
 #####################################
@@ -1149,7 +1149,7 @@ FW_answerCall($)
   my $gen = 'generated="'.(time()-1).'"';
   my $lp = 'longpoll="'.AttrVal($FW_wname,"longpoll",
                  $FW_use{sha} && $FW_userAgent=~m/Chrome/ ? "websocket": 1).'"';
-  $FW_id = $FW_chash->{NR} if( !$FW_id );
+  $FW_id = gettimeofday() if( !$FW_id ); #132013
 
   my $dataAttr = FW_dataAttr();
   FW_pO "</head>\n<body name='$t' fw_id='$FW_id' $gen $lp $csrf $dataAttr>";
@@ -1243,6 +1243,7 @@ FW_dataAttr()
   }
 
   return
+    ($FW_needIsDay ? 'data-isDay="'.(isday()?1:0).'"' : '') .
     addParam($FW_wname, "jsLog", 0).
     addParam($FW_wname, "confirmDelete", 1).
     addParam($FW_wname, "confirmJSError", 1).
@@ -2395,11 +2396,12 @@ FW_select($$$$$@)
 
 ##################
 sub
-FW_textfieldv($$$$)
+FW_textfieldv($$$$;$)
 {
-  my ($n, $z, $class, $value) = @_;
+  my ($n, $z, $class, $value, $place) = @_;
   my $v;
-  $v=" value='$value'" if(defined($value));
+  $v.=" value='$value'" if(defined($value));
+  $v.=" placeholder='$place'" if(defined($place));
   return if($FW_hiddenroom{input});
   my $s = "<input type='text' name='$n' class='$class' size='$z'$v ".
             "autocorrect='off' autocapitalize='off'/>";
@@ -2929,6 +2931,10 @@ FW_Attr(@)
         if(!$FW_use{sha});
   }
 
+  if($attrName eq "styleData" && $type eq "set") {
+     $FW_needIsDay = ($param[0] =~ m/dayNightActive.*true/);
+  }
+
   return $retMsg;
 }
 
@@ -2971,14 +2977,14 @@ FW_readIconsFrom($$)
       }
     }
   }
-  $FW_icons{$dir}{""} = 1; # Do not check empty directories again.
+  $FW_icons{$dir}{""} = undef; # Do not check empty directories again.
 }
 
 sub
 FW_readIcons($)
 {
   my ($dir)= @_;
-  return if($FW_icons{$dir});
+  return if(exists($FW_icons{$dir}));
   FW_readIconsFrom($dir, "");
 }
 
@@ -3037,6 +3043,16 @@ FW_dev2image($;$)
     Log3 $FW_wname, 1, "devStateIcon $name: $@" if($@);
     return ($html, $link, 1) if(defined($html) && $html =~ m/^<.*>$/s);
     $devStateIcon = $html;
+    if($devStateIcon) { # 132483
+      foreach my $l (split(" ", $devStateIcon)) {
+        my ($re, $iconName, $link) = split(":", $l, 3);
+        eval { "Hallo" =~ m/^$re$/ };    
+        if($@) {
+          Log 1, "ERROR: $name devStateIcon evaluated to $devStateIcon => $@";
+          return "ERROR, check the log";
+        }
+      }
+    }
   }
 
   if(defined($devStateIcon)) {
@@ -4193,8 +4209,8 @@ FW_log($$)
         only the deviceName or have the form deviceName.event or deviceName.*.
         This is always the case when using the <a href="#plotEditor">Plot
         editor</a>. The SVG will be reloaded for <b>any</b> event triggered by
-        this deviceName. Default is off. Note: the plotEmbed attribute must be
-        set.
+        this deviceName. Default is off.<br>
+        Note: this feature needs the plotEmbed attribute set to 1.
         </li>
         <br>
 
@@ -4799,7 +4815,7 @@ FW_log($$)
         </ul>
         Zweite Variante:<br>
         <ul>
-        Perl regexp eingeschlossen in {}. Wenn der Code undef
+        Perl Ausdruck eingeschlossen in {}. Wenn der Code undef
         zur&uuml;ckliefert, wird das Standard Icon verwendet; wird ein String
         in <> zur&uuml;ck geliefert, wird dieser als HTML String interpretiert.
         Andernfalls wird der String als devStateIcon gem&auml;&szlig; der
@@ -5052,8 +5068,9 @@ FW_log($$)
         bzw. deviceName.*. Wenn man den <a href="#plotEditor">Plot Editor</a>
         benutzt, ist das &uuml;brigens immer der Fall. Die SVG Datei wird bei
         <b>jedem</b> ausl&ouml;senden Event dieses Ger&auml;tes neu geladen.
-        Die Voreinstellung ist aus. Achtung: das plotEmbed Attribute muss
-        gesetzt sein.
+        Die Voreinstellung ist aus.<br>
+        Achtung: fuer dieses Feature muss das plotEmbed Attribute auf 1 gesetzt
+        sein.
         </li><br>
 
     <a id="FHEMWEB-attr-mainInputLength"></a>

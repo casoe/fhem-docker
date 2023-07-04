@@ -1,5 +1,5 @@
 "use strict";
-// $Id: fhemdoc_modular.js 26782 2022-12-05 12:36:32Z rudolfkoenig $
+// $Id: fhemdoc_modular.js 27337 2023-03-17 16:44:19Z rudolfkoenig $
 
 var fd_loadedHash={}, fd_loadedList=[], fd_all={}, fd_allCnt, fd_progress=0, 
     fd_lang, fd_offsets=[], fd_scrolled=0, fd_modLinks={}, csrfToken="X",
@@ -103,7 +103,7 @@ loadOneDoc(mname, lang)
     ret = ret.replace(/Keine deutsche Hilfe gefunden!<br\/>/,'');
     ret = '<div id="FD_'+mname+'">'+ret+'</div>';
     ret = ret.replace(/target="_blank"/g, '');  // revert help URL rewrite
-    ret = ret.replace(/href=".*?commandref.*?.html#/g, 'href="#');
+    ret = ret.replace(/href="[^"]*commandref[^"]*.html#/g, 'href="#');
 
     if(fd_loadedHash[mname])
       $("div#FD_"+mname).remove();

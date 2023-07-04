@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 98_SVG.pm 26539 2022-10-15 10:44:44Z rudolfkoenig $
+# $Id: 98_SVG.pm 27261 2023-02-21 09:34:09Z rudolfkoenig $
 package main;
 
 use strict;
@@ -724,12 +724,15 @@ SVG_WriteGplot($)
     my $prf = "par_${i}_";
     my @v = map {$FW_webArgs{"$prf$_"}}
             grep {defined($FW_webArgs{"$prf$_"})} (0..9);
-    my $r = @v > 1 ?
-            join(":", map { $v[$_] =~ s/:/\\x3a/g if($_<$#v); $v[$_] } 0..$#v) :
-            $v[0];
 
     my $src = $FW_webArgs{"src_$i"};
+    my $typ = $defs{$src}{TYPE};
+    my $r = @v > 1 ? 
+            join(":", map { $v[$_] =~ s/:/\\x3a/g if($_<$#v && $typ ne "DbLog");
+                            $v[$_] } 0..$#v) :
+            $v[0];
     push @rows, "#$src $r";
+
     push @plot, "\"<IN>\" using 1:2 axes ".
                 ($FW_webArgs{"axes_$i"} eq "right" ? "x1y2" : "x1y1").
                 ($FW_webArgs{"title_$i"} eq "notitle" ? " notitle" :

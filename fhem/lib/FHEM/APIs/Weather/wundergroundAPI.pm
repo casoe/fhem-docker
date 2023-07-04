@@ -1,4 +1,4 @@
-# $Id: wundergroundAPI.pm 26996 2023-01-07 21:22:20Z CoolTux $
+# $Id: wundergroundAPI.pm 27642 2023-06-02 03:11:10Z CoolTux $
 package FHEM::APIs::Weather::wundergroundAPI;
 use strict;
 use warnings;
@@ -542,6 +542,16 @@ sub _ProcessingRetrieveData {
                                         )
                                     )
                                 ),
+                                'temperature' => int(
+                                    sprintf(
+                                        "%.1f",
+                                        (
+                                              $data->{temperatureMax}[$i]
+                                            ? $data->{temperatureMax}[$i]
+                                            : 0
+                                        )
+                                    ) + 0.5
+                                ),
                                 'low_c' => int(
                                     sprintf( "%.1f",
                                         $data->{temperatureMin}[$i] ) + 0.5
@@ -733,7 +743,7 @@ sub _CallWeatherCallbackFn {
     my $self = shift;
 
     #     ## Aufruf der callbackFn
-    return ::Weather_RetrieveCallbackFn( $self->{devName} );
+    return FHEM::Core::Weather::RetrieveCallbackFn( $self->{devName} );
 }
 
 sub _ErrorHandling {

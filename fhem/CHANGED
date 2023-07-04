@@ -1,5 +1,221 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - bugfix:  93_DbRep: fix check of DbRep_afterproc, DbRep_beforeproc if should 
+                      exec PERL code
+ - bugfix : 74_AutomowerConnect: Common.pm fixed bug in WS filter
+ - feature: 74_AutomowerConnect: Common.pm Cref update, add Log after WS filter
+         add Collisions to statistics and zones if addPollingMinInterval is set
+ - feature: 74_AutomowerConnect: Common.pm, prevent DevIo from directly setting
+            STATE, prepare automowerconnect.js for use with FTUI 2
+ - bugfix:  74_AutomowerConnect: Common.pm, automowerconnect.js, fix problem
+            with empty positions array
+ - feature: 74_AutomowerConnect: Common.pm, add additional API polling
+ - feature: 76_SMAInverter: bugfix DC-Power 
+ - change:  74_AutomowerConnect: Common.pm, automowerconnect.js
+            handle userattr for API timeouts and logleveldevio, measure
+            response time, prevent some warnings, update map via FW extension,
+            reduce side effects while maually update mower data via polling
+ - feature: 72_FRITZBOX: Attribut: disableHostIPv4check
+ - bugfix:  72_FRITZBOX: Parameter Fehlerbehandlung: get fritzLog
+ - change:  10_KNX: moved KNX_scan function to KNXIO-module, see Forum #122582
+ - change:  00_KNXIO: update KNX and KNXIO-module at same time!, Forum #127792
+            added new Attr. enableKNXscan, see cmd-ref 
+ - change:  74_AutomowerConnect: Common.pm, automowerconnect.js
+            improved disabled handling, reworked use only differential data
+ - feature: OpenWeatherMapAPI: add human-readable text of daily forecast
+ - feature: 48_BlinkCamera: Support for doorbell added 
+ - change:  50_Signalbot: Minor change in event behavior and catch dbus error
+ - change:  74_AutomowerConnect: Common.pm, automowerconnect.js
+            shift subs to library, mowing path: display only way point dots
+            alternatively
+ - bugfix:  59_Weather: wunderground API fix lost temperature reading
+ - bugfix:  88_HMCCU: Fixed scaling of non numeric reading values
+ - bugfix:  74_AutomowerConnect: improved background image loading
+            Commandref: Hint to connect application key with Automower Connect
+            API in Developer Portal.
+ - bugfix:  74_AutomowerConnect: prevent division by zero, delay ws init
+            force new access token when set client_secret
+ - change:  74_AutomowerConnect: Common.pm, automowerconnect.js
+            implemented error stack and getter to show
+            show daily collisions, not calculate statistics solved
+            use only differential data to update mower path, hints at
+            https://forum.fhem.de/index.php?topic=131661.msg1277180
+ - feature:  76_SMAInverter: add new Inverter (STP X, SI x.xM-13),
+                    add String 3 for STP X
+ - feature:  76_SMAInverter: add new Readings 
+                    (GeneralOperatingStatus, OperatingStatus, BACKRELAYRELAY)
+ - change: 76_SMAInverter: changed some read call (Hybridinverter)
+ - feature: 93_DbLog: write cachefile while Server shutdown if database isn't 
+                      available, Forum: #133599
+ - change:  00_KNXIO: multiple changes, see Forum #127792
+ - change:  10_KNX: multiple changes, see Forum #122582
+ - change:  74_AutomowerConnect: Common.pm, automowerconnect.js
+            use of websocket for realtime events, more at 
+            https://forum.fhem.de/index.php?topic=131661.msg1276678#msg1276678
+ - change:  50_SSChatBot: compatibility to DSM starting with DSM 7.2 RC, 
+                          Forum: https://forum.fhem.de/index.php?msg=1276303
+ - change:  75_AutomowerConnectDevice: deleted,
+               change definition to AutomowerConnect before updating, 
+               use different application key each definition
+ - change:  50_SSChatBot: support of loglevel in HttpUtils
+ - change:  75_AutomowerConnectDevice: last revision, declared deprecated
+            will be removed soon, change definition to AutomowerConnect
+            use different application key
+ - change:  74_AutomowerConnect: Common.pm remove attr mowerActivityToHighLight
+            extend design attributes, automowerconnect.js enhanced highlighting
+ - change:  93_DbRep: attr executeBeforeProc, executeAfterProc can execute 
+                      FHEM commands as well as PERL code
+ - bugfix:  82_LGTV_WebOS: fix little typos and change version
+ - change:  93_DBLog: changed default splitting, Forum: #133537
+ - feature: AutomowerConnectFamily: set cutting height for user defined zones
+            automatically, code cleaning, some fixes
+ - feature: 72_FRITZBOX: neue Readings:
+            dect<n>_NoRingTime - Ruhezeiten des DECT Telefons <n>
+            dect<n>_NoRingWithNightSetting - Bei aktiver Klingelsperre
+              keine Ereignisse signalisieren für das DECT Telefon <n>
+ - feature: codemirror: code folding added
+ - feature: 72_FRITZBOX: verbose bei SOAP auf 4 gesetzt
+ - feature: AutomowerConnectFamily: enhanced zone statistics
+ - bugfix:  72_FRITZBOX: XML::Simple entfernt
+            wg diverese Inkompatibilitaeten
+ - change:  codemirror updated from 5.22.0 to 5.65.13
+ - bugfix:  72_FRITZBOX: weitere Stabilisierung
+                         TR064 Fehlerhandling
+ - feature: 93_DbLog: new Events FRAME_INITIALIZED, SUBPROC_INITIALIZED, 
+                      SUBPROC_DISCONNECTED, SUBPROC_STOPPED
+                      (Forum: #133403.0)
+ - feature: 48_MieleAtHome: support optional event-api
+ - bugfix:  72_FRITZBOX: weitere Stabilisierung
+ - feature: 72_FRITZBOX: neue Readings
+            box_dns_Server<n>, box_connection_Type,
+            box_last_auth_err, box_mac_Address
+ - feature: 47_OBIS: Support for Tibber Pulse with HTTP-Hack
+ - feature: AutomowerConnectFamily: add definiton of zones, possibillity to
+            highlight path section, some fixes
+ - bugfix: 72_FRITZBOX: Dumper Fehler
+ - bugfix: 72_FRITZBOX: weitere Stabilisierung
+ - feature: 72_FRITZBOX: set <name> reboot
+            Readings für Mobilfunkgeräte als Fall Back
+            attr <name> m3uFileActive <0 | 1>
+ - change:  72_FB_CALLMONITOR: Passwort Sicherheit
+ - feature: 7x_AutomowerConnect(Device): add attribute to determine
+            the days of a week when the way point stack will be reset
+ - bugfix: AutomowerConnectFamily:minor fixes and changes in cref
+ - bugfix: 72_FRITZBOX: kleinere Korrekturen
+ - bugfix: 72_FRITZBOX: TR-064 Problem (topic=133142.0)
+ - bugfix: 72_FRITZBOX: Fehler in Evaluierung RegEx
+ - change: 93_DbRep: diffValue Forum: forum.fhem.de/index.php?msg=1271853 
+ - bugfix: 98_WeekdayTimer: sunday handling in special cases
+ - bugfix: 74_AMADDevice: much more bugfixes
+ - change: Update Synology lib modules
+ - bugfix: 72_FRITZBOX: Fehlerkorrekturen: u.a. Verhalten bei disable
+               feature: attr nonblockingTimeOut <50|75|100|125>
+               feature: fritzLog zusätzlich mit blocking sub (commandRef)
+ - bugfix:  93_DbRep: fix diffValue writeToDB: Fm:#53584.msg1270905#msg1270905
+ - feature: 93_DbRep: diffValue can operate positive and negative differences, 
+                      sqlCmd can execute 'describe' statement
+ - bugfix: 72_FRITZBOX: Fehlerkorrekturen: u.a. fritzLog
+               feature: set name wakeUpCall ... / Attr disableHostIPv4check
+ - change:  93_DBLog: Plot Editor - include functions like delta-h, delta-h
+                      !! setter deleteOldDaysNbl, reduceLogNbl removed !!
+ - change:  10_KNX: syntax check on Attr., internal code improvement 
+ - change:  00_KNXIO: rework logging & duplicate msg detection
+ - bugfix: 72_FRITZBOX: Fehler bei leerem Ereignislog FB bereinigt
+ - feature: 72_FRITZBOX: Neu: box_upnp, box_upnp_control_activated
+            box_fon_logNewest
+ - feature: 72_FRITZBOX: Neu: get <name> fritzLog <hash | table> <...>
+            Umbennung von Readings
+            Forum: #topic,118150
+ - bugfix: 98_todoist: title by params 
+ - feature: 72_FRITZBOX: IP/URL um reinen DNS (ohne Domain) erweitert
+ - bugfix:  93_DbRep: fix Perl Warnings
+ - bugfix: 72_FRITZBOX: Pruefung Attr FritzBoxIP um URL erweitert
+                        Umlaute auf HTML Namen umgestellt
+                        get <name> tr064Command gehärtet
+ - bugfix:  93_DBLog: fix using https in configCheck after SVN server change
+ - change: SVN is moved to a new server (same hostname, different IP)
+ - bugfix: 72_FRITZBOX: Zeilenumbruch bei Attr entfernt
+ - bugfix: 72_FRITZBOX: Fehler bereinigt
+ - feature: 72_FRITZBOX: telnet/WEBCM entfernt
+ - bugfix: 72_FRITZBOX: Fehler bei DOCSIS ohne docsis31
+ - disbaled: 72_FRITZBOX: telnet abgeschaltet
+             Unterstützung Fhem auf FB abgeschaltet
+ - bugfix: 72_FRITZBOX: wlanGuest on|off
+ - feature: 72_FRITZBOX: FB Cable DOCSIS Informationen
+            get <name> luaInfo docsisInformation
+            Readings Box_docsis...
+ - bugfix:  72_FB_CALLMONITOR: Fehler behoben (unknown)
+ - change:  93_DbLog: new attr plotInputFieldLength, attr noNotifyDev deleted,
+                      Plot Editor improved
+ - feature: 02_RSS: device alias displayed in device overview
+ - change:  93_DbLog: adapt configCheck, new get...configCheck, commref edited
+ - change:  93_DbLog: adapt configCheck
+ - feature: 93_DbRep: Support of utf8mb4 collation, minor fixes,
+                      new setter migrateCollation
+ - feature: 93_DbLog: Support of utf8mb4 collation, minor fixes
+ - feature: 49_SSCam: Telegram send attributes: new key option => silent, 
+                      peer can be fetched from r:<reading> 
+ - feature: 72_FRITZBOX: Anzeigen aus luaInfo verschönert
+                         Fehlh. Lod-Eintrag gefixed
+ - feature:  76_SMAInverter: read PV-Power (Hybridinverter)
+ - bugfix:  76_SMAInverter: reset TODAY Counter
+ - feature: AutomowerConnect:remove error display faster after error correction
+ - change:  50_TelegramBot: new reading msgDate and corrections
+ - feature: 72_FRITZBOX: Attr. enableWanInfo -> enableWLANneighbors
+                         Attr. wlanNeighborsPrefix
+                         Fehlerkorrekturen <prefix>
+                         get <name> LuaInfo wlanNeighborhood
+                         set <name> rescanWLANneighbors
+                         Fehlerkorrekturen
+ - bugfix:  93_DbRep: fix execute DbRep_afterproc after generating readings,
+                      fix MySQL sqlSpecial 50mostFreqLogsLast2days
+ - feature: AutomowerConnect-family: error message and location on map
+            various settings for map design, mowerpath for all activities
+ - feature: 72_FRITZBOX: neue Attr. deviceInfo / enableWanInfo (s. commandRef)
+                         Fehlerkorrekturen
+ - bugfix:  72_FB_CALLMONITOR: RegEx für Suche dasOertliche angepasst
+                         uralt Fehler bei Suche in Cache behoben
+ - bugfix:  93_DbRep: fix Perl Warning 
+                      Forum: #topic,53584.msg1262032.html#msg1262032
+ - change : 74_AutomowerConnect: shift common subs to lib
+            bugfix due to last rework, more precise alingment for gps data
+ - change:  75_AutomowerConnectDevice: shift common subs to lib
+ - bugfix:  59_Weather: return missing perl modules message
+ - bugfix:  59_Weather: fix Undefined subroutine 
+ - feature: 74_AutomowerConnect: rework detail view
+             getter for MowerData and StatisticsData
+ - feature: 75_AutomowerConnectDevice: same as AutomowerConnect
+ - feature: 93_DbLog: new Get menu for a selection of getters,
+                      send Log data back to parent process, Forum:#131790
+ - change:  93_DbRep: ignore non-numeric values in diffValue and output 
+                      the erroneous record in the log
+ - feature:  74_AutomowerConnect: reduce readings, new getter for error codes 
+             and internal data, show mower path without registered image
+             add widget selectnumbers to Park and Start setter
+ - feature:  75_AutomowerConnectDevice: same as AutomowerConnect
+ - feature:  72_FB_CALLMONITOR: tellows.de integriert
+                         kleinere Korrekturen
+                         commandRef überarbeitet / ergänzt
+ - feature: 59_Weather: mod packages, add new modul path in to pre-commit
+ - bugfix:  00_KNXIO: PBP fixes
+ - bugfix:  10_KNX: fix define-parsing problem, PBP fixes
+ - bugfix:  74_AutomowerConnect: improved error handling, fix missig passwd bug
+ - feature: 74_AutomowerConnect: add disabledForIntervals, Internal MODEL
+ - feature: 75_AutomowerConnectDevice: add disabledForIntervals, Internal MODEL
+ - bugfix:  98_WeekdayTimer: !$we handling
+ - new:     74_AutomowerConnect: Control Automower + Host
+ - new:     75_AutomowerConnectDevice: Control Automower Client
+ - new:     automowerconnect.js: Frontend helper
+ - change:  93_Log2Syslog: Adapt to change Logging in fhem.pl, Forum:#131790
+ - change:  93_DbLog: Syntaxcheck of DbLogValueFn attribute, Forum:#131777
+ - change:  72_FRITZBOX: our Deklaration nach my (package global)
+ - bugfix:  49_SSCAM: substitution of placeholder [$#]TIME corrected
+ - bugfix:  93_DbRep: reduceLog -> Handling of field 'value' with NULL value,
+                      improve averageValue avgTimeWeightMean, Thanks to alkazaa 
+ - feature: 76_SMAInverter: read EnergyMeter data
+                            read SPOT_EPVTOTAL/SPOT_EPVTODAY (Hybrid Inverter)
+                            reset TODAY Counter
+ - bugfix:  76_SMAInverter: fix show FVERSION
  - bugfix:  72_FRITZBOX: FB ohne DSL/vDSL für entspr. Funkt. ausgenommen
  - feature: 75_MSG:      add RegEx support for signalbot groups
  - bugfix:  72_FRITZBOX: Fehlerbereinigungen für 4020, 4040, 4060 ohne Modem

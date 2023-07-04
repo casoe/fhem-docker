@@ -1,5 +1,5 @@
 ########################################################################################################################
-# $Id: SMUtils.pm 26946 2023-01-02 21:45:29Z DS_Starter $
+# $Id: SMUtils.pm 27415 2023-04-08 20:33:35Z DS_Starter $
 #########################################################################################################################
 #       SMUtils.pm
 #
@@ -26,16 +26,18 @@
 #########################################################################################################################
 
 # Version History
-# 1.24.2   fix evalDecodeJSON return
-# 1.24.2   fix evaljson return
-# 1.24.1   extend moduleVersion by useCTZ
-# 1.24.0   new sub encodeSpecChars
-# 1.23.1   correct version format
-# 1.23.0   new sub evalDecodeJSON
-# 1.22.0   new sub addCHANGED
-# 1.21.0   new sub timestringToTimestamp / createReadingsFromArray
-# 1.20.7   change to defined ... in sub _addSendqueueSimple
-# 1.20.6   delete $hash->{OPMODE} in checkSendRetry
+# 1.26.0  08.04.2023  add postid to _addSendqueueExtended
+# 1.25.0              new sub timestampToDateTime
+# 1.24.2              fix evalDecodeJSON return
+# 1.24.2              fix evaljson return
+# 1.24.1              extend moduleVersion by useCTZ
+# 1.24.0              new sub encodeSpecChars
+# 1.23.1              correct version format
+# 1.23.0              new sub evalDecodeJSON
+# 1.22.0              new sub addCHANGED
+# 1.21.0              new sub timestringToTimestamp / createReadingsFromArray
+# 1.20.7              change to defined ... in sub _addSendqueueSimple
+# 1.20.6              delete $hash->{OPMODE} in checkSendRetry
 
 package FHEM::SynoModules::SMUtils;                                          
 
@@ -54,7 +56,7 @@ use FHEM::SynoModules::ErrCodes qw(:all);                                 # Erro
 use GPUtils qw( GP_Import GP_Export ); 
 use Carp qw(croak carp);
 
-use version 0.77; our $VERSION = version->declare('1.24.3');
+use version 0.77; our $VERSION = version->declare('1.26.0');
 
 use Exporter ('import');
 our @EXPORT_OK = qw(
@@ -94,6 +96,7 @@ our @EXPORT_OK = qw(
                      purgeSendqueue
                      updQueueLength
                      timestringToTimestamp
+                     timestampToDateTime
                    );
                      
 our %EXPORT_TAGS = (all => [@EXPORT_OK]);
@@ -300,6 +303,31 @@ return $timestamp;
 }
 
 ###############################################################################
+#  einen Unix-Timestamp in Datum / Zeit umwandeln und als Einzelvariablen
+#  zurück geben.
+#  Das Rückgabeformat ist von der eingestellten Sprache abhängig.
+#  Bei Fehler wird "1" als $err zurück gegeben.
+###############################################################################
+sub timestampToDateTime {            
+  my $uts = shift // time;
+  $uts    = time if (!$uts); 
+  
+  my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($uts);
+  my ($date, $time);
+  
+  if(AttrVal('global', 'language', 'EN') eq "DE") {
+      $date = sprintf "%02d.%02d.%04d", $mday , $mon+=1 ,$year+=1900; 
+      $time = sprintf "%02d:%02d:%02d", $hour , $min , $sec; 
+  } 
+  else {
+      $date = sprintf "%04d-%02d-%02d", $year+=1900 , $mon+=1 , $mday; 
+      $time = sprintf "%02d:%02d:%02d", $hour , $min , $sec;
+  }
+  
+return ($date, $time);
+}
+
+###############################################################################
 #                   Readings aus Array erstellen
 #       $daref:  Referenz zum Array der zu erstellenden Readings
 #                muß Paare <Readingname>:<Wert> enthalten
@@ -392,14 +420,14 @@ sub moduleVersion {
   if($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {          # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;                                           # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{<TYPE>}{META}}
       
-      if($modules{$type}{META}{x_version}) {                                             # {x_version} nur gesetzt wenn $Id: SMUtils.pm 26946 2023-01-02 21:45:29Z DS_Starter $ im Kopf komplett! vorhanden
+      if($modules{$type}{META}{x_version}) {                                             # {x_version} nur gesetzt wenn $Id: SMUtils.pm 27415 2023-04-08 20:33:35Z DS_Starter $ im Kopf komplett! vorhanden
           $modules{$type}{META}{x_version} =~ s/1\.1\.1/$v/gx;
       } 
       else {
           $modules{$type}{META}{x_version} = $v; 
       }
       
-      FHEM::Meta::SetInternals($hash);                                                   # FVERSION wird gesetzt ( nur gesetzt wenn $Id: SMUtils.pm 26946 2023-01-02 21:45:29Z DS_Starter $ im Kopf komplett! vorhanden )
+      FHEM::Meta::SetInternals($hash);                                                   # FVERSION wird gesetzt ( nur gesetzt wenn $Id: SMUtils.pm 27415 2023-04-08 20:33:35Z DS_Starter $ im Kopf komplett! vorhanden )
   } 
   else {                                                                                 # herkömmliche Modulstruktur
       $hash->{VERSION} = $v;                                                             # Internal VERSION setzen
@@ -1682,12 +1710,14 @@ return;
 #    $text    = zu übertragender Text
 #    $fileUrl = opt. zu übertragendes File
 #    $channel = opt. Channel
+#    $postid  = opt. Post Id (zu löschen)
 #
 ######################################################################################
 sub _addSendqueueExtended {
     my $paref      = shift;
     my $name       = $paref->{name};
     my $hash       = $defs{$name};
+    
     my $opmode     = $paref->{opmode}  // do {my $err = qq{internal ERROR -> opmode is empty}; Log3($name, 1, "$name - $err"); setReadingErrorState ($hash, $err); return};
     my $method     = $paref->{method}  // do {my $err = qq{internal ERROR -> method is empty}; Log3($name, 1, "$name - $err"); setReadingErrorState ($hash, $err); return};
     my $userid     = $paref->{userid}  // do {my $err = qq{internal ERROR -> userid is empty}; Log3($name, 1, "$name - $err"); setReadingErrorState ($hash, $err); return};
@@ -1695,8 +1725,9 @@ sub _addSendqueueExtended {
     my $fileUrl    = $paref->{fileUrl};
     my $channel    = $paref->{channel};
     my $attachment = $paref->{attachment};
+    my $postid     = $paref->{postid};
     
-    if(!$text && $opmode !~ /chatUserlist|chatChannellist|apiInfo/x) {
+    if(!$text && $opmode !~ /chatUserlist|chatChannellist|apiInfo|delPostId/x) {
         my $err = qq{can't add message to queue: "text" is empty};
         Log3($name, 2, "$name - ERROR - $err");
         
@@ -1712,7 +1743,8 @@ sub _addSendqueueExtended {
         'channel'    => $channel,
         'text'       => $text,
         'attachment' => $attachment,
-        'fileUrl'    => $fileUrl,  
+        'fileUrl'    => $fileUrl, 
+        'postid'     => $postid,      
         'retryCount' => 0             
     };
               
@@ -1816,7 +1848,7 @@ sub checkSendRetry {
   my $forbidSend = q{};
   my $startfnref = \&{$startfn};
   
-  my @forbidlist = qw(100 101 103 117 120 400 401 407 408 409 410 414 418 419 420 800 900
+  my @forbidlist = qw(100 101 103 117 120 400 401 407 408 409 410 414 415 418 419 420 800 900
                       1000 1001 1002 1003 1004 1006 1007 1100 1101 1200 1300 1301 1400
                       1401 1402 1403 1404 1405 1800 1801 1802 1803 1804 1805 2000 2001    
                       2002 9002);                                                         # bei diesen Errorcodes den Queueeintrag nicht wiederholen, da dauerhafter Fehler !

@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 15_CUL_EM.pm 16293 2018-02-28 21:33:57Z rudolfkoenig $
+# $Id: 15_CUL_EM.pm 27691 2023-06-19 15:18:23Z rudolfkoenig $
 package main;
 
 use strict;
@@ -313,7 +313,7 @@ CUL_EM_Parse($$)
     daily (without the basic fee) or month (with the bassic fee included). Your
     definition should look like e.g.:
     <ul><code>
-    define emwz 1 75 900 0.15 12.50<br>
+    define emwz CUL_EM 1 75 900 0.15 12.50<br>
     </code></ul>
     and the Log looks like:
     <ul><code>
@@ -408,7 +408,7 @@ CUL_EM_Parse($$)
     generiert und angezeigt.
     Die Definition sollte in etwa so aussehen:
     <ul><code>
-    define emwz 1 75 900 0.15 12.50<br>
+    define emwz CUL_EM 1 75 900 0.15 12.50<br>
     </code></ul>
     und in der Logdatei sollten diese Zeilen erscheinen:
     <ul><code>

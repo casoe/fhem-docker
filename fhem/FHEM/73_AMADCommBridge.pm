@@ -26,7 +26,7 @@
 #  GNU General Public License for more details.
 #
 #
-# $Id: 73_AMADCommBridge.pm 20404 2019-10-24 07:10:03Z CoolTux $
+# $Id: 73_AMADCommBridge.pm 27422 2023-04-10 10:19:51Z CoolTux $
 #
 ###############################################################################
 ##
@@ -945,6 +945,9 @@ qx(cat $fhempath/FHEM/lib/74_AMADautomagicFlowset_$flowsetversion.xml);
 
         Log3( $name, 4, "AMADCommBridge ($name) - No PARTIAL buffer" );
     }
+    
+    return
+      if ( !defined($json) );
 
     Log3( $name, 5, "AMADCommBridge ($name) - Incoming data: " . $json );
 
@@ -1462,7 +1465,7 @@ sub ParseMsg($$) {
   ],
   "release_status": "stable",
   "license": "GPL_2",
-  "version": "v4.4.3",
+  "version": "v4.4.4",
   "x_flowsetversion": "4.4.3",
   "author": [
     "Marko Oldenburg <leongaultier@gmail.com>"
