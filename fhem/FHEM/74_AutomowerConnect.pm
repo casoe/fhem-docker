@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: 74_AutomowerConnect.pm 27701 2023-06-23 22:06:55Z Ellert $
+# $Id: 74_AutomowerConnect.pm 27715 2023-06-29 22:36:38Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::AutomowerConnect;
-our $cvsid = '$Id: 74_AutomowerConnect.pm 27701 2023-06-23 22:06:55Z Ellert $';
+our $cvsid = '$Id: 74_AutomowerConnect.pm 27715 2023-06-29 22:36:38Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -229,7 +229,7 @@ __END__
 
     <li><a id='AutomowerConnect-get-StatisticsData'>StatisticsData</a><br>
       <code>get &lt;name&gt; StatisticsData</code><br>
-      Lists statistics data with its hash path. The hash path can be used for generating userReadings. The trigger is <i>device_state: connected</i>.</li>
+      Lists statistics data with its hash path. The hash path can be used for generating userReadings. The trigger is e.g. <i>device_state: connected</i> or <i>mower_wsEvent: &lt;status-event|positions-event|settings-event&gt;</i>.</li>
 
     <li><a id='AutomowerConnect-get-errorCodes'>errorCodes</a><br>
       <code>get &lt;name&gt; errorCodes</code><br>
@@ -592,7 +592,7 @@ __END__
 
     <li><a id='AutomowerConnect-get-StatisticsData'>StatisticsData</a><br>
       <code>get &lt;name&gt; StatisticsData</code><br>
-      Listet statistische Daten mit ihrem Hashpfad auf. Der Hashpfad kann zur Erzeugung von userReadings genutzt werden, getriggert wird durch <i>device_state: connected</i></li>
+      Listet statistische Daten mit ihrem Hashpfad auf. Der Hashpfad kann zur Erzeugung von userReadings genutzt werden, getriggert wird z.B. durch <i>device_state: connected</i> oder <i>mower_wsEvent: &lt;status-event|positions-event|settings-event&gt;</i></li>
 
     <li><a id='AutomowerConnect-get-errorStack'>errorStack</a><br>
       <code>get &lt;name&gt; errorStack</code><br>

@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: Common.pm 27701 2023-06-23 22:06:55Z Ellert $
+# $Id: Common.pm 27717 2023-06-30 15:19:30Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::Devices::AMConnect::Common;
-my $cvsid = '$Id: Common.pm 27701 2023-06-23 22:06:55Z Ellert $';
+my $cvsid = '$Id: Common.pm 27717 2023-06-30 15:19:30Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -195,10 +195,12 @@ my $mapZonesTpl = '{
       maxLat                    => -90,
       imageHeight               => 650,
       imageWidthHeight          => '350 650',
+      map_init_delay            => 2,
       mapdesign                 => $mapAttr,
       mapZonesTpl               => $mapZonesTpl,
       posMinMax                 => "-180 90\n180 -90",
       newdatasets               => 0,
+      newcollisions             => 0,
       newzonedatasets           => 0,
       positionsTime             => 0,
       storesum                  => 0,
@@ -275,6 +277,7 @@ my $mapZonesTpl = '{
         currentDayTrack         => 0,
         currentDayArea          => 0,
         currentDayTime          => 0,
+        currentDayCollisions    => 0,
         lastDayTrack            => 0,
         lastDayArea             => 0,
         lastDaytime             => 0,
@@ -296,6 +299,7 @@ my $mapZonesTpl = '{
   ( $hash->{LIBRARY_VERSION} ) = $cvsid =~ /\.pm (.*)Z/;
   $hash->{Host} = 'ws.openapi.husqvarna.dev';
   $hash->{Port} = '443/v1';
+  $hash->{devioNoSTATE} = 1;
 
   AddExtension( $name, \&GetMap, "$type/$name/map" );
   AddExtension( $name, \&GetJson, "$type/$name/json" );
@@ -447,87 +451,82 @@ sub FW_detailFn {
   my $type = $hash->{TYPE};
   return '' if( AttrVal($name, 'disable', 0) || !AttrVal($name, 'showMap', 1) );
 
-  if ( $hash->{helper} && $hash->{helper}{mower} && $hash->{helper}{mower}{attributes} && $hash->{helper}{mower}{attributes}{positions} && @{$hash->{helper}{mower}{attributes}{positions}} > 0 ) {
+  my $img = "$FW_ME/$type/$name/map";
+  my $zoom=AttrVal( $name,"mapImageZoom", 0.7 );
+  my $backgroundcolor = AttrVal($name, 'mapBackgroundColor','');
+  my $bgstyle = $backgroundcolor ? " background-color:$backgroundcolor;" : '';
+  my $design = AttrVal( $name, 'mapDesignAttributes', $hash->{helper}{mapdesign} );
+  my @adesign = split(/\R/,$design);
+  my $mapDesign = 'data-'.join("data-",@adesign);
 
-    my $img = "$FW_ME/$type/$name/map";
-    my $zoom=AttrVal( $name,"mapImageZoom", 0.7 );
-    my $backgroundcolor = AttrVal($name, 'mapBackgroundColor','');
-    my $bgstyle = $backgroundcolor ? " background-color:$backgroundcolor;" : '';
-    my $design = AttrVal( $name, 'mapDesignAttributes', $hash->{helper}{mapdesign} );
-    my @adesign = split(/\R/,$design);
-    my $mapDesign = 'data-'.join("data-",@adesign);
+  my ($picx,$picy) = AttrVal( $name,"mapImageWidthHeight", $hash->{helper}{imageWidthHeight} ) =~ /(\d+)\s(\d+)/;
+  $picx=int($picx*$zoom);
+  $picy=int($picy*$zoom);
 
-    my ($picx,$picy) = AttrVal( $name,"mapImageWidthHeight", $hash->{helper}{imageWidthHeight} ) =~ /(\d+)\s(\d+)/;
-    $picx=int($picx*$zoom);
-    $picy=int($picy*$zoom);
+  my ( $lonlo, $latlo, $dummy, $lonru, $latru ) = AttrVal( $name,"mapImageCoordinatesToRegister",$hash->{helper}{posMinMax} ) =~ /(-?\d*\.?\d+)\s(-?\d*\.?\d+)(\R|\s)(-?\d*\.?\d+)\s(-?\d*\.?\d+)/;
+  my $mapx = $lonlo-$lonru;
+  my $mapy = $latlo-$latru;
 
-    my ( $lonlo, $latlo, $dummy, $lonru, $latru ) = AttrVal( $name,"mapImageCoordinatesToRegister",$hash->{helper}{posMinMax} ) =~ /(-?\d*\.?\d+)\s(-?\d*\.?\d+)(\R|\s)(-?\d*\.?\d+)\s(-?\d*\.?\d+)/;
-    my $mapx = $lonlo-$lonru;
-    my $mapy = $latlo-$latru;
+  AttrVal($name,'scaleToMeterXY', $hash->{helper}{scaleToMeterLongitude} . ' ' .$hash->{helper}{scaleToMeterLatitude}) =~ /(-?\d+)\s+(-?\d+)/;
+  my $scalx = ( $lonru - $lonlo ) * $1;
+  my $scaly = ( $latlo - $latru ) * $2;
 
-    AttrVal($name,'scaleToMeterXY', $hash->{helper}{scaleToMeterLongitude} . ' ' .$hash->{helper}{scaleToMeterLatitude}) =~ /(-?\d+)\s+(-?\d+)/;
-    my $scalx = ( $lonru - $lonlo ) * $1;
-    my $scaly = ( $latlo - $latru ) * $2;
+  # CHARGING STATION POSITION 
+  my $csimgpos = AttrVal( $name,"chargingStationImagePosition","right" );
+  my $xm = $hash->{helper}{chargingStation}{longitude} // 10.1165;
+  my $ym = $hash->{helper}{chargingStation}{latitude} // 51.28;
 
-    # CHARGING STATION POSITION 
-    my $csimgpos = AttrVal( $name,"chargingStationImagePosition","right" );
-    my $xm = $hash->{helper}{chargingStation}{longitude} // 10.1165;
-    my $ym = $hash->{helper}{chargingStation}{latitude} // 51.28;
+  my ($cslo,$csla) = AttrVal( $name,"chargingStationCoordinates","$xm $ym" ) =~  /(-?\d*\.?\d+)\s(-?\d*\.?\d+)/;
+  my $cslon = int(($lonlo-$cslo) * $picx / $mapx);
+  my $cslat = int(($latlo-$csla) * $picy / $mapy);
+  my $csdata = 'data-csimgpos="'.$csimgpos.'" data-cslon="'.$cslon.'" data-cslat="'.$cslat.'"';
 
-    my ($cslo,$csla) = AttrVal( $name,"chargingStationCoordinates","$xm $ym" ) =~  /(-?\d*\.?\d+)\s(-?\d*\.?\d+)/;
-    my $cslon = int(($lonlo-$cslo) * $picx / $mapx);
-    my $cslat = int(($latlo-$csla) * $picy / $mapy);
-    my $csdata = 'data-csimgpos="'.$csimgpos.'" data-cslon="'.$cslon.'" data-cslat="'.$cslat.'"';
-
-    # AREA LIMITS
-    my $arealimits = AttrVal($name,'mowingAreaLimits','');
-    my $limi = '';
-    if ($arealimits) {
-      my @lixy = (split(/\s|,|\R$/,$arealimits));
-      $limi = int( ( $lonlo - $lixy[ 0 ] ) * $picx / $mapx ) . "," . int( ( $latlo - $lixy[ 1 ] ) * $picy / $mapy );
-      for (my $i=2;$i<@lixy;$i+=2){
-        $limi .= ",".int( ( $lonlo - $lixy[ $i ] ) * $picx / $mapx).",".int( ( $latlo-$lixy[$i+1] ) * $picy / $mapy);
-      }
+  # AREA LIMITS
+  my $arealimits = AttrVal($name,'mowingAreaLimits','');
+  my $limi = '';
+  if ($arealimits) {
+    my @lixy = (split(/\s|,|\R$/,$arealimits));
+    $limi = int( ( $lonlo - $lixy[ 0 ] ) * $picx / $mapx ) . "," . int( ( $latlo - $lixy[ 1 ] ) * $picy / $mapy );
+    for (my $i=2;$i<@lixy;$i+=2){
+      $limi .= ",".int( ( $lonlo - $lixy[ $i ] ) * $picx / $mapx).",".int( ( $latlo-$lixy[$i+1] ) * $picy / $mapy);
     }
-    $limi = 'data-areaLimitsPath="'.$limi.'"';
-
-    # PROPERTY LIMITS
-    my $propertylimits = AttrVal($name,'propertyLimits','');
-    my $propli = '';
-    if ($propertylimits) {
-      my @propxy = (split(/\s|,|\R$/,$propertylimits));
-      $propli = int(($lonlo-$propxy[0]) * $picx / $mapx).",".int(($latlo-$propxy[1]) * $picy / $mapy);
-      for (my $i=2;$i<@propxy;$i+=2){
-        $propli .= ",".int(($lonlo-$propxy[$i]) * $picx / $mapx).",".int(($latlo-$propxy[$i+1]) * $picy / $mapy);
-      }
-    }
-    $propli = 'data-propertyLimitsPath="'.$propli.'"';
-
-    my $ret = "";
-    $ret .= "<style>
-    .${type}_${name}_div{padding:0px !important;
-      $bgstyle background-image: url('$img');
-      background-size: ${picx}px ${picy}px;
-      background-repeat: no-repeat; 
-      width: ${picx}px; height: ${picy}px;
-      position: relative;}
-    .${type}_${name}_canvas_0{
-      position: absolute; left: 0; top: 0; z-index: 0;}
-    .${type}_${name}_canvas_1{
-      position: absolute; left: 0; top: 0; z-index: 1;}
-    </style>";
-    $ret .= "<div id='${type}_${name}_div' class='${type}_${name}_div' $mapDesign $csdata $limi $propli >";
-    $ret .= "<canvas id='${type}_${name}_canvas_0' class='${type}_${name}_canvas_0' width='$picx' height='$picy' ></canvas>";
-    $ret .= "<canvas id='${type}_${name}_canvas_1' class='${type}_${name}_canvas_1' width='$picx' height='$picy' ></canvas>";
-    $ret .= "</div>";
-    $hash->{helper}{detailFnFirst} = 1;
-    InternalTimer( gettimeofday() + 2, \&FW_detailFn_Update, $hash, 0 );
-    
-    return $ret;
-
   }
+  $limi = 'data-areaLimitsPath="'.$limi.'"';
 
-  return '';
+  # PROPERTY LIMITS
+  my $propertylimits = AttrVal($name,'propertyLimits','');
+  my $propli = '';
+  if ($propertylimits) {
+    my @propxy = (split(/\s|,|\R$/,$propertylimits));
+    $propli = int(($lonlo-$propxy[0]) * $picx / $mapx).",".int(($latlo-$propxy[1]) * $picy / $mapy);
+    for (my $i=2;$i<@propxy;$i+=2){
+      $propli .= ",".int(($lonlo-$propxy[$i]) * $picx / $mapx).",".int(($latlo-$propxy[$i+1]) * $picy / $mapy);
+    }
+  }
+  $propli = 'data-propertyLimitsPath="'.$propli.'"';
+
+  my $ret = "";
+  $ret .= "<style>
+  .${type}_${name}_div{padding:0px !important;
+    $bgstyle background-image: url('$img');
+    background-size: ${picx}px ${picy}px;
+    background-repeat: no-repeat; 
+    width: ${picx}px; height: ${picy}px;
+    position: relative;}
+  .${type}_${name}_canvas_0{
+    position: absolute; left: 0; top: 0; z-index: 0;}
+  .${type}_${name}_canvas_1{
+    position: absolute; left: 0; top: 0; z-index: 1;}
+  </style>";
+  $ret .= "<div id='${type}_${name}_div' class='${type}_${name}_div' $mapDesign $csdata $limi $propli >";
+  $ret .= "<canvas id='${type}_${name}_canvas_0' class='${type}_${name}_canvas_0' width='$picx' height='$picy' ></canvas>";
+  $ret .= "<canvas id='${type}_${name}_canvas_1' class='${type}_${name}_canvas_1' width='$picx' height='$picy' ></canvas>";
+  $ret .= "</div>";
+  $hash->{helper}{detailFnFirst} = 1;
+  my $mid = $hash->{helper}{map_init_delay};
+  InternalTimer( gettimeofday() + $mid, \&FW_detailFn_Update, $hash, 0 );
+
+  return $ret;
 
 }
 
@@ -571,28 +570,12 @@ sub FW_detailFn_Update {
 
   }
 
-  # MOWING PATH OLD
-  # my $posxy = '';
-
-  # if ( @pos > 0 ) {
-
-    # $posxy = int( ( $lonlo-$pos[ 0 ]{longitude} ) * $picx / $mapx ).",".int( ( $latlo-$pos[ 0 ]{latitude} ) * $picy / $mapy ).",'".$pos[ 0 ]{act}."'";
-
-    # for ( my $i = 1; $i < @pos; $i++ ){
-
-      # $posxy .= ",".int( ( $lonlo - $pos[ $i ]{longitude} ) * $picx / $mapx ).",".int( ( $latlo - $pos[ $i ]{latitude} ) * $picy / $mapy ).",'".$pos[ $i ]{act}."'";
-
-    # }
-
-  # }
-
   # ERROR MESSAGE
   my $errdesc = $hash->{helper}{lasterror}{errordesc};
   my $errdate = $hash->{helper}{lasterror}{errordate};
   my $errstate = $hash->{helper}{lasterror}{errorstate};
 
   # ERROR PATH
-
   my @poserrxy = ( int( ( $lonru-$lonlo ) / 2 * $picx / $mapx ), int( ( $latlo - $latru ) / 2 * $picy / $mapy ) );
 
   if ( @poserr > 0 ) {
@@ -605,25 +588,6 @@ sub FW_detailFn_Update {
     }
 
   }
-
-  # ERROR PATH OLD
-  # my $poserrxy = int( ( $lonru-$lonlo ) / 2 * $picx / $mapx ).",".int( ( $latlo - $latru ) / 2 * $picy / $mapy );;
-
-  # if ( @poserr > 0 ) {
-
-    # $poserrxy = int( ( $lonlo - $poserr[ 0 ]{longitude} ) * $picx / $mapx ) . "," . int( ( $latlo - $poserr[ 0 ]{latitude} ) * $picy / $mapy );
-
-    # for ( my $i = 1; $i < @poserr; $i++ ){
-      # $poserrxy .= ",".int( ( $lonlo - $poserr[ $i ]{longitude} ) * $picx / $mapx) . "," . int( ( $latlo - $poserr[ $i ]{latitude} ) * $picy / $mapy );
-    # }
-
-  # }
-
-  # Log3 $name, 1, "AutomowerConnectUpdateDetail ( '$name', '$type', $detailFnFirst, $picx, $picy, $scalx, [ '$errdesc', '$errdate' ], [ $posxy ], [ $poserrxy ] )";
-
-  # map { 
-    # ::FW_directNotify("#FHEMWEB:$_", "AutomowerConnectUpdateDetail ( '$name', '$type', $detailFnFirst, $picx, $picy, $scalx, [ '$errdesc', '$errdate', '$errstate' ], [ $posxy ], [ $poserrxy ] )","");
-  # } devspec2array("TYPE=FHEMWEB");
 
   # prepare hash for json map update
   $hash->{helper}{mapupdate}{name} = $name;
@@ -1403,7 +1367,7 @@ sub Attr {
 
     if( $cmd eq "set" ) {
 
-      return "$iam $attrVal is invalid, allowed time in seconds >= 0." unless( $attrVal >= 0 ) );
+      return "$iam $attrVal is invalid, allowed time in seconds >= 0." unless( $attrVal >= 0 );
       $hash->{helper}{additional_polling} = $attrVal;
       Log3 $name, 4, "$iam $cmd $attrName $attrVal";
 
@@ -1796,6 +1760,7 @@ sub ZoneHandling {
             $hash->{helper}{mapZones}{$_}{currentDayAreaPct} = ( $sumDayArea ? sprintf( "%.0f", $hash->{helper}{mapZones}{$_}{zoneLength} / $sumDayArea * 100 ) : 0 );
       } @zonekeys;
 
+      $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{currentDayCollisions} += $hash->{helper}{newcollisions};
       $hash->{helper}{newzonedatasets} = $cnt;
 
 }
@@ -1861,6 +1826,8 @@ sub AreaStatistics {
   my $lsum = calcPathLength( $hash, 0, $i );
   my $asum = 0;
   my $atim = 0;
+  my $acol = $hash->{helper}{mower}{attributes}{statistics}{numberOfCollisions} - $hash->{helper}{mowerold}{attributes}{statistics}{numberOfCollisions};
+  $hash->{helper}{newcollisions} = $acol - $hash->{helper}{statistics}{currentDayCollisions};
 
   $asum = $lsum * AttrVal($name,'mowerCuttingWidth',0.24);
   $atim = $i*30; # seconds
@@ -1870,6 +1837,7 @@ sub AreaStatistics {
   $hash->{helper}{statistics}{currentDayTrack} += $lsum;
   $hash->{helper}{statistics}{currentDayArea} += $asum;
   $hash->{helper}{statistics}{currentDayTime} += $atim;
+  $hash->{helper}{statistics}{currentDayCollisions} = $acol;
 
   return  undef;
 }
@@ -2057,7 +2025,7 @@ sub fillReadings {
   readingsBulkUpdateIfChanged($hash, "planner_nextStart", $tstamp ? $timestamp : '-' );
 
   $pref = 'statistics';
-  my $noCol = $hash->{helper}{mower}{attributes}{$pref}{numberOfCollisions} - $hash->{helper}{mowerold}{attributes}{$pref}{numberOfCollisions};
+  my $noCol = $hash->{helper}{statistics}{currentDayCollisions};
   readingsBulkUpdateIfChanged( $hash, $pref."_numberOfCollisions", '(' . $noCol . '/' . $hash->{helper}{statistics}{lastDayCollisions} . '/' . $hash->{helper}{mower}{attributes}{$pref}{numberOfCollisions} . ')' );
   readingsBulkUpdateIfChanged( $hash, $pref."_newGeoDataSets", $hash->{helper}{newdatasets} );
   $pref = 'settings';
@@ -2157,6 +2125,7 @@ sub listStatisticsData {
   my ( $hash ) = @_;
   if ( $::init_done && $hash->{helper}{statistics} ) {
 
+    my $additional_polling = $hash->{helper}{additional_polling};
     my $name = $hash->{NAME};
     my $cnt = 0;
     my $ret = '';
@@ -2164,92 +2133,103 @@ sub listStatisticsData {
     $ret .= '<caption><b>Statistics Data</b></caption><tbody>'; 
 
     $ret .= '<tr class="col_header"><td> Hash Path </td><td> Value </td><td> Unit </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>numberOfChargingCycles</b>} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{numberOfChargingCycles} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>numberOfCollisions</b>} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{numberOfCollisions} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalChargingTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalChargingTime} / 3600 ) . ' </td><td> h </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalCuttingTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalCuttingTime} / 3600 ) . ' </td><td> h </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalRunningTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalRunningTime} / 3600 ) . '<sup>1</sup> </td><td> h </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalSearchingTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalSearchingTime} / 3600 ) . ' </td><td> h </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>numberOfChargingCycles</b>} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{numberOfChargingCycles} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>numberOfCollisions</b>} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{numberOfCollisions} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalChargingTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalChargingTime} / 3600 ) . ' </td><td> h </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalCuttingTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalCuttingTime} / 3600 ) . ' </td><td> h </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalRunningTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalRunningTime} / 3600 ) . '<sup>1</sup> </td><td> h </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalSearchingTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalSearchingTime} / 3600 ) . ' </td><td> h </td></tr>';
 
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentDayTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentDayTrack} ) . ' </td><td> m </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentDayArea</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentDayArea} ) . ' </td><td> qm </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentDayTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentDayTime} ) . ' </td><td> s </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> <b>calculated speed</b> &emsp;</td><td> ' . sprintf( "%.2f", $hash->{helper}{statistics}{currentDayTrack} / $hash->{helper}{statistics}{currentDayTime} ) . ' </td><td> m/s </td></tr>' if ( $hash->{helper}{statistics}{currentDayTime} );
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentDayTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentDayTrack} ) . ' </td><td> m </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentDayArea</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentDayArea} ) . ' </td><td> qm </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentDayTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentDayTime} ) . ' </td><td> s </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentDayCollisions</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentDayCollisions} ) . ' </td><td> </td></tr>' if ( $additional_polling );
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> <b>calculated speed</b> &emsp;</td><td> ' . sprintf( "%.2f", $hash->{helper}{statistics}{currentDayTrack} / $hash->{helper}{statistics}{currentDayTime} ) . ' </td><td> m/s </td></tr>' if ( $hash->{helper}{statistics}{currentDayTime} );
 
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastDayTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastDayTrack} ) . ' </td><td> m </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastDayArea</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastDayArea} ) . ' </td><td> qm </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastDayTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastDayTime} ) . ' </td><td> s </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastDayCollisions</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastDayCollisions} ) . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> <b>last day calculated speed</b> &emsp;</td><td> ' . sprintf( "%.2f", $hash->{helper}{statistics}{lastDayTrack} / $hash->{helper}{statistics}{lastDayTime} ) . ' </td><td> m/s </td></tr>' if ( $hash->{helper}{statistics}{lastDayTime} );
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastDayTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastDayTrack} ) . ' </td><td> m </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastDayArea</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastDayArea} ) . ' </td><td> qm </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastDayTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastDayTime} ) . ' </td><td> s </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastDayCollisions</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastDayCollisions} ) . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> <b>last day calculated speed</b> &emsp;</td><td> ' . sprintf( "%.2f", $hash->{helper}{statistics}{lastDayTrack} / $hash->{helper}{statistics}{lastDayTime} ) . ' </td><td> m/s </td></tr>' if ( $hash->{helper}{statistics}{lastDayTime} );
 
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentWeekTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentWeekTrack} ) . ' </td><td> m </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentWeekArea</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentWeekArea} ) . ' </td><td> qm </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentWeekTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentWeekTime} ) . ' </td><td> s </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastWeekTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastWeekTrack} ) . ' </td><td> m </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastWeekArea</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastWeekArea} ) . ' </td><td> qm </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastWeekTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastWeekTime} ) . ' </td><td> s </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentWeekTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentWeekTrack} ) . ' </td><td> m </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentWeekArea</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentWeekArea} ) . ' </td><td> qm </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentWeekTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentWeekTime} ) . ' </td><td> s </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastWeekTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastWeekTrack} ) . ' </td><td> m </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastWeekArea</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastWeekArea} ) . ' </td><td> qm </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastWeekTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastWeekTime} ) . ' </td><td> s </td></tr>';
 
     if ( AttrVal($name, 'mapZones', 0) && defined( $hash->{helper}{mapZones} ) ) {
 
-    my @zonekeys = sort (keys %{$hash->{helper}{mapZones}});
+      my @zonekeys = sort (keys %{$hash->{helper}{mapZones}});
 
-    for ( @zonekeys ) {
+      if ( $additional_polling ) {
 
-      $cnt++;
-      $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentDayCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentDayCntPct} ? $hash->{helper}{mapZones}{$_}{currentDayCntPct} : '' ) . ' </td><td> % </td></tr>';
+        for ( @zonekeys ) {
+
+          $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentDayCollisions</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentDayCollisions} ? $hash->{helper}{mapZones}{$_}{currentDayCollisions} : '' ) . ' </td><td>  </td></tr>';
+
+        }
+
+      }
+
+      for ( @zonekeys ) {
+
+        
+        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentDayCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentDayCntPct} ? $hash->{helper}{mapZones}{$_}{currentDayCntPct} : '' ) . ' </td><td> % </td></tr>';
+
+      }
+
+      for ( @zonekeys ) {
+
+        
+        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastDayCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastDayCntPct} ? $hash->{helper}{mapZones}{$_}{lastDayCntPct} : '' ) . ' </td><td> % </td></tr>';
+
+      }
+
+      for ( @zonekeys ) {
+
+        
+        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentWeekCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentWeekCntPct} ? $hash->{helper}{mapZones}{$_}{currentWeekCntPct} : '' ) . ' </td><td> % </td></tr>';
+
+      }
+
+      for ( @zonekeys ) {
+
+        
+        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastWeekCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastWeekCntPct} ? $hash->{helper}{mapZones}{$_}{lastWeekCntPct} : '' ). ' </td><td> % </td></tr>';
+
+      }
+
+      for ( @zonekeys ) {
+
+        
+        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentDayAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentDayAreaPct} ? $hash->{helper}{mapZones}{$_}{currentDayAreaPct} : '' ) . ' </td><td> % </td></tr>';
+
+      }
+
+      for ( @zonekeys ) {
+
+        
+        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastDayAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastDayAreaPct} ? $hash->{helper}{mapZones}{$_}{lastDayAreaPct} : '' ) . ' </td><td> % </td></tr>';
+
+      }
+
+      for ( @zonekeys ) {
+
+        
+        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentWeekAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentWeekAreaPct} ? $hash->{helper}{mapZones}{$_}{currentWeekAreaPct} : '' ) . ' </td><td> % </td></tr>';
+
+      }
+
+      for ( @zonekeys ) {
+
+        
+        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastWeekAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastWeekAreaPct} ? $hash->{helper}{mapZones}{$_}{lastWeekAreaPct} : '' ). ' </td><td> % </td></tr>';
+
+      }
 
     }
-
-    for ( @zonekeys ) {
-
-      $cnt++;
-      $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastDayCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastDayCntPct} ? $hash->{helper}{mapZones}{$_}{lastDayCntPct} : '' ) . ' </td><td> % </td></tr>';
-
-    }
-
-    for ( @zonekeys ) {
-
-      $cnt++;
-      $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentWeekCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentWeekCntPct} ? $hash->{helper}{mapZones}{$_}{currentWeekCntPct} : '' ) . ' </td><td> % </td></tr>';
-
-    }
-
-    for ( @zonekeys ) {
-
-      $cnt++;
-      $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastWeekCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastWeekCntPct} ? $hash->{helper}{mapZones}{$_}{lastWeekCntPct} : '' ). ' </td><td> % </td></tr>';
-
-    }
-
-    for ( @zonekeys ) {
-
-      $cnt++;
-      $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentDayAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentDayAreaPct} ? $hash->{helper}{mapZones}{$_}{currentDayAreaPct} : '' ) . ' </td><td> % </td></tr>';
-
-    }
-
-    for ( @zonekeys ) {
-
-      $cnt++;
-      $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastDayAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastDayAreaPct} ? $hash->{helper}{mapZones}{$_}{lastDayAreaPct} : '' ) . ' </td><td> % </td></tr>';
-
-    }
-
-    for ( @zonekeys ) {
-
-      $cnt++;
-      $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentWeekAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentWeekAreaPct} ? $hash->{helper}{mapZones}{$_}{currentWeekAreaPct} : '' ) . ' </td><td> % </td></tr>';
-
-    }
-
-    for ( @zonekeys ) {
-
-      $cnt++;
-      $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastWeekAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastWeekAreaPct} ? $hash->{helper}{mapZones}{$_}{lastWeekAreaPct} : '' ). ' </td><td> % </td></tr>';
-
-    }
-
-  }
 
     $ret .= '</tbody></table>';
     $ret .= '<p><sup>1</sup> totalRunningTime = totalCuttingTime + totalSearchingTime';
@@ -2276,37 +2256,37 @@ sub listMowerData {
     $ret .= '<caption><b>Mower Data</b></caption><tbody>'; 
 
     $ret .= '<tr class="col_header"><td> Hash Path </td><td> Value </td><td> Unit </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{type} &emsp;</td><td> ' . $hash->{helper}{mower}{type} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{id} &emsp;</td><td> ' . $hash->{helper}{mower}{id} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{system}{name} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{system}{name} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{system}{model} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{system}{model} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{system}{serialNumber} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{system}{serialNumber} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{battery}{batteryPercent} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{battery}{batteryPercent} . ' </td><td> % </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{mower}{mode} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{mower}{mode} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{mower}{activity} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{mower}{activity} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{mower}{state} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{mower}{state} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{mower}{errorCode} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{mower}{errorCode} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{mower}{errorCodeTimestamp} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{mower}{errorCodeTimestamp} . ' </td><td> ms </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{type} &emsp;</td><td> ' . $hash->{helper}{mower}{type} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{id} &emsp;</td><td> ' . $hash->{helper}{mower}{id} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{system}{name} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{system}{name} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{system}{model} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{system}{model} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{system}{serialNumber} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{system}{serialNumber} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{battery}{batteryPercent} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{battery}{batteryPercent} . ' </td><td> % </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{mower}{mode} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{mower}{mode} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{mower}{activity} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{mower}{activity} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{mower}{state} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{mower}{state} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{mower}{errorCode} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{mower}{errorCode} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{mower}{errorCodeTimestamp} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{mower}{errorCodeTimestamp} . ' </td><td> ms </td></tr>';
 
     my $calendarjson = eval { JSON::XS->new->pretty(1)->encode ($hash->{helper}{mower}{attributes}{calendar}{tasks}) };
 
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td style="vertical-align:middle;" > $hash->{helper}{mower}{attributes}{calendar}{tasks} &emsp;</td><td colspan="2" style="word-wrap:break-word; max-width:34em;" > ' . ($@ ? $@ : $calendarjson) . ' </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{planner}{nextStartTimestamp} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{planner}{nextStartTimestamp} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{planner}{override}{action} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{planner}{override}{action} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{planner}{restrictedReason} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{planner}{restrictedReason} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{metadata}{connected} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{metadata}{connected} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} . ' </td><td> ms </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{positions}[0]{longitude} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{positions}[0]{longitude} . ' </td><td> decimal degree </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{positions}[0]{latitude} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{positions}[0]{latitude} . ' </td><td> decimal degree </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{settings}{cuttingHeight} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{settings}{cuttingHeight} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{settings}{headlight}{mode} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{settings}{headlight}{mode} . ' </td><td>  </td></tr>';
-  #  $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{cuttingBladeUsageTime} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{cuttingBladeUsageTime} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{numberOfChargingCycles} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{numberOfChargingCycles} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{numberOfCollisions} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{numberOfCollisions} . ' </td><td>  </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{totalChargingTime} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{totalChargingTime} . ' </td><td> s </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{totalCuttingTime} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{totalCuttingTime} . ' </td><td> s </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{totalRunningTime} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{totalRunningTime} . '<sup>1</sup> </td><td> s </td></tr>';
-    $cnt++;$ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{totalSearchingTime} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{totalSearchingTime} . ' </td><td> s </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td style="vertical-align:middle;" > $hash->{helper}{mower}{attributes}{calendar}{tasks} &emsp;</td><td colspan="2" style="word-wrap:break-word; max-width:34em;" > ' . ($@ ? $@ : $calendarjson) . ' </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{planner}{nextStartTimestamp} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{planner}{nextStartTimestamp} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{planner}{override}{action} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{planner}{override}{action} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{planner}{restrictedReason} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{planner}{restrictedReason} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{metadata}{connected} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{metadata}{connected} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} . ' </td><td> ms </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{positions}[0]{longitude} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{positions}[0]{longitude} . ' </td><td> decimal degree </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{positions}[0]{latitude} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{positions}[0]{latitude} . ' </td><td> decimal degree </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{settings}{cuttingHeight} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{settings}{cuttingHeight} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{settings}{headlight}{mode} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{settings}{headlight}{mode} . ' </td><td>  </td></tr>';
+  #  $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{cuttingBladeUsageTime} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{cuttingBladeUsageTime} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{numberOfChargingCycles} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{numberOfChargingCycles} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{numberOfCollisions} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{numberOfCollisions} . ' </td><td>  </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{totalChargingTime} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{totalChargingTime} . ' </td><td> s </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{totalCuttingTime} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{totalCuttingTime} . ' </td><td> s </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{totalRunningTime} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{totalRunningTime} . '<sup>1</sup> </td><td> s </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{totalSearchingTime} &emsp;</td><td> ' . $hash->{helper}{mower}{attributes}{statistics}{totalSearchingTime} . ' </td><td> s </td></tr>';
 
     $ret .= '</tbody></table>';
     $ret .= '<p><sup>1</sup> totalRunningTime = totalCuttingTime + totalSearchingTime';
@@ -2336,7 +2316,7 @@ sub listErrorStack {
 
     for ( my $i = 0; $i < @{ $hash->{helper}{errorstack} }; $i++ ) {
 
-      $cnt++; $ret .= '<tr class="column '.( $cnt % 2 ? 'odd' : 'even' ).'"><td> ' . $hash->{helper}{errorstack}[$i]{errordate} . ' </td><td> ' . $hash->{helper}{errorstack}[$i]{errorstate} . ' - ' . $hash->{helper}{errorstack}[$i]{errordesc} . ' </td><td> ' . $hash->{helper}{errorstack}[$i]{errorzone} . ' </td><td> ' . $hash->{helper}{errorstack}[$i]{positions}[0]{longitude} . ' / ' . $hash->{helper}{errorstack}[$i]{positions}[0]{latitude} . ' </td></tr>';
+      $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> ' . $hash->{helper}{errorstack}[$i]{errordate} . ' </td><td> ' . $hash->{helper}{errorstack}[$i]{errorstate} . ' - ' . $hash->{helper}{errorstack}[$i]{errordesc} . ' </td><td> ' . $hash->{helper}{errorstack}[$i]{errorzone} . ' </td><td> ' . $hash->{helper}{errorstack}[$i]{positions}[0]{longitude} . ' / ' . $hash->{helper}{errorstack}[$i]{positions}[0]{latitude} . ' </td></tr>';
 
     }
 
@@ -2392,7 +2372,7 @@ sub listInternalData {
     $ret .= '<tr class="col_header"><td> Used For Activities&emsp;</td><td> Stack Name&emsp;</td><td> Current Size&emsp;</td><td> Max Size&emsp;</td></tr>';
     $ret .= '<tr class="column odd"><td>PARKED_IN_CS, CHARGING&emsp;</td><td> cspos&emsp;</td><td> ' . $csnr . ' </td><td> ' . $csnrmax . '&emsp;</td></tr>';
     $ret .= '<tr class="column even"><td>ALL&emsp;</td><td> areapos&emsp;</td><td> ' . $arnr . ' </td><td> ' . $arnrmax . '&emsp;</td></tr>';
-    $ret .= '<tr class="column even"><td>NOT_APPLICABLE with error time stamp&emsp;</td><td> lasterror/positions&emsp;</td><td> ' . $ernr . ' </td><td> -&emsp;</td></tr>';
+    $ret .= '<tr class="column odd"><td>NOT_APPLICABLE with error time stamp&emsp;</td><td> lasterror/positions&emsp;</td><td> ' . $ernr . ' </td><td> -&emsp;</td></tr>';
 
     $ret .= '</tbody></table>';
     if ( $hash->{TYPE} eq 'AutomowerConnect' ) {
@@ -2400,18 +2380,18 @@ sub listInternalData {
       $ret .= '<p><table class="block wide">';
       $ret .= '<caption><b>Rest API Data</b></caption><tbody>'; 
 
-      $cnt++;$ret .= '<tr class="column ' . ( $cnt % 2 ? "odd" : "even" ) . '"><td> Link to APIs</td><td><a target="_blank" href="https://developer.husqvarnagroup.cloud/">Husqvarna Developer</a></td></tr>';
-      $cnt++;$ret .= '<tr class="column ' . ( $cnt % 2 ? "odd" : "even" ) . '"><td> Authentification API URL</td><td>' . AUTHURL . '</td></tr>';
-      $cnt++;$ret .= '<tr class="column ' . ( $cnt % 2 ? "odd" : "even" ) . '"><td> Automower Connect API URL</td><td>' . APIURL . '</td></tr>';
-      $cnt++;$ret .= '<tr class="column ' . ( $cnt % 2 ? "odd" : "even" ) . '"><td> Websocket IO Device name</td><td>' . WSDEVICENAME . '</td></tr>';
-      $cnt++;$ret .= '<tr class="column ' . ( $cnt % 2 ? "odd" : "even" ) . '"><td> Client-Id</td><td>' . $hash->{helper}{client_id} . '</td></tr>';
-      $cnt++;$ret .= '<tr class="column ' . ( $cnt % 2 ? "odd" : "even" ) . '"><td> Grant-Type</td><td>' . $hash->{helper}{grant_type} . '</td></tr>';
-      $cnt++;$ret .= '<tr class="column ' . ( $cnt % 2 ? "odd" : "even" ) . '"><td> User-Id</td><td>' . ReadingsVal($name, '.user_id', '-') . '</td></tr>';
-      $cnt++;$ret .= '<tr class="column ' . ( $cnt % 2 ? "odd" : "even" ) . '"><td> Provider</td><td>' . ReadingsVal($name, '.provider', '-') . '</td></tr>';
-      $cnt++;$ret .= '<tr class="column ' . ( $cnt % 2 ? "odd" : "even" ) . '"><td> Scope</td><td>' . ReadingsVal($name, '.scope', '-') . '</td></tr>';
-      $cnt++;$ret .= '<tr class="column ' . ( $cnt % 2 ? "odd" : "even" ) . '"><td> Token Type</td><td>' . ReadingsVal($name, '.token_type', '-') . '</td></tr>';
-      $cnt++;$ret .= '<tr class="column ' . ( $cnt % 2 ? "odd" : "even" ) . '"><td> Token Expires</td><td> ' . FmtDateTime( ReadingsVal($name, '.expires', '0') ) . '</td></tr>';
-      $cnt++;$ret .= '<tr class="column ' . ( $cnt % 2 ? "odd" : "even" ) . '"><td> Access Token</td><td style="word-wrap:break-word; max-width:40em">' . ReadingsVal($name, '.access_token', '0') . '</td></tr>';
+      $ret .= '<tr class="column ' . ( $cnt++ % 2 ? "odd" : "even" ) . '"><td> Link to APIs</td><td><a target="_blank" href="https://developer.husqvarnagroup.cloud/">Husqvarna Developer</a></td></tr>';
+      $ret .= '<tr class="column ' . ( $cnt++ % 2 ? "odd" : "even" ) . '"><td> Authentification API URL</td><td>' . AUTHURL . '</td></tr>';
+      $ret .= '<tr class="column ' . ( $cnt++ % 2 ? "odd" : "even" ) . '"><td> Automower Connect API URL</td><td>' . APIURL . '</td></tr>';
+      $ret .= '<tr class="column ' . ( $cnt++ % 2 ? "odd" : "even" ) . '"><td> Websocket IO Device name</td><td>' . WSDEVICENAME . '</td></tr>';
+      $ret .= '<tr class="column ' . ( $cnt++ % 2 ? "odd" : "even" ) . '"><td> Client-Id</td><td>' . $hash->{helper}{client_id} . '</td></tr>';
+      $ret .= '<tr class="column ' . ( $cnt++ % 2 ? "odd" : "even" ) . '"><td> Grant-Type</td><td>' . $hash->{helper}{grant_type} . '</td></tr>';
+      $ret .= '<tr class="column ' . ( $cnt++ % 2 ? "odd" : "even" ) . '"><td> User-Id</td><td>' . ReadingsVal($name, '.user_id', '-') . '</td></tr>';
+      $ret .= '<tr class="column ' . ( $cnt++ % 2 ? "odd" : "even" ) . '"><td> Provider</td><td>' . ReadingsVal($name, '.provider', '-') . '</td></tr>';
+      $ret .= '<tr class="column ' . ( $cnt++ % 2 ? "odd" : "even" ) . '"><td> Scope</td><td>' . ReadingsVal($name, '.scope', '-') . '</td></tr>';
+      $ret .= '<tr class="column ' . ( $cnt++ % 2 ? "odd" : "even" ) . '"><td> Token Type</td><td>' . ReadingsVal($name, '.token_type', '-') . '</td></tr>';
+      $ret .= '<tr class="column ' . ( $cnt++ % 2 ? "odd" : "even" ) . '"><td> Token Expires</td><td> ' . FmtDateTime( ReadingsVal($name, '.expires', '0') ) . '</td></tr>';
+      $ret .= '<tr class="column ' . ( $cnt++ % 2 ? "odd" : "even" ) . '"><td> Access Token</td><td style="word-wrap:break-word; max-width:40em">' . ReadingsVal($name, '.access_token', '0') . '</td></tr>';
 
       $ret .= '</tbody></table>';
 
@@ -2431,7 +2411,7 @@ sub listInternalData {
 sub listErrorCodes {
   if ($::init_done) {
 
-    my $rowCount = 1;
+    my $rowCount = 0;
     my %ec = ();
     my $ec = \%ec;
     for ( keys %{$errortable} ) {
@@ -2445,13 +2425,12 @@ sub listErrorCodes {
     $ret .= '<caption><b>Mower Error Table</b></caption><tbody>'; 
     for (sort keys %{$ec}) {
       $ret .= '<tr class="column ';
-      $ret .= ( $rowCount % 2 ? "odd" : "even" );
+      $ret .= ( $rowCount++ % 2 ? "odd" : "even" );
       $ret .= '"><td>';
       $ret .= $_;
       $ret .= '</td><td>';
       $ret .= $ec->{$_};
       $ret .= '</td></tr>';
-      $rowCount++;
     }
     
     $ret .= '</tbody></table></html>';
@@ -2504,7 +2483,8 @@ sub wsCb {
   my $name = $hash->{NAME};
   my $type = $hash->{TYPE};
   my $iam = "$type $name wsCb:";
-  Log3 $name, 2, "$iam failed with error: $error" if( $error );
+  my $l = $hash->{devioLoglevel};
+  Log3 $name, ( $l ? $l : 1 ), "$iam failed with error: $error" if( $error );
   return undef;
 
 }
@@ -2529,11 +2509,11 @@ sub wsRead {
   my $additional_polling = $hash->{helper}{additional_polling} * 1000;
   my $use_position_polling = $hash->{helper}{use_position_polling};
   my $buf = DevIo_SimpleRead( $hash );
-  return "" if ( !defined($buf) );
+  return "" if ( !defined( $buf ) );
 
   if ( $buf ) {
 
-    my $result = eval { decode_json($buf) };
+    my $result = eval { decode_json( $buf ) };
 
     if ( $@ ) {
 
@@ -2541,18 +2521,17 @@ sub wsRead {
 
     } else {
 
-      if ( defined( $result->{type} ) ) {
+      if ( !defined( $result->{type} ) ) {
 
-        $hash->{helper}{wsResult}{$result->{type}} = $result;
-        $hash->{helper}{wsResult}{type} = $result->{type};
-
-      } else {
-
-        $hash->{helper}{wsResult}{other} = $result;
+        $hash->{helper}{wsResult}{other} = dclone( $result );
 
       }
 
-      if ( defined( $result->{type} && $result->{id} eq $hash->{helper}{mower_id}) ) {
+      if ( defined( $result->{type} ) && $result->{id} eq $hash->{helper}{mower_id} ) {
+
+        Log3 $name, 4, "$iam selected websocket data: >$buf<";
+        $hash->{helper}{wsResult}{$result->{type}} = dclone( $result );
+        $hash->{helper}{wsResult}{type} = $result->{type};
 
         if ( $result->{type} eq "status-event" ) {
 
