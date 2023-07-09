@@ -5,3 +5,4 @@ dbrep_bkw_maxValueEnergyToday_sqlCmdList:
 dbrep_bkw_maxValueGenDay_sqlCmdList:
 dbrep_bkw_maxValueGesDay_sqlCmdList:
 dbrep_bkw_minValueOutDay_sqlCmdList:
+dbrep_zahler_maxValue_gasHour_sqlCmdList:
