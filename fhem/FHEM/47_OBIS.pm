@@ -13,7 +13,7 @@
 # Thanks to matzefizi for letting me merge this with 70_SMLUSB.pm and for testing
 # Thanks to immi for testing and supporting help and tips
 # 
-# $Id: 47_OBIS.pm 27490 2023-04-27 10:16:32Z gvzdus $
+# $Id: 47_OBIS.pm 27732 2023-07-08 10:03:12Z gvzdus $
 
 package main;
 use strict;
@@ -109,6 +109,7 @@ sub OBIS_Initialize($)
   $hash->{DefFn}   = "OBIS_Define";
   $hash->{ParseFn}   = "OBIS_Parse";
   $hash->{GetFn} = "OBIS_Get";
+  $hash->{SetFn} = "OBIS_Set";
   $hash->{UndefFn} = "OBIS_Undef";
   $hash->{AttrFn}	= "OBIS_Attr";
   $hash->{AttrList}= "do_not_notify:1,0 interval offset_feed offset_energy IODev channels directions alignTime pollingMode:on,off extChannels:on,off,auto unitReadings:on,off ignoreUnknown:on,off valueBracket:first,second,both resetAfterNoDataTime createPreValues:on,off httpAuthorization ".
@@ -282,7 +283,10 @@ sub OBIS_Set($@)
 		}		
 		
 	}
-	return;
+	if ($opt eq "data") {
+    	OBIS_Parse($hash,(pack 'H*', $value));
+    }
+	return undef;
 }
 
 # Update-Routine
