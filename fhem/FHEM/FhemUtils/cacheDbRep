@@ -6,3 +6,7 @@ dbrep_bkw_maxValueGenDay_sqlCmdList:
 dbrep_bkw_maxValueGesDay_sqlCmdList:
 dbrep_bkw_minValueOutDay_sqlCmdList:
 dbrep_zahler_maxValue_gasHour_sqlCmdList:
+dbrep_zahler_maxValueGasHour_sqlCmdList:
+dbrep_zahler_maxValueWaterHour_sqlCmdList:
+dbrep_zahler_minValueGasHour_sqlCmdList:
+dbrep_zahler_minValueWaterHour_sqlCmdList:
