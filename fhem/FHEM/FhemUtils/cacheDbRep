@@ -7,7 +7,6 @@ dbrep_DelEntriesFritzbox_sqlCmdList:
 dbrep_fritzbox_sqlCmdList:
 dbrep_power_sqlCmdList:
 dbrep_sysstat_sqlCmdList:
-dbrep_zaehler_sqlCmdList:
 dbrep_zaehler_strom_sqlCmdList:
 dbrep_bkw_maxValueDiffDay_sqlCmdList:
 dbrep_bkw_maxValueEnergyToday_sqlCmdList:
