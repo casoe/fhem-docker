@@ -18,3 +18,5 @@ dbrep_bkw1_maxValueDiffDay_sqlCmdList:
 dbrep_bkw2_maxValueEnergyToday_sqlCmdList:
 dbrep_bkw3_maxValueGenDay_sqlCmdList:
 dbrep_bkw4_minValueOutDay_sqlCmdList:
+dbrep_zahler_minValueGasHour_sqlCmdList:
+dbrep_zahler_minValueWaterHour_sqlCmdList:
