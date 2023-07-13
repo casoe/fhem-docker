@@ -2,6 +2,7 @@
 .idea
 !.gitkeep
 /fhem/FHEM/FhemUtils/uniqueID
+/fhem/FHEM/FhemUtils/cacheDbRep
 /fhem/fhem.cfg.bak
 /fhem/log/*
 /fhem/restoreDir/*
