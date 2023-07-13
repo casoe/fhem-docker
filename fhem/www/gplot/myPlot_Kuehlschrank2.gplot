@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2022-04-26 07:25:49
+# Created by FHEM/98_SVG.pm, 2023-07-13 19:58:02
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -13,8 +13,6 @@ set y2label ""
 set yrange [0:2]
 set y2range [0:2]
 
-#dblog MQTT2_DVES_0371A9:ENERGY_Yesterday
-#dblog MQTT2_DVES_0371A9:ENERGY_Today
+#dblog MQTT2_DVES_0371A9:ENERGY_Today:::
 
-plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch gestern in Watt' ls l0fill lw 1 with bars,\
-     "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch heute in Watt' ls l1fill lw 1 with lines
+plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch heute in Watt' ls l0fill lw 1 with steps
