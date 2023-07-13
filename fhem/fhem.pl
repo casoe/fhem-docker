@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 27498 2023-04-30 08:50:41Z rudolfkoenig $
+# $Id: fhem.pl 27750 2023-07-11 18:30:38Z rudolfkoenig $
 
 
 use strict;
@@ -279,7 +279,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 27498 2023-04-30 08:50:41Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 27750 2023-07-11 18:30:38Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -1447,9 +1447,9 @@ OpenLogfile($)
     open($LOG, '>&STDOUT') || die "Can't dup stdout: $!";
 
   } else {
-    HandleArchiving($defs{global}) if($defs{global}{currentlogfile});
     $defs{global}{currentlogfile} = $param;
     $defs{global}{logfile} = $attr{global}{logfile};
+    HandleArchiving($defs{global});
 
     restoreDir_mkDir($currlogfile=~m,^/,? "":".", $currlogfile, 1);
     open($LOG, ">>$currlogfile") || return("Can't open $currlogfile: $!");
@@ -4110,8 +4110,6 @@ HandleArchiving($;$)
   my $ard = $attr{$ln}{archivedir};
   return if(!defined($nra));
 
-  $nra++ if($ln eq "global"); # Forum #61450
-
   # If nrarchive is set, then check the last files:
   # Get a list of files:
 
@@ -4123,16 +4121,18 @@ HandleArchiving($;$)
   }
 
   $file =~ s/%./.+/g;
+  my $clf = $log->{currentlogfile};
+  $clf = $2 if($clf =~ m,^(.+)/([^/]+)$,);
+
   my @t = localtime(gettimeofday());
   $dir = ResolveDateWildcards($dir, @t);
   return if(!opendir(DH, $dir));
-  my @files = sort grep {/^$file$/} readdir(DH);
+  my @files = sort grep {$_ =~ m/^$file$/ && $_ ne $clf } readdir(DH);
   @files = sort { (stat("$dir/$a"))[9] <=> (stat("$dir/$b"))[9] } @files
         if(AttrVal("global", "archivesort", "alphanum") eq "timestamp");
   closedir(DH);
 
   my $max = int(@files)-$nra;
-  $max-- if($flogInitial);
   for(my $i = 0; $i < $max; $i++) {
     if($ard) {
       Log 2, "Moving $files[$i] to $ard";

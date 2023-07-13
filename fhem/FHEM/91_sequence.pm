@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 91_sequence.pm 27742 2023-07-10 09:32:40Z rudolfkoenig $
+# $Id: 91_sequence.pm 27749 2023-07-11 16:59:45Z rudolfkoenig $
 package main;
 
 use strict;
@@ -269,8 +269,8 @@ sequence_Undef($$)
     <li>strictSequence<br>
       if set (to 1), any "unexpected" event will reset the sequence. This may
       be helpful to avoid brute-force attacks.<br>
-      Note: it will only work as correctly if the sequence is triggering only
-      to the configured devices (check the NOTIFYDEV internal), and the source
+      Note: it will only work correctly if the sequence is triggered only
+      by the configured devices (check the NOTIFYDEV internal), and the source
       is not generating "undesired" events together with the desired ones.
       </li><br>
   </ul>
