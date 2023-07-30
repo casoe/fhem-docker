@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 91_sequence.pm 27749 2023-07-11 16:59:45Z rudolfkoenig $
+# $Id: 91_sequence.pm 27765 2023-07-14 15:28:29Z rudolfkoenig $
 package main;
 
 use strict;
@@ -86,7 +86,7 @@ sequence_Notify($$)
     my $s = $events->[$i];
     $s = "" if(!defined($s));
     if($n !~ m/^$re$/ && "$n:$s" !~ m/^$re$/) {
-      next if(!$strictSequence && $hash->{IDX});
+      next if(!$strictSequence || !$hash->{IDX});
       RemoveInternalTimer($ln);
       sequence_Trigger($ln, "abort-strict");
       return "";
