@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2023-07-07 16:35:48
+# Created by FHEM/98_SVG.pm, 2023-08-01 13:34:09
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -17,6 +17,6 @@ set y2label ""
 #lp ConstY:0
 
 plot "<IN>" using 1:2 axes x1y1 title 'Generierte kW/h' ls l0 lw 1 with histeps,\
-     "<IN>" using 1:2 axes x1y1 title 'Verbrauchte kW/h' ls l2 lw 1 with histeps,\
+     "<IN>" using 1:2 axes x1y1 title 'Verbrauchte kW/h' ls l2 lw 1.5 with histeps,\
      "<IN>" using 1:2 axes x1y1 title 'Eingespeiste kW/h' ls l1 lw 1 with histeps,\
      "<IN>" using 1:2 axes x1y1 title 'Null' ls l7 lw 1 with lines
