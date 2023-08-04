@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2021-06-24 12:55:27
+# Created by FHEM/98_SVG.pm, 2023-08-04 13:03:04
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -8,11 +8,11 @@ set title 'Verbrauch pro Tag'
 set ytics 
 set y2tics 
 set grid ytics
-set ylabel "kW/h"
+set ylabel "kWh"
 set y2label ""
 set yrange [0:35]
 set y2range [0:35]
 
-#dblog Stromzaehler:daily_consumption
+#dblog Stromzaehler:daily_consumption:::
 
 plot "<IN>" using 1:2 axes x1y1 title 'Täglicher Verbrauch' ls l0fill lw 1 with histeps
