@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 27750 2023-07-11 18:30:38Z rudolfkoenig $
+# $Id: fhem.pl 27895 2023-08-24 12:46:07Z rudolfkoenig $
 
 
 use strict;
@@ -279,7 +279,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 27750 2023-07-11 18:30:38Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 27895 2023-08-24 12:46:07Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -5630,7 +5630,8 @@ createNtfyHash()
   my %d2a_cache;
   %ntfyHash = ("*" => []);
   foreach my $d (@ntfyList) {
-    my $ndl = $defs{$d}{NOTIFYDEV};
+    my $ndl = $attr{$d}{overrideNotifydev};
+    $ndl = $defs{$d}{NOTIFYDEV} if(!$ndl);
     next if(!$ndl);
     my @ndlarr;
     if($d2a_cache{$ndl}) {
@@ -5648,7 +5649,8 @@ createNtfyHash()
 
   my @nhk = keys %ntfyHash;
   foreach my $d (@ntfyList) {
-    my $ndl = $defs{$d}{NOTIFYDEV};
+    my $ndl = $attr{$d}{overrideNotifydev};
+    $ndl = $defs{$d}{NOTIFYDEV} if(!$ndl);
     my $arr = ($ndl ? $d2a_cache{$ndl} : \@nhk);
     map { push @{$ntfyHash{$_}}, $d } @{$arr};
   }
