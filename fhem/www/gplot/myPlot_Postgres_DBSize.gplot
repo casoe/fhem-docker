@@ -1,0 +1,18 @@
+# Created by FHEM/98_SVG.pm, 2023-08-27 16:18:52
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Größe der Datenbank'
+set ytics 
+set y2tics 
+set grid
+set ylabel ""
+set y2label ""
+set yrange [0:500]
+set y2range [0:500]
+
+#dblog dbrep_dbsize:SizeDbEnd_MB:::
+
+plot "<IN>" using 1:2 axes x1y1 title 'DBSize in MB' ls l0 lw 1 with lines
