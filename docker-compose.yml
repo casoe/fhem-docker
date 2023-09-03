@@ -2,9 +2,10 @@ services:
     fhem:
         restart: always
         network_mode: host
-        image: ghcr.io/fhem/fhem/fhem-minimal-docker:bullseye
+        image: ghcr.io/casoe/fhem-minimal-signal-docker:latest
         volumes:
             - "./fhem/:/opt/fhem/"
+            - "./signal/:/var/lib/signal-cli/"
         devices:
             - "/dev/ttyUSB0:/dev/ttyUSB0"
         environment:
@@ -14,7 +15,6 @@ services:
             RESTART: 1
             TELNETPORT: 7072
             TZ: Europe/Berlin
-            APT_PKGS: speedtest-cli
         depends_on:
             postgres:
                  condition: service_healthy
