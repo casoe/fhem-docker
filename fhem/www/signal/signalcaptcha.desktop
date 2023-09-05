@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Signalcaptcha
+Exec=xdg-open http://192.168.2.5:8083/fhem?cmd=set%%20signalBot%%20captcha%%20%u&fwcsrf=csrf_319980982093912
+Type=Application
+Terminal=false
+StartupNotify=false
+MimeType=x-scheme-handler/signalcaptcha
