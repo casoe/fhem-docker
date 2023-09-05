@@ -14,3 +14,4 @@
 /homebridge/logs/*
 /homebridge/homebridge.log
 *.sqlc
+/signal/data/*
