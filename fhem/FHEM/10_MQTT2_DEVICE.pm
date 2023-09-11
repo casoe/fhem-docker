@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_MQTT2_DEVICE.pm 27674 2023-06-12 08:33:06Z rudolfkoenig $
+# $Id: 10_MQTT2_DEVICE.pm 27935 2023-09-05 11:48:14Z rudolfkoenig $
 package main;
 
 use strict;
@@ -40,7 +40,7 @@ MQTT2_DEVICE_Initialize($)
     imageLink
     jsonMap:textField-long
     model
-    periodicCmd
+    periodicCmd:textField-long
     readingList:textField-long
     setExtensionsEvent:1,0
     setList:textField-long

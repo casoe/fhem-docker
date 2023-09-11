@@ -1,5 +1,5 @@
 ##############################################
-# $Id: TcpServerUtils.pm 25866 2022-03-21 09:01:16Z rudolfkoenig $
+# $Id: TcpServerUtils.pm 27931 2023-09-04 09:52:58Z rudolfkoenig $
 
 package main;
 use strict;
@@ -331,9 +331,10 @@ TcpServer_Accept($$)
       && $err ne "Socket is not connected") {
       $err = "" if(!$err);
       $err .= " ".($SSL_ERROR ? $SSL_ERROR : IO::Socket::SSL::errstr());
-      my $errLevel = ($err =~ m/error:14094416:SSL/ ? 5 : 1); # 61511
+      my $errLevel = ($err =~ m/error:14094416:SSL/ || # 61511
+                      $err =~ m/ssl accept attempt failed/i ? 5 : 1); #134820
       Log3 $name, $errLevel, "$type SSL/HTTPS error: $err (peer: $caddr)"
-        if($err !~ m/error:00000000:lib.0.:func.0.:reason.0./); #Forum 56364
+        if($err !~ m/error:00000000:lib.0.:func.0.:reason.0./); #56364
       close($clientinfo[0]);
       return undef;
     }

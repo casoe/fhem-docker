@@ -1,4 +1,4 @@
-# $Id: 98_JsonMod.pm 27916 2023-08-31 19:01:13Z herrmannj $
+# $Id: 98_JsonMod.pm 27933 2023-09-04 13:29:42Z herrmannj $
 ###############################################################################
 #
 #     This file is part of fhem.
@@ -73,7 +73,7 @@ sub JsonMod_Define {
 	my ($hash, $def) = @_;
 	my ($name, $type, $source) = split /\s/, $def, 3;
 
-	my $cvsid = '$Id: 98_JsonMod.pm 27916 2023-08-31 19:01:13Z herrmannj $';
+	my $cvsid = '$Id: 98_JsonMod.pm 27933 2023-09-04 13:29:42Z herrmannj $';
 	$cvsid =~ s/^.*pm\s//;
 	$cvsid =~ s/Z\s\S+\s\$$/ UTC/;
 	$hash->{'SVN'} = $cvsid;
@@ -116,9 +116,15 @@ sub JsonMod_Run {
 
 	my $cron = AttrVal($name, 'interval', '0 * * * *');
 	$hash->{'CONFIG'}->{'CRON'} = \$cron;
-	$hash->{'CRON'} = FHEM::Scheduler::Cron->new($cron);
-	JsonMod_StartTimer($hash);
-	JsonMod_ApiRequest($hash) if AttrVal($name, 'update-on-start', 0);
+	my $err;
+	($hash->{'CRON'}, $err) = FHEM::Scheduler::Cron->new($cron);
+	if ($err) {
+		$hash->{'NEXT'} = sprintf('NEVER (%s)', $err);
+		JsonMod_Logger($hash, 2, 'cron returned error: %s', $err);
+	} else {
+		JsonMod_StartTimer($hash);
+		JsonMod_ApiRequest($hash) if AttrVal($name, 'update-on-start', 0);
+	}
 	return;
 };
 
@@ -150,7 +156,6 @@ sub JsonMod_Attr {
 	my ($cmd, $name, $attrName, $attrValue) = @_;
 	my $hash = $defs{$name};
 	$attrValue //= '';
-	#my $result;
 
 	if ($cmd eq 'set') {
 		if ($attrName eq 'disable') {
@@ -158,7 +163,7 @@ sub JsonMod_Attr {
 				JsonMod_StopTimer($hash);
 			} else {
 				JsonMod_StopTimer($hash);
-				JsonMod_StartTimer($hash); # unless IsDisabled($name);
+				JsonMod_StartTimer($hash);
 			};
 		};
 		if ($attrName eq 'interval') {
@@ -167,11 +172,12 @@ sub JsonMod_Attr {
 				($hash->{'CRON'}, $err) = FHEM::Scheduler::Cron->new($attrValue);
 				unless ($err) {
 					$hash->{'CONFIG'}->{'CRON'} = \$attrValue;
-					return if (!$init_done);
 					JsonMod_StopTimer($hash);
-					JsonMod_StartTimer($hash) unless IsDisabled($name);
+					JsonMod_StartTimer($hash);
 					return;
 				} else {
+					$hash->{'NEXT'} = sprintf('NEVER (%s)', $err);
+					JsonMod_Logger($hash, 2, 'cron returned error: %s', $err);
 					return $err;
 				};
 			};
@@ -179,14 +185,14 @@ sub JsonMod_Attr {
 		};
 	};
 	if ($cmd eq 'del') {
+		if ($attrName eq 'disable') {
+			JsonMod_StartTimer($hash);
+		};
 		if ($attrName eq 'interval') {
 			$hash->{'CONFIG'}->{'CRON'} = \'0 * * * *';
 			JsonMod_StopTimer($hash);
-			JsonMod_StartTimer($hash); # unless IsDisabled($name);
+			JsonMod_StartTimer($hash);
 			return;
-		};
-		if ($attrName eq 'disable') {
-			JsonMod_StartTimer($hash); # unless IsDisabled($name);
 		};
 	};
 };
@@ -460,11 +466,11 @@ sub JsonMod_DoReadings {
 
 			# my sub m1 {
 			local *m1 = sub {
-				my ($jsonPathExpression, $readingName, $readingValue) = @_;
+				my ($jsonPathExpression, $readingName, $readingValue, $defaultReading, $defaultValue) = @_;
 
 				$warnings = 1;
 
-				if (ref($resultSet) eq 'ARRAY') {
+				if (ref($resultSet) eq 'ARRAY' and scalar @$resultSet) {
 					foreach my $res (@{$resultSet}) {
 						$resultNode = $res->[0];
 						$resultObject = $res->[1]; # value
@@ -474,6 +480,11 @@ sub JsonMod_DoReadings {
 						eval 'm2'.$args; warn $@ if $@;
 						$index++;
 					};
+				} elsif($defaultReading) {
+					JsonMod_Logger($hash, 4, '%s is empty or missing: use defaults (%s:%s)', $jsonPathExpression, $defaultReading, $defaultValue);
+					sanitizedSetReading($defaultReading, $defaultValue);
+				} else {
+					JsonMod_Logger($hash, 4, '%s is empty or missing: discarded', $jsonPathExpression);
 				};
 			};
 
@@ -533,7 +544,6 @@ sub JsonMod_DoReadings {
 		};
 	};
 
-
 	# update readings
 	if (keys %{$newReadings}) {
 		my @newReadings;
@@ -546,29 +556,45 @@ sub JsonMod_DoReadings {
 		};
 		# reading is not used anymore
 		foreach my $k (keys %{$oldReadings}) {
-			readingsDelete($hash, $k) if ($oldReadings->{$k} == 0 and any { $_ eq $k} @oldReadings);
+			if ($oldReadings->{$k} == 0 and any { $_ eq $k} @oldReadings) {
+				readingsDelete($hash, $k);
+				DoTrigger($name, ".readingsDelete $k");
+			};
 		};
 		readingsBulkUpdate($hash, '.computedReadings', join ',', @newReadings);
 		readingsEndUpdate($hash, 1);
+	} else {
+		# in case all readings removed
+		for (split ',', ReadingsVal($name, '.computedReadings', '')) {
+			readingsDelete($hash, $_);
+			DoTrigger($name, ".readingsDelete $_");
+		};
+		DoTrigger($name, ".computedReadingsNone");
+		readingsSingleUpdate($hash, '.computedReadings', '', 1);
 	};
-
 };
 
 sub JsonMod_StartTimer {
 	my ($hash) = @_;
 	my $name = $hash->{'NAME'};
 
+	return if (!$init_done);
+
 	my $cron = ${$hash->{'CONFIG'}->{'CRON'}};
 	my @t = localtime(Time::HiRes::time());
 	$t[4] += 1;
 	$t[5] += 1900;
 	my ($r, $err) = $hash->{'CRON'}->next(sprintf('%04d%02d%02d%02d%02d%02d', $t[5], $t[4], $t[3], $t[2], $t[1], $t[0]));
-	# todo check err
-	my @u = ($r =~ m/([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})/);
-	my $ts = timelocal($u[5], $u[4], $u[3], $u[2], $u[1] -1, $u[0] -1900);
-	$hash->{'NEXT'} = sprintf('%04d-%02d-%02d %02d:%02d:%02d', @u);
-	JsonMod_Logger($hash, 4, 'next request: %04d.%02d.%02d %02d:%02d:%02d', @u);
-	InternalTimer($ts, \&JsonMod_DoTimer, $hash);
+	if ($err) {
+		$hash->{'NEXT'} = sprintf('NEVER (%s)', $err);
+		JsonMod_Logger($hash, 2, 'cron returned error: %s', $err);
+	} else {
+		my @u = ($r =~ m/([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})/);
+		my $ts = timelocal($u[5], $u[4], $u[3], $u[2], $u[1] -1, $u[0] -1900);
+		$hash->{'NEXT'} = sprintf('%04d-%02d-%02d %02d:%02d:%02d', @u);
+		JsonMod_Logger($hash, 4, 'next request: %04d.%02d.%02d %02d:%02d:%02d', @u);
+		InternalTimer($ts, \&JsonMod_DoTimer, $hash);
+	}
 	return;
 };
 
@@ -1691,10 +1717,20 @@ sub DESTROY {
 	<ul>
 		<a name="interval"></a>
 		<li>interval<br>
-			<code>set &lt;name&gt; interval &lt;*/15 * * * *&gt;</code><br>
+			<code>attr &lt;name&gt; interval &lt;*/15 * * * *&gt;</code><br>
 			utilize a cron expression to define the interval at which the source file will be loaded.
 			Default is one hour. 			
 		</li>
+		<a name="onEmptyResponse"></a>
+		# <li>onEmptyResponse<br>
+		# 	Controls the module behaviour if an empty response is received.
+		# 	<ul>
+		# 		<li>
+		# 			not set or empty (default):<br>
+		# 			the device will be updated to no computed readings and an event is triggered ()
+		# 		</li>
+		# 	</ul>
+		# </li>
 		<a name="readingList"></a>
 		<li>readingList<br>
 			Specifies the access to json elements and their representation as well as formatting as reading.
