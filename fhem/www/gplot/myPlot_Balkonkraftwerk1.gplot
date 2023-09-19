@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2023-07-07 14:49:58
+# Created by FHEM/98_SVG.pm, 2023-09-17 19:36:37
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -17,5 +17,5 @@ set yrange [-600:650]
 #lp ConstY:0
 
 plot "<IN>" using 1:2 axes x1y1 title 'Erzeugte Leistung in Watt' ls l0 lw 1 with steps,\
-     "<IN>" using 1:2 axes x1y1 title 'Einspeisung in Watt' ls l1 lw 1 with lines,\
+     "<IN>" using 1:2 axes x1y1 title 'Einspeisung in Watt' ls l1 lw 1 with steps,\
      "<IN>" using 1:2 axes x1y1 title 'Null' ls l7 lw 1 with lines
