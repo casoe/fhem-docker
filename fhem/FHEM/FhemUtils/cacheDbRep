@@ -20,3 +20,7 @@ dbrep_heizung07_mz_target_sqlCmdList:
 dbrep_heizung08_mz_value_sqlCmdList:
 dbrep_heizung09_sz_target_sqlCmdList:
 dbrep_heizung10_sz_value_sqlCmdList:
+dbrep_bkw6_average_power_gen_sqlCmdList:
+dbrep_bkw7_average_power_out_sqlCmdList:
+dbrep_dbsize_sqlCmdList:
+dbrep_sqlcount_sqlCmdList:
