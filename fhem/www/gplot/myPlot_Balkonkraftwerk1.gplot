@@ -1,0 +1,21 @@
+# Created by FHEM/98_SVG.pm, 2023-09-17 19:36:37
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Balkonkraftwerk'
+set ytics 
+set y2tics 
+set grid ytics
+set ylabel "Leistung"
+set y2label ""
+set yrange [-600:650]
+
+#dblog MQTT2_DVES_9BFAF4:power_gen:::
+#dblog MQTT2_DVES_9BFAF4:power_out:::
+#lp ConstY:0
+
+plot "<IN>" using 1:2 axes x1y1 title 'Erzeugte Leistung in Watt' ls l0 lw 1 with steps,\
+     "<IN>" using 1:2 axes x1y1 title 'Einspeisung in Watt' ls l1 lw 1 with steps,\
+     "<IN>" using 1:2 axes x1y1 title 'Null' ls l7 lw 1 with lines

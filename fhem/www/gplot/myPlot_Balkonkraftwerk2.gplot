@@ -1,0 +1,24 @@
+# Created by FHEM/98_SVG.pm, 2023-09-17 16:11:46
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Generierte Energie vs. Einspeisung'
+set ytics 
+set y2tics 
+set grid ytics
+set ylabel "kWh"
+set y2label ""
+
+#dblog MQTT2_DVES_9BFAF4:statTotal_kwh_genDay:::
+#dblog MQTT2_DVES_9BFAF4:ENERGY_Today:::
+#dblog MQTT2_DVES_9BFAF4:statTotal_kwh_diffDay:::
+#dblog MQTT2_DVES_9BFAF4:statTotal_kwh_outDay:::
+#lp ConstY:0
+
+plot "<IN>" using 1:2 axes x1y1 title 'Generierte kWh (aggregate)' ls l0 lw 1 with histeps,\
+     "<IN>" using 1:2 axes x1y1 title 'Generierte kWh (shelly)' ls l0fill lw 1 with histeps,\
+     "<IN>" using 1:2 axes x1y1 title 'Verbrauchte kWh' ls l2 lw 1.5 with histeps,\
+     "<IN>" using 1:2 axes x1y1 title 'Eingespeiste kWh' ls l1 lw 1 with histeps,\
+     "<IN>" using 1:2 axes x1y1 title 'Null' ls l7 lw 1 with lines
