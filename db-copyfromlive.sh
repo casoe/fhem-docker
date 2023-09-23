@@ -2,6 +2,8 @@
 # db-copyfromlive.sh
 # Carsten Söhrens, 22.01.2023
 
+mkdir -p ~/backup
+
 DBFILE=~/backup/db_backup_$(date -I).sqlc
 
 if [ ! -f "$DBFILE" ]; then

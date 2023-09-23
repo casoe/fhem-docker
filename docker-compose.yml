@@ -5,7 +5,8 @@ services:
             - "1883:1883"
             - "8083-8085:8083-8085"
             - "7072:7072"
-        image: ghcr.io/fhem/fhem/fhem-minimal-docker:bullseye
+        image: ghcr.io/fhem/fhem-minimal-docker:3-bullseye
+
         volumes:
             - "./fhem/:/opt/fhem/"
         #devices:
