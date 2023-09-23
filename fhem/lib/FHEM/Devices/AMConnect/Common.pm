@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: Common.pm 27717 2023-06-30 15:19:30Z Ellert $
+# $Id: Common.pm 27851 2023-08-17 12:29:27Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::Devices::AMConnect::Common;
-my $cvsid = '$Id: Common.pm 27717 2023-06-30 15:19:30Z Ellert $';
+my $cvsid = '$Id: Common.pm 27851 2023-08-17 12:29:27Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -156,7 +156,9 @@ mowingPathLineColor="#ff0000"
 mowingPathLineDash="6,2"
 mowingPathLineWidth="1"
 mowingPathDotWidth="2"
-mowingPathUseDots=""';
+mowingPathUseDots=""
+mowingPathShowCollisions=""
+';
 
 my $mapZonesTpl = '{
     "01_oben" : {
@@ -174,11 +176,14 @@ my $mapZonesTpl = '{
       passObj                   => FHEM::Core::Authentication::Passwords->new($type),
       interval                  => 840,
       interval_ws               => 7110,
-      interval_ping             => 60,
+      interval_ping             => 570,
       use_position_polling      => 0,
       additional_polling        => 0,
+      reverse_positions_order   => 1,
+      reverse_pollpos_order     => 0,
       retry_interval_apiauth    => 840,
       retry_interval_getmower   => 840,
+      retry_interval_wsreopen   => 2,
       timeout_apiauth           => 5,
       timeout_getmower          => 5,
       timeout_cmd               => 10,
@@ -202,12 +207,15 @@ my $mapZonesTpl = '{
       newdatasets               => 0,
       newcollisions             => 0,
       newzonedatasets           => 0,
+      cuttingHeightLatency      => 100,
+      cuttingHeightLast         => 0,
       positionsTime             => 0,
       storesum                  => 0,
       statusTime                => 0,
       cspos                     => [],
       areapos                   => [],
       errorstack                => [],
+      errorstackmax             => 5,
       lasterror                 => {
         positions               => [],
         timestamp               => 0,
@@ -605,7 +613,7 @@ sub FW_detailFn_Update {
   $hash->{helper}{mapupdate}{poserrxy} = \@poserrxy;
 
   map { 
-    ::FW_directNotify("#FHEMWEB:$_", "AutomowerConnectUpdateJson ( '$FW_ME/$type/$name/json' )","");
+    ::FW_directNotify("#FHEMWEB:$_", "AutomowerConnectUpdateJson ( '$FW_ME/$type/$name/json' )","") if ( $FW_ME );
   } devspec2array("TYPE=FHEMWEB");
 
   $hash->{helper}{detailFnFirst} = 0;
@@ -625,7 +633,14 @@ sub APIAuth {
   my $type = $hash->{TYPE};
   my $iam = "$type $name APIAuth:";
 
-  return if( IsDisabled( $name ) );
+  if( IsDisabled( $name ) ) {
+
+    readingsSingleUpdate( $hash, 'device_state', 'temporarily disabled', 1 ) if ( ReadingsVal( $name, 'device_state', '' ) !~ /disabled/ );
+    RemoveInternalTimer( $hash );
+    InternalTimer( gettimeofday() + $hash->{helper}{retry_interval_apiauth}, \&APIAuth, $hash, 0 );
+    return undef;
+
+  }
 
   if ( !$update && $::init_done ) {
 
@@ -742,7 +757,6 @@ sub APIAuthResponse {
 
 }
 
-
 ##############################################################
 #
 # GET MOWERS
@@ -818,7 +832,7 @@ sub getMowerResponseWs {
   my $iam = "$type $name getMowerResponseWs:";
 
   Log3 $name, 1, "$iam response time ". sprintf( "%.2f", ( gettimeofday() - $param->{t_begin} ) ) . ' s' if ( $param->{timeout} == 60 );
-  Log3 $name, 1, "debug $iam \$statuscode [$statuscode]\n\$err [$err],\n \$data [$data] \n\$param->url $param->{url}" if ( AttrVal($name, 'debug', '') );
+  Log3 $name, 4, "$iam response polling after status-event \$statuscode >$statuscode<, \$err >$err<, \$param->url $param->{url} \n \$data >$data<";
 
   if( !$err && $statuscode == 200 && $data) {
 
@@ -848,13 +862,14 @@ sub getMowerResponseWs {
           for ( $cnt = 0; $cnt < $poslen; $cnt++ ) { 
 
             if (   $hash->{helper}{searchpos}[ 0 ]{longitude} == $result->{data}{attributes}{positions}[ $cnt ]{longitude}
-                && $hash->{helper}{searchpos}[ 0 ]{latitude} == $result->{data}{attributes}{positions}[ $cnt ]{latitude} ) {
+                && $hash->{helper}{searchpos}[ 0 ]{latitude} == $result->{data}{attributes}{positions}[ $cnt ]{latitude} || $cnt == $poslen -1) { # if nothing found take all
 
               if ( $cnt > 0 ) {
 
                 my @ar;
                 push @ar, @{ $result->{data}{attributes}{positions} }[ 0 .. $cnt-1 ];
                 $hash->{helper}{mower}{attributes}{positions} = dclone( \@ar );
+                
                 AlignArray( $hash );
                 FW_detailFn_Update ($hash);
 
@@ -881,6 +896,7 @@ sub getMowerResponseWs {
           fillReadings( $hash );
           # readingsBulkUpdate( $hash, 'mower_wsEvent', $hash->{helper}{wsResult}{type} ); #to do check what event
           readingsBulkUpdate( $hash, 'mower_wsEvent', 'status-event' );
+          readingsBulkUpdateIfChanged( $hash, 'device_state', 'connected' );
 
         readingsEndUpdate($hash, 1);
 
@@ -915,7 +931,7 @@ sub getMowerResponse {
   my $mowerNumber = $hash->{helper}{mowerNumber};
   
   Log3 $name, 1, "$iam response time ". sprintf( "%.2f", ( gettimeofday() - $param->{t_begin} ) ) . ' s' if ( $param->{timeout} == 60 );
-  Log3 $name, 1, "debug $iam \$statuscode [$statuscode]\n\$err [$err],\n \$data [$data] \n\$param->url $param->{url}" if ( AttrVal($name, 'debug', '') );
+  Log3 $name, 4, "$iam response \$statuscode >$statuscode<, \$err >$err<, \$param->url $param->{url} \n\$data >$data<";
   
   if( !$err && $statuscode == 200 && $data) {
     
@@ -1007,7 +1023,7 @@ sub getMowerResponse {
   } else {
 
     readingsSingleUpdate( $hash, 'device_state', "error statuscode $statuscode", 1 );
-    Log3 $name, 1, "$iam \$statuscode [$statuscode]\n\$err [$err],\n \$data [$data] \n\$param->url $param->{url}";
+    Log3 $name, 1, "$iam \$statuscode >$statuscode<, \$err >$err<, \$param->url $param->{url} \n\$data >$data<";
 
   }
 
@@ -1371,11 +1387,21 @@ sub Attr {
       $hash->{helper}{additional_polling} = $attrVal;
       Log3 $name, 4, "$iam $cmd $attrName $attrVal";
 
+      if ( $attrVal == 0 ) {
+
+        delete $attr{$name}{addPositionPolling} if ( defined( $attr{$name}{addPositionPolling} ) );
+        $hash->{helper}{use_position_polling} = 0;
+
+      }
+
+
     } elsif( $cmd eq "del" ) {
 
       $hash->{helper}{additional_polling} = 0;
       readingsDelete( $hash, 'api_callsThisMonth' );
       Log3 $name, 3, "$iam $cmd $attrName and set default value 0.";
+      delete $attr{$name}{addPositionPolling} if ( defined( $attr{$name}{addPositionPolling} ) );
+      $hash->{helper}{use_position_polling} = 0;
 
     }
   ##########
@@ -1384,6 +1410,7 @@ sub Attr {
     if( $cmd eq "set" ) {
 
       return "$iam $attrVal is invalid, allowed value 0 or 1." unless( $attrVal == 0 || $attrVal == 1 );
+      return "$iam $attrVal set attribute addPollingMinInterval > 0 first." unless( defined( $attr{$name}{addPollingMinInterval} ) && $attr{$name}{addPollingMinInterval} > 0 );
       $hash->{helper}{use_position_polling} = $attrVal;
       Log3 $name, 4, "$iam $cmd $attrName $attrVal";
 
@@ -1395,9 +1422,10 @@ sub Attr {
     }
   ##########
   } elsif ( $attrName eq 'numberOfWayPointsToDisplay' ) {
-    
+
+    return "$iam $attrVal is invalid, min value is 100." if ( $attrVal < 100 );
     my $icurr = scalar @{$hash->{helper}{areapos}};
-    if( $cmd eq "set" && $attrVal =~ /\d+/ && $attrVal > 100 ) {
+    if( $cmd eq "set" && $attrVal =~ /\d+/ ) {
 
       # reduce array
       $hash->{helper}{MOWING}{maxLength} = $attrVal;
@@ -1563,6 +1591,9 @@ sub AlignArray {
   my ($hash) = @_;
   my $name = $hash->{NAME};
   my $use_position_polling = $hash->{helper}{use_position_polling};
+  my $reverse_positions_order = $hash->{helper}{reverse_positions_order};
+  my $reverse_pollpos_order = $hash->{helper}{reverse_pollpos_order};
+  my $additional_polling = $hash->{helper}{additional_polling};
   my $act = $hash->{helper}{mower}{attributes}{mower}{activity};
   my $actold = $hash->{helper}{mowerold}{attributes}{mower}{activity};
   my $cnt = @{ $hash->{helper}{mower}{attributes}{positions} };
@@ -1573,8 +1604,16 @@ sub AlignArray {
     my @ar = @{ $hash->{helper}{mower}{attributes}{positions} };
     my $deltaTime = $hash->{helper}{positionsTime} - $hash->{helper}{statusTime};
 
-    # if encounter positions shortly after status event old activity is assigned to positions  
-    if ( $cnt > 1 && $deltaTime > 0 && $deltaTime < 0.29 && !$use_position_polling) {
+    # if encounter positions shortly after status event then old activity is assigned to positions 
+    # or when position polling is on and activity is MOWING first time after LEAVING count new positions as LEAVING
+    #### if ( $cnt > 1 && $deltaTime > 0 && $deltaTime < 0.29 && !$use_position_polling || $use_position_polling && $actold =~ /LEAVING/ && $act eq 'MOWING' ) {
+    # or when position polling is on and activity is GOING_HOME first time after MOWING count new positions as MOWING
+    # or when position polling is on and activity is PARKED_IN_CS|CHARGING first time after GOING_HOME count new positions as GOING_HOME
+    if ( $cnt > 1 && $deltaTime > 0 && $deltaTime < 0.29 && !$use_position_polling || $use_position_polling && 
+          ( $actold =~ /LEAVING/ && $act eq 'MOWING' ||
+            $actold =~ /MOWING/ && $act eq 'GOING_HOME' ||
+            $actold =~ /GOING_HOME/ && $act =~ /PARKED_IN_CS|CHARGING/ )
+       ) {
 
       map { $_->{act} = $hash->{helper}{$actold}{short} } @ar;
 
@@ -1586,8 +1625,19 @@ sub AlignArray {
 
     if ( !$use_position_polling ) {
 
-      @ar = reverse @ar if ( $cnt > 1 ); # positions seem to be in reversed order
-      # @ar = @ar if ( $cnt > 1 ); # positions seem to be not in reversed order
+      if ( $reverse_positions_order ) {
+
+        @ar = reverse @ar if ( $cnt > 1 ); # positions seem to be in reversed order
+
+      }
+
+    } elsif ( $use_position_polling ) {
+
+      if ( $reverse_pollpos_order ) {
+
+        @ar = reverse @ar if ( $cnt > 1 ); # positions seem to be in reversed order
+
+      }
 
     }
 
@@ -1618,19 +1668,30 @@ sub AlignArray {
 
     }
 
+    if ( $hash->{helper}{newcollisions} && $additional_polling && $act =~ /^(MOWING)$/ ) {
+
+      TagWayPointsAsCollision ( $hash, $cnt );
+
+    }
+
     if ( AttrVal($name, 'mapZones', 0) && $act =~ /^(MOWING)$/ ) {
 
       $tmp = dclone( \@ar );
       ZoneHandling ( $hash, $tmp, $cnt );
 
     }
+
     # set cutting height per zone
-    if ( AttrVal($name, 'mapZones', 0) && $act =~ /^MOWING$/
-         && defined( $hash->{helper}{currentZone} ) 
-         && defined( $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{cuttingHeight} )) {
+    my $cuthi = $hash->{helper}{mower}{attributes}{settings}{cuttingHeight};
+    if ( AttrVal( $name, 'mapZones', 0 ) && $act =~ /^(MOWING)$/
+        && defined( $hash->{helper}{currentZone} )
+        && defined( $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{cuttingHeight} )
+        && $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{cuttingHeight} !~ /$cuthi/
+        && ( $hash->{helper}{cuttingHeightLast} + $hash->{helper}{cuttingHeightLatency} ) < scalar gettimeofday() ) {
 
       RemoveInternalTimer( $hash, \&setCuttingHeight );
       InternalTimer( gettimeofday() + 11, \&setCuttingHeight, $hash, 0 )
+
     }
 
     # if ( $act =~ /^(CHARGING|PARKED_IN_CS)$/ && $actold =~ /^(PARKED_IN_CS|CHARGING)$/ ) {
@@ -1670,7 +1731,7 @@ sub isErrorThanPrepare {
 
       my $tmp = dclone( $hash->{helper}{lasterror} );
       unshift ( @{ $hash->{helper}{errorstack} }, $tmp );
-      pop ( @{ $hash->{helper}{errorstack} } ) if ( @{ $hash->{helper}{errorstack} } > 5 );
+      pop ( @{ $hash->{helper}{errorstack} } ) if ( @{ $hash->{helper}{errorstack} } > $hash->{helper}{errorstackmax} );
       ::FHEM::Devices::AMConnect::Common::FW_detailFn_Update ($hash);
 
     }
@@ -1758,6 +1819,8 @@ sub ZoneHandling {
 
       map { $hash->{helper}{mapZones}{$_}{currentDayCntPct} = ( $sumDayCnt ? sprintf( "%.0f", $hash->{helper}{mapZones}{$_}{zoneCnt} / $sumDayCnt * 100 ) : 0 );
             $hash->{helper}{mapZones}{$_}{currentDayAreaPct} = ( $sumDayArea ? sprintf( "%.0f", $hash->{helper}{mapZones}{$_}{zoneLength} / $sumDayArea * 100 ) : 0 );
+            $hash->{helper}{mapZones}{$_}{currentDayTrack} = $hash->{helper}{mapZones}{$_}{zoneLength};
+            $hash->{helper}{mapZones}{$_}{currentDayTime} = $hash->{helper}{mapZones}{$_}{zoneCnt} * 30;
       } @zonekeys;
 
       $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{currentDayCollisions} += $hash->{helper}{newcollisions};
@@ -1816,6 +1879,19 @@ sub calcPathLength {
 
   }
   return $lsum;
+}
+
+#########################
+sub TagWayPointsAsCollision {
+  my ( $hash, $i ) = @_;
+  my $name = $hash->{NAME};
+  for ( my $k = 1; $k < ($i-1); $k++) {
+
+    $hash->{helper}{areapos}[$k]{act} = 'K';
+
+  }
+  $hash->{helper}{areapos}[0]{act} = 'KE';
+  $hash->{helper}{areapos}[$i-1]{act} = 'KS' if ($i>1);
 }
 
 #########################
@@ -1950,9 +2026,14 @@ sub readMap {
 sub setCuttingHeight {
   my ( $hash ) = @_;
   RemoveInternalTimer( $hash, \&setCuttingHeight );
-  CMD( $hash ,'cuttingHeight', $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{cuttingHeight} )
-       if ( $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{cuttingHeight} != $hash->{helper}{mower}{attributes}{settings}{cuttingHeight} );
-  
+
+  if ( $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{cuttingHeight} != $hash->{helper}{mower}{attributes}{settings}{cuttingHeight} ) {
+
+    CMD( $hash ,'cuttingHeight', $hash->{helper}{mapZones}{$hash->{helper}{currentZone}}{cuttingHeight} );
+    $hash->{helper}{cuttingHeightLast} = scalar gettimeofday();
+
+  }
+
   return undef;
 }
 
@@ -2018,7 +2099,7 @@ sub fillReadings {
   $hash->{MODEL} = $model if ( $model && $hash->{MODEL} ne $model );
   $pref = 'planner';
   readingsBulkUpdateIfChanged( $hash, "planner_restrictedReason", $hash->{helper}{mower}{attributes}{$pref}{restrictedReason} );
-  readingsBulkUpdateIfChanged( $hash, "planner_overrideAction", $hash->{helper}{mower}{attributes}{$pref}{override}{action} );
+  readingsBulkUpdateIfChanged( $hash, "planner_overrideAction", $hash->{helper}{mower}{attributes}{$pref}{override}{action} ) if ( $hash->{helper}{mower}{attributes}{$pref}{override}{action} );
 
   $tstamp = $hash->{helper}{mower}{attributes}{$pref}{nextStartTimestamp};
   $timestamp = FmtDateTimeGMT( $tstamp/1000 );
@@ -2035,8 +2116,8 @@ sub fillReadings {
   my $connected = $hash->{helper}{mower}{attributes}{metadata}{connected};
   readingsBulkUpdateIfChanged( $hash, $pref."_connected", ( $connected ? "CONNECTED($connected)"  : "OFFLINE($connected)") );
 
-  readingsBulkUpdateIfChanged( $hash, $pref."_Timestamp", FmtDateTime( $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp}/1000 ) ); # verschieben nach websocket fill
-  readingsBulkUpdateIfChanged( $hash, $pref."_TimestampDiff", $hash->{helper}{storediff}/1000 );# verschieben nach websocket fill
+  readingsBulkUpdateIfChanged( $hash, $pref."_Timestamp", FmtDateTime( $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp}/1000 ) );
+  readingsBulkUpdateIfChanged( $hash, $pref."_TimestampDiff", $hash->{helper}{storediff}/1000 );
 
   return undef;
 }
@@ -2056,9 +2137,11 @@ sub calculateStatistics {
   $hash->{helper}{statistics}{currentWeekTrack} += $hash->{helper}{statistics}{currentDayTrack};
   $hash->{helper}{statistics}{currentWeekArea} += $hash->{helper}{statistics}{currentDayArea};
   $hash->{helper}{statistics}{currentWeekTime} += $hash->{helper}{statistics}{currentDayTime};
+  $hash->{helper}{statistics}{currentWeekCollisions} += $hash->{helper}{statistics}{lastDayCollisions};
   $hash->{helper}{statistics}{currentDayTrack} = 0;
   $hash->{helper}{statistics}{currentDayArea} = 0;
   $hash->{helper}{statistics}{currentDayTime} = 0;
+  $hash->{helper}{statistics}{currentDayCollisions} = 0;
 
   if ( AttrVal($name, 'mapZones', 0) && defined( $hash->{helper}{mapZones} ) ) {
     
@@ -2069,9 +2152,15 @@ sub calculateStatistics {
       $hash->{helper}{mapZones}{$_}{currentWeekCnt} += $hash->{helper}{mapZones}{$_}{zoneCnt};
       $sumCurrentWeekCnt += $hash->{helper}{mapZones}{$_}{currentWeekCnt};
       $hash->{helper}{mapZones}{$_}{currentWeekArea} += $hash->{helper}{mapZones}{$_}{zoneLength};
-      $sumCurrentWeekArea += $hash->{helper}{mapZones}{$_}{currentWeekArea};
+      $sumCurrentWeekArea += ( $hash->{helper}{mapZones}{$_}{currentWeekArea} ? $hash->{helper}{mapZones}{$_}{currentWeekArea} : 0 );
+      $hash->{helper}{mapZones}{$_}{lastDayTrack} = $hash->{helper}{mapZones}{$_}{currentDayTrack};
+      $hash->{helper}{mapZones}{$_}{currentWeekTrack} += ( $hash->{helper}{mapZones}{$_}{currentDayTrack} ? $hash->{helper}{mapZones}{$_}{currentDayTrack} : 0 );
+      $hash->{helper}{mapZones}{$_}{lastDayTime} = ( $hash->{helper}{mapZones}{$_}{currentDayTime} ? $hash->{helper}{mapZones}{$_}{currentDayTime} : 0 );
+      $hash->{helper}{mapZones}{$_}{currentWeekTime} += ( $hash->{helper}{mapZones}{$_}{currentDayTime} ? $hash->{helper}{mapZones}{$_}{currentDayTime} : 0 );
       $hash->{helper}{mapZones}{$_}{zoneCnt} = 0;
       $hash->{helper}{mapZones}{$_}{zoneLength} = 0;
+      $hash->{helper}{mapZones}{$_}{currentDayTrack} = 0;
+      $hash->{helper}{mapZones}{$_}{currentDayTime} = 0;
     } @zonekeys;
 
     map { 
@@ -2081,6 +2170,11 @@ sub calculateStatistics {
       $hash->{helper}{mapZones}{$_}{currentWeekAreaPct} = ( $sumCurrentWeekArea ? sprintf( "%.0f", $hash->{helper}{mapZones}{$_}{currentWeekArea} / $sumCurrentWeekArea * 100 ) : '' );
       $hash->{helper}{mapZones}{$_}{currentDayCntPct} = '';
       $hash->{helper}{mapZones}{$_}{currentDayAreaPct} = '';
+      if ( $hash->{helper}{additional_polling} ) {
+        $hash->{helper}{mapZones}{$_}{lastDayCollisions} = ( $hash->{helper}{mapZones}{$_}{currentDayCollisions} ? $hash->{helper}{mapZones}{$_}{currentDayCollisions} : 0 );
+        $hash->{helper}{mapZones}{$_}{currentWeekCollisions} += ( $hash->{helper}{mapZones}{$_}{currentDayCollisions} ? $hash->{helper}{mapZones}{$_}{currentDayCollisions} : 0 );
+        $hash->{helper}{mapZones}{$_}{currentDayCollisions} = 0;
+      }
     } @zonekeys;
 
   }
@@ -2090,9 +2184,11 @@ sub calculateStatistics {
     $hash->{helper}{statistics}{lastWeekTrack} = $hash->{helper}{statistics}{currentWeekTrack};
     $hash->{helper}{statistics}{lastWeekArea} = $hash->{helper}{statistics}{currentWeekArea};
     $hash->{helper}{statistics}{lastWeekTime} = $hash->{helper}{statistics}{currentWeekTime};
+    $hash->{helper}{statistics}{lastWeekCollisions} = $hash->{helper}{statistics}{currentWeekCollisions};
     $hash->{helper}{statistics}{currentWeekTrack} = 0;
     $hash->{helper}{statistics}{currentWeekArea} = 0;
     $hash->{helper}{statistics}{currentWeekTime} = 0;
+    $hash->{helper}{statistics}{currentWeekCollisions} = 0;
 
     if ( AttrVal($name, 'mapZones', 0) && defined( $hash->{helper}{mapZones} ) ) {
 
@@ -2100,8 +2196,16 @@ sub calculateStatistics {
       map { 
         $hash->{helper}{mapZones}{$_}{lastWeekCntPct} = $hash->{helper}{mapZones}{$_}{currentWeekCntPct};
         $hash->{helper}{mapZones}{$_}{lastWeekAreaPct} = $hash->{helper}{mapZones}{$_}{currentWeekAreaPct};
+        $hash->{helper}{mapZones}{$_}{lastWeekTrack} = $hash->{helper}{mapZones}{$_}{currentWeekTrack};
+        $hash->{helper}{mapZones}{$_}{lastWeekTime} = $hash->{helper}{mapZones}{$_}{currentWeekTime};
         $hash->{helper}{mapZones}{$_}{currentWeekCntPct} = '';
         $hash->{helper}{mapZones}{$_}{currentWeekAreaPct} = '';
+        $hash->{helper}{mapZones}{$_}{currentWeekTrack} = 0;
+        $hash->{helper}{mapZones}{$_}{currentWeekTime} = 0;
+        if ( $hash->{helper}{additional_polling} ) {
+          $hash->{helper}{mapZones}{$_}{lastWeekCollisions} = $hash->{helper}{mapZones}{$_}{currentWeekCollisions};
+          $hash->{helper}{mapZones}{$_}{currentWeekCollisions} = 0;
+        }
       } @zonekeys;
 
     }
@@ -2125,6 +2229,16 @@ sub listStatisticsData {
   my ( $hash ) = @_;
   if ( $::init_done && $hash->{helper}{statistics} ) {
 
+    my %unit =(
+      Track      => 'm',
+      Area       => 'qm',
+      Time       => 's',
+      Collisions => ' ',
+      CntPct     => '%',
+      AreaPct    => '%'
+    );
+    my @props = qw(Track Area Time Collisions);
+    my @items = qw(currentDay lastDay currentWeek lastWeek);
     my $additional_polling = $hash->{helper}{additional_polling};
     my $name = $hash->{NAME};
     my $cnt = 0;
@@ -2140,92 +2254,45 @@ sub listStatisticsData {
     $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalRunningTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalRunningTime} / 3600 ) . '<sup>1</sup> </td><td> h </td></tr>';
     $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalSearchingTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalSearchingTime} / 3600 ) . ' </td><td> h </td></tr>';
 
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentDayTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentDayTrack} ) . ' </td><td> m </td></tr>';
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentDayArea</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentDayArea} ) . ' </td><td> qm </td></tr>';
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentDayTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentDayTime} ) . ' </td><td> s </td></tr>';
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentDayCollisions</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentDayCollisions} ) . ' </td><td> </td></tr>' if ( $additional_polling );
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> <b>calculated speed</b> &emsp;</td><td> ' . sprintf( "%.2f", $hash->{helper}{statistics}{currentDayTrack} / $hash->{helper}{statistics}{currentDayTime} ) . ' </td><td> m/s </td></tr>' if ( $hash->{helper}{statistics}{currentDayTime} );
+    my $prop = '';
+    for my $item ( @items ) {
 
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastDayTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastDayTrack} ) . ' </td><td> m </td></tr>';
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastDayArea</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastDayArea} ) . ' </td><td> qm </td></tr>';
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastDayTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastDayTime} ) . ' </td><td> s </td></tr>';
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastDayCollisions</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastDayCollisions} ) . ' </td><td>  </td></tr>';
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> <b>last day calculated speed</b> &emsp;</td><td> ' . sprintf( "%.2f", $hash->{helper}{statistics}{lastDayTrack} / $hash->{helper}{statistics}{lastDayTime} ) . ' </td><td> m/s </td></tr>' if ( $hash->{helper}{statistics}{lastDayTime} );
+      for $prop ( @props ) {
 
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentWeekTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentWeekTrack} ) . ' </td><td> m </td></tr>';
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentWeekArea</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentWeekArea} ) . ' </td><td> qm </td></tr>';
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>currentWeekTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{currentWeekTime} ) . ' </td><td> s </td></tr>';
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastWeekTrack</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastWeekTrack} ) . ' </td><td> m </td></tr>';
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastWeekArea</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastWeekArea} ) . ' </td><td> qm </td></tr>';
-    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>lastWeekTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{statistics}{lastWeekTime} ) . ' </td><td> s </td></tr>';
+        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{statistics}{<b>'. $item . $prop . '</b>} &emsp;</td><td> ' . sprintf( "%.0f", ( $hash->{helper}{statistics}{$item.$prop} ? $hash->{helper}{statistics}{$item.$prop} : 0 ) ) . ' </td><td> ' . $unit{$prop} . ' </td></tr>' if ( $item.$prop ne 'currentDayCollision' or $additional_polling );
+
+      }
+
+        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> <b>'. $item . ' calculated speed</b> &emsp;</td><td> ' . sprintf( "%.2f", $hash->{helper}{statistics}{$item.'Track'} / $hash->{helper}{statistics}{$item.'Time'} ) . ' </td><td> m/s </td></tr>' if ( $hash->{helper}{statistics}{$item.'Time'} );
+
+    }
+
 
     if ( AttrVal($name, 'mapZones', 0) && defined( $hash->{helper}{mapZones} ) ) {
 
       my @zonekeys = sort (keys %{$hash->{helper}{mapZones}});
+      my @props = qw(Track CntPct AreaPct);
+      unshift @props, 'Collisions' if ( $additional_polling );
 
-      if ( $additional_polling ) {
+      for my $prop ( @props ) {
 
-        for ( @zonekeys ) {
+        for my $item ( @items ) {
 
-          $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentDayCollisions</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentDayCollisions} ? $hash->{helper}{mapZones}{$_}{currentDayCollisions} : '' ) . ' </td><td>  </td></tr>';
+          for ( @zonekeys ) {
+
+            if ($prop eq 'Track') {
+
+              $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> <b> '. $item . ' calculated speed for '. $_ . '</b> &emsp;</td><td> ' . sprintf( "%.2f", $hash->{helper}{mapZones}{$_}{$item.'Track'} / $hash->{helper}{mapZones}{$_}{$item.'Time'} ) . ' </td><td> m/s </td></tr>' if ( $hash->{helper}{mapZones}{$_}{$item.'Time'} );
+
+            } else {
+
+              $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>'. $item . $prop . '</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{$item.$prop} ? $hash->{helper}{mapZones}{$_}{$item.$prop} : '' ) . ' </td><td> ' . $unit{$prop} . ' </td></tr>';
+
+            }
+
+          }
 
         }
-
-      }
-
-      for ( @zonekeys ) {
-
-        
-        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentDayCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentDayCntPct} ? $hash->{helper}{mapZones}{$_}{currentDayCntPct} : '' ) . ' </td><td> % </td></tr>';
-
-      }
-
-      for ( @zonekeys ) {
-
-        
-        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastDayCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastDayCntPct} ? $hash->{helper}{mapZones}{$_}{lastDayCntPct} : '' ) . ' </td><td> % </td></tr>';
-
-      }
-
-      for ( @zonekeys ) {
-
-        
-        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentWeekCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentWeekCntPct} ? $hash->{helper}{mapZones}{$_}{currentWeekCntPct} : '' ) . ' </td><td> % </td></tr>';
-
-      }
-
-      for ( @zonekeys ) {
-
-        
-        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastWeekCntPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastWeekCntPct} ? $hash->{helper}{mapZones}{$_}{lastWeekCntPct} : '' ). ' </td><td> % </td></tr>';
-
-      }
-
-      for ( @zonekeys ) {
-
-        
-        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentDayAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentDayAreaPct} ? $hash->{helper}{mapZones}{$_}{currentDayAreaPct} : '' ) . ' </td><td> % </td></tr>';
-
-      }
-
-      for ( @zonekeys ) {
-
-        
-        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastDayAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastDayAreaPct} ? $hash->{helper}{mapZones}{$_}{lastDayAreaPct} : '' ) . ' </td><td> % </td></tr>';
-
-      }
-
-      for ( @zonekeys ) {
-
-        
-        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>currentWeekAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{currentWeekAreaPct} ? $hash->{helper}{mapZones}{$_}{currentWeekAreaPct} : '' ) . ' </td><td> % </td></tr>';
-
-      }
-
-      for ( @zonekeys ) {
-
-        
-        $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ) . '"><td> $hash->{helper}{mapZones}{' . $_ . '}{<b>lastWeekAreaPct</b>} &emsp;</td><td> ' . ( $hash->{helper}{mapZones}{$_}{lastWeekAreaPct} ? $hash->{helper}{mapZones}{$_}{lastWeekAreaPct} : '' ). ' </td><td> % </td></tr>';
 
       }
 
@@ -2495,9 +2562,19 @@ sub wsReopen {
   RemoveInternalTimer( $hash, \&wsReopen );
   RemoveInternalTimer( $hash, \&wsKeepAlive );
   DevIo_CloseDev( $hash ) if ( DevIo_IsOpen( $hash ) );
-  $hash->{DeviceName} = WSDEVICENAME;
-  DevIo_OpenDev( $hash, 0, \&wsInit, \&wsCb );
+  # $hash->{DeviceName} = WSDEVICENAME;
+  # DevIo_OpenDev( $hash, 0, \&wsInit, \&wsCb );
+  InternalTimer( gettimeofday() + $hash->{helper}{retry_interval_wsreopen}, \&wsAsyncDevIo_OpenDev, $hash, 0 );
 
+}
+
+#########################
+sub wsAsyncDevIo_OpenDev {
+  my ( $hash ) = @_;
+  RemoveInternalTimer( $hash, \&wsAsyncDevIo_OpenDev );
+  $hash->{DeviceName} = WSDEVICENAME;
+  $hash->{helper}{retry_interval_wsreopen} = 2;
+  DevIo_OpenDev( $hash, 0, \&wsInit, \&wsCb );
 }
 
 #########################
@@ -2509,11 +2586,15 @@ sub wsRead {
   my $additional_polling = $hash->{helper}{additional_polling} * 1000;
   my $use_position_polling = $hash->{helper}{use_position_polling};
   my $buf = DevIo_SimpleRead( $hash );
-  return "" if ( !defined( $buf ) );
+  return undef if ( !defined( $buf ) );
+  Log3 $name, 4, "$iam received websocket data: >$buf<";
 
   if ( $buf ) {
+    
+    $buf =~ s/}\{/},{/g;
+    $buf = "[${buf}]";
 
-    my $result = eval { decode_json( $buf ) };
+    my $bufres = eval { decode_json( $buf ) };
 
     if ( $@ ) {
 
@@ -2521,85 +2602,99 @@ sub wsRead {
 
     } else {
 
-      if ( !defined( $result->{type} ) ) {
+      for my $result (@$bufres) {
 
-        $hash->{helper}{wsResult}{other} = dclone( $result );
+        if ( !defined( $result->{type} ) ) {
 
-      }
+          $hash->{helper}{wsResult}{other} = dclone( $result );
 
-      if ( defined( $result->{type} ) && $result->{id} eq $hash->{helper}{mower_id} ) {
+          if ( defined( $result->{ready} ) && !$result->{ready} ) {
 
-        Log3 $name, 4, "$iam selected websocket data: >$buf<";
-        $hash->{helper}{wsResult}{$result->{type}} = dclone( $result );
-        $hash->{helper}{wsResult}{type} = $result->{type};
-
-        if ( $result->{type} eq "status-event" ) {
-
-          $hash->{helper}{statusTime} = gettimeofday();
-          $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp} = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp};
-          $hash->{helper}{mowerold}{attributes}{mower}{activity} = $hash->{helper}{mower}{attributes}{mower}{activity};
-          $hash->{helper}{mower}{attributes}{battery} = dclone( $result->{attributes}{battery} );
-          $hash->{helper}{mower}{attributes}{metadata} = dclone( $result->{attributes}{metadata} );
-          $hash->{helper}{mower}{attributes}{mower} = dclone( $result->{attributes}{mower} );
-          $hash->{helper}{mower}{attributes}{planner} = dclone( $result->{attributes}{planner} );
-          $hash->{helper}{storediff} = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} - $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp};
-          $hash->{helper}{storesum} += $hash->{helper}{storediff} if ( $additional_polling );
-          my $act = $result->{attributes}{mower}{activity};
-
-          if ( !$additional_polling ) {
-
-            isErrorThanPrepare( $hash );
-            resetLastErrorIfCorrected( $hash );
-
-          } elsif ( ( $additional_polling < $hash->{helper}{storesum} || $additional_polling && $act eq 'LEAVING' ) && !$hash->{helper}{midnightCycle} ) {
-
-            $hash->{helper}{storesum} = 0;
-            # RemoveInternalTimer( $hash, \&getMowerWs );
-            # InternalTimer(gettimeofday() + 2,  \&getMowerWs, $hash, 0 );
-            getMowerWs( $hash );
-            Log3 $name, 4, "$iam received websocket data, and polling is on: >$buf<";
-            $hash->{First_Read} = 0;
-            return;
+            readingsSingleUpdate( $hash, 'mower_wsEvent', 'not ready', 1);
+            $hash->{helper}{retry_interval_wsreopen} = 420;
+            wsReopen($hash);
 
           }
 
         }
 
-        if ( $result->{type} eq "positions-event" ) {
+        if ( defined( $result->{type} ) && $result->{id} eq $hash->{helper}{mower_id} ) {
 
-          if ( !$use_position_polling || $use_position_polling && !$additional_polling ) {
+          Log3 $name, 5, "$iam selected websocket data: >$buf<";
+          $hash->{helper}{wsResult}{$result->{type}} = dclone( $result );
+          $hash->{helper}{wsResult}{type} = $result->{type};
 
-          $hash->{helper}{positionsTime} = gettimeofday();
-          $hash->{helper}{mower}{attributes}{positions} = dclone( $result->{attributes}{positions} );
+          if ( $result->{type} eq "status-event" ) {
 
-            AlignArray( $hash );
-            FW_detailFn_Update ($hash);
+            $hash->{helper}{statusTime} = gettimeofday();
+            $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp} = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp};
+            $hash->{helper}{mowerold}{attributes}{mower}{activity} = $hash->{helper}{mower}{attributes}{mower}{activity};
+            $hash->{helper}{mower}{attributes}{battery} = dclone( $result->{attributes}{battery} );
+            $hash->{helper}{mower}{attributes}{metadata} = dclone( $result->{attributes}{metadata} );
+            $hash->{helper}{mower}{attributes}{mower} = dclone( $result->{attributes}{mower} );
+            $hash->{helper}{mower}{attributes}{planner} = dclone( $result->{attributes}{planner} );
+            $hash->{helper}{storediff} = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} - $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp};
+            $hash->{helper}{storesum} += $hash->{helper}{storediff} if ( $additional_polling );
+            my $act = $hash->{helper}{mower}{attributes}{mower}{activity};
+            my $actold = $hash->{helper}{mowerold}{attributes}{mower}{activity};
 
-          } elsif ( $use_position_polling && $additional_polling ) {
+            if ( !$additional_polling ) {
 
-            Log3 $name, 4, "$iam received websocket data, but position polling is on: >$buf<";
-            $hash->{First_Read} = 0;
-            return;
+              isErrorThanPrepare( $hash );
+              resetLastErrorIfCorrected( $hash );
+
+            #respect polling min interval with exceptions
+            } elsif ( ( $additional_polling < $hash->{helper}{storesum} || $additional_polling &&
+              ( $act =~ /^(LEAVING|GOING_HOME)/ ||
+                $actold =~ /LEAVING/ && $act eq 'MOWING' ||
+                $actold =~ /GOING_HOME/ && $act =~ /PARKED_IN_CS|CHARGING/
+              ) ) && !$hash->{helper}{midnightCycle} ) {
+
+              $hash->{helper}{storesum} = 0;
+              RemoveInternalTimer( $hash, \&getMowerWs );
+              InternalTimer(gettimeofday() + 1,  \&getMowerWs, $hash, 0 );
+              # getMowerWs( $hash );
+              next;
+
+            }
 
           }
 
+          if ( $result->{type} eq "positions-event" ) {
+
+            if ( !$use_position_polling ) {
+
+            $hash->{helper}{positionsTime} = gettimeofday();
+            $hash->{helper}{mower}{attributes}{positions} = dclone( $result->{attributes}{positions} );
+
+              AlignArray( $hash );
+              FW_detailFn_Update ($hash);
+
+            } elsif ( $use_position_polling ) {
+
+              next;
+
+            }
+
+          }
+
+          if ( $result->{type} eq "settings-event" ) {
+
+            $hash->{helper}{mower}{attributes}{calendar} = dclone( $result->{attributes}{calendar} ) if ( defined ( $result->{attributes}{calendar} ) );
+            $hash->{helper}{mower}{attributes}{settings}{headlight} = $result->{attributes}{headlight} if ( defined ( $result->{attributes}{headlight} ) );
+            $hash->{helper}{mower}{attributes}{settings}{cuttingHeight} = $result->{attributes}{cuttingHeight} if ( defined ( $result->{attributes}{cuttingHeight} ) );
+
+          }
+
+          # Update readings
+          readingsBeginUpdate($hash);
+
+            fillReadings( $hash );
+            readingsBulkUpdate( $hash, 'mower_wsEvent', $hash->{helper}{wsResult}{type} );
+
+          readingsEndUpdate($hash, 1);
+
         }
-
-        if ( $result->{type} eq "settings-event" ) {
-
-          $hash->{helper}{mower}{attributes}{calendar} = dclone( $result->{attributes}{calendar} ) if ( defined ( $result->{attributes}{calendar} ) );
-          $hash->{helper}{mower}{attributes}{settings}{headlight} = $result->{attributes}{headlight} if ( defined ( $result->{attributes}{headlight} ) );
-          $hash->{helper}{mower}{attributes}{settings}{cuttingHeight} = $result->{attributes}{cuttingHeight} if ( defined ( $result->{attributes}{cuttingHeight} ) );
-
-        }
-
-        # Update readings
-        readingsBeginUpdate($hash);
-
-          fillReadings( $hash );
-          readingsBulkUpdate( $hash, 'mower_wsEvent', $hash->{helper}{wsResult}{type} );
-
-        readingsEndUpdate($hash, 1);
 
       }
 
@@ -2607,7 +2702,6 @@ sub wsRead {
 
   }
 
-  Log3 $name, 4, "$iam received websocket data: >$buf<";
   $hash->{First_Read} = 0;
   return;
 
@@ -2616,6 +2710,7 @@ sub wsRead {
 #########################
 sub wsReady {
   my  ($hash ) = @_;
+  RemoveInternalTimer( $hash, \&wsAsyncDevIo_OpenDev);
   RemoveInternalTimer( $hash, \&wsReopen);
   RemoveInternalTimer( $hash, \&wsKeepAlive);
   return DevIo_OpenDev( $hash, 1, \&wsInit, \&wsCb );

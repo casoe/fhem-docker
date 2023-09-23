@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: 74_AutomowerConnect.pm 27715 2023-06-29 22:36:38Z Ellert $
+# $Id: 74_AutomowerConnect.pm 27838 2023-08-13 18:11:38Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::AutomowerConnect;
-our $cvsid = '$Id: 74_AutomowerConnect.pm 27715 2023-06-29 22:36:38Z Ellert $';
+our $cvsid = '$Id: 74_AutomowerConnect.pm 27838 2023-08-13 18:11:38Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -318,7 +318,7 @@ __END__
 
     <li><a id='AutomowerConnect-attr-numberOfWayPointsToDisplay'>numberOfWayPointsToDisplay</a><br>
       <code>attr &lt;name&gt; numberOfWayPointsToDisplay &lt;number of way points&gt;</code><br>
-      Set the number of way points stored and displayed, default and at least 5000. The way points are shifted through the dedicated stack.</li>
+      Set the number of way points stored and displayed, default is 5000 at least 100. The way points are shifted through the dedicated stack.</li>
 
     <li><a id='AutomowerConnect-attr-weekdaysToResetWayPoints'>weekdaysToResetWayPoints</a><br>
       <code>attr &lt;name&gt; weekdaysToResetWayPoints &lt;any combination of weekday numbers, space or minus [0123456 -]&gt;</code><br>
@@ -378,7 +378,7 @@ __END__
 
     <li><a id='AutomowerConnect-attr-addPollingMinInterval'>addPollingMinInterval</a><br>
       <code>attr &lt;name&gt; addPollingMinInterval &lt;interval in seconds&gt;</code><br>
-      Set minimum intervall for additional polling, default 0 (no polling). Gets periodically statistics data from mower. Make sure to be within API limits (10000 calls per month).</li>
+      Set minimum intervall for additional polling triggered by status-event, default 0 (no polling). Gets periodically statistics data from mower. Make sure to be within API limits (10000 calls per month).</li>
 
     <li><a id='AutomowerConnect-attr-addPositionPolling'>addPositionPolling</a><br>
       <code>attr &lt;name&gt; addPositionPolling &lt;[1|<b>0</b>]&gt;</code><br>
@@ -680,7 +680,7 @@ __END__
 
     <li><a id='AutomowerConnect-attr-numberOfWayPointsToDisplay'>numberOfWayPointsToDisplay</a><br>
       <code>attr &lt;name&gt; numberOfWayPointsToDisplay &lt;number of way points&gt;</code><br>
-      Legt die Anzahl der gespeicherten und und anzuzeigenden Wegpunkte fest, Standart und Mindestwert 5000. Die Wegpunkte werden durch den zugeteilten Wegpunktspeicher geschoben.</li>
+      Legt die Anzahl der gespeicherten und und anzuzeigenden Wegpunkte fest, Standartwert ist 5000 und Mindestwert ist 100. Die Wegpunkte werden durch den zugeteilten Wegpunktspeicher geschoben.</li>
 
     <li><a id='AutomowerConnect-attr-weekdaysToResetWayPoints'>weekdaysToResetWayPoints</a><br>
       <code>attr &lt;name&gt; weekdaysToResetWayPoints &lt;any combination of weekday numbers, space or minus [0123456 -]&gt;</code><br>
@@ -741,7 +741,7 @@ __END__
 
     <li><a id='AutomowerConnect-attr-addPollingMinInterval'>addPollingMinInterval</a><br>
       <code>attr &lt;name&gt; addPollingMinInterval &lt;interval in seconds&gt;</code><br>
-      Setzt das Mindestintervall für zusätzliches Polling der API, default 0 (kein Polling). Liest periodisch statistische Daten vom Mäher. Es muss sichergestellt werden, das die API Begrenzung (10000 Anfragen pro Monat) eingehalten wird.</li>
+      Setzt das Mindestintervall für zusätzliches Polling der API nach einem status-event, default 0 (kein Polling). Liest periodisch zusätzlich statistische Daten vom Mäher. Es muss sichergestellt werden, das die API Begrenzung (10000 Anfragen pro Monat) eingehalten wird.</li>
 
     <li><a id='AutomowerConnect-attr-addPositionPolling'>addPositionPolling</a><br>
       <code>attr &lt;name&gt; addPositionPolling &lt;[1|<b>0</b>]&gt;</code><br>

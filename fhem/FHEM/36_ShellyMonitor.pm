@@ -4,7 +4,7 @@
 # Parses the MultiCast "COAP" messages of Shellys and updates
 # devices accordingly
 #
-# $Id: 36_ShellyMonitor.pm 26929 2022-12-29 19:28:42Z gvzdus $
+# $Id: 36_ShellyMonitor.pm 27981 2023-09-18 20:54:54Z gvzdus $
 #
 
 package main;
@@ -234,6 +234,8 @@ my %DEVID_MODEL = (
     "SHCB-1"   => "shellybulb",
     "SHBLB-1"  => "shellybulb",
     "SHBDUO-1" => "shellybulb",
+	"SHEM"     => "shellyem",
+	"SHEM-3"   => "shelly3em",
     "SHMOS-01" => "generic",
     "SHWT-1"   => "generic",
     "SHHT-1"   => "generic",
@@ -263,7 +265,9 @@ my %DEVID_PREFIX = (
     "SHBTN-2"  => "shelly_button",
     "SHIX3-1"  => "shelly_i3",
     "SHMOS-01" => "shelly_motion",
-	"SHTRV-01" => "shelly_trv"
+	"SHTRV-01" => "shelly_trv",
+	"SHEM"     => "shelly_em",
+	"SHEM-3"   => "shelly_em3"
 );
 
 # Mapping of DeviceId in Multicast to additional attributes on creation
@@ -323,8 +327,8 @@ sub ShellyMonitor_Initialize
   # Check which models are available in Mod_Shelly
   LoadModule "Shelly";
   my $fn = $modules{"Shelly"}{"AttrList"};
-  if($fn && $fn=~/ model:([^ ]+)( |$)/) {
-    map { $shelly_models_by_mod_shelly{$_} = 1 } split (/,/, $1);
+  if($fn && $fn=~/(^| )model:([^ ]+)( |$)/) {
+    map { $shelly_models_by_mod_shelly{$_} = 1 } split (/,/, $2);
     Log3 $hash->{NAME}, 2, "Shelly-Module loaded supports models: " . join(',', keys %shelly_models_by_mod_shelly);
   }
 }
@@ -727,10 +731,17 @@ sub ShellyMonitor_DoRead
                 readingsBulkUpdateIfChanged($device, $rtype . $subs,
                    $defarr->{"unit"} eq "Wmin" ? int($svalue/6)/10 : $svalue);
               } elsif ($rtype eq "output") {
-                my $subs = ($shelly_models{$model}[0] ==1) ? "" : "_".$rno;
                 my $state = ( $svalue == 0 ? "off" : ( $svalue == 1 ? "on" : undef ));
-                if ($state) {
-                  readingsBulkUpdateIfChanged($device, "relay" . $subs, $state);
+                my $no_relais = $shelly_models{$model}[0];
+                if ($no_relais == 0) {
+                  readingsBulkUpdateIfChanged($device, "state", $state);
+                } else {
+                  if ($no_relais == 1) {
+                    readingsBulkUpdateIfChanged($device, "relay", $state);
+                  } else {
+                    my $sname = "relay_" . $rno;
+                    readingsBulkUpdateIfChanged($device, $sname, $state);
+                  }
                 }
               } elsif ($rtype eq "brightness") {
                 my $subs = ($shelly_models{$model}[3] ==1) ? "" : "_".$rno;
@@ -998,6 +1009,8 @@ sub ShellyMonitor_Set
       CommandAttr ( undef, $dname . ' model ' . $model);
     } elsif ($shelly_models_by_mod_shelly{"shellygeneric"}) {
       CommandAttr ( undef, $dname . ' model shellygeneric');
+    } elsif ($shelly_models_by_mod_shelly{"generic"}) {
+      CommandAttr ( undef, $dname . ' model generic');
     }
     return "Creation of device '$dname' failed" unless ($defs{$dname});
 

@@ -1,4 +1,4 @@
-# $Id: 70_BRAVIA.pm 24219 2021-04-11 14:29:19Z vuffiraa $
+# $Id: 70_BRAVIA.pm 27771 2023-07-16 16:04:59Z vuffiraa $
 ##############################################################################
 #
 #     70_BRAVIA.pm
@@ -791,7 +791,7 @@ sub SendCommand {
     my $return;
     my $requestFormat = ReadingsVal($name, "requestFormat", "");
 
-    if ($service ne "register" && $service ne "getStatus") {
+    if ($service ne "register" && $service ne "getStatus" && ReadingsVal($name, "state", "") eq "on") {
       return if CheckRegistration($hash, $service, $cmd, $param, @successor);
     }
 
