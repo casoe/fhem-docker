@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2023-09-19 22:06:27
+# Created by FHEM/98_SVG.pm, 2023-10-03 16:23:05
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -10,8 +10,8 @@ set y2tics
 set grid ytics
 set ylabel "Watt"
 set y2label ""
-set yrange [0:350]
-set y2range [0:350]
+set yrange [0:500]
+set y2range [0:500]
 
 #dblog MQTT2_DVES_ED41C4:power:::
 

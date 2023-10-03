@@ -1,10 +1,10 @@
-# Created by FHEM/98_SVG.pm, 2023-07-13 19:58:02
+# Created by FHEM/98_SVG.pm, 2023-10-03 16:04:34
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
 set timefmt "%Y-%m-%d_%H:%M:%S"
 set xlabel " "
-set title 'Kühlschrank Verbrauch pro Tag'
+set title 'Kühlschrank Keller Verbrauch pro Tag'
 set ytics 
 set y2tics 
 set grid ytics

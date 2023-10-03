@@ -1,0 +1,24 @@
+# Created by FHEM/98_SVG.pm, 2023-09-26 20:16:29
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Wifi'
+set ytics 
+set y2tics 
+set grid ytics
+set ylabel ""
+set y2label ""
+set yrange [-100:0]
+set y2range [-100:0]
+
+#dblog MQTT2_DVES_9BFAF4:Wifi_Signal:::
+#dblog MQTT2_shellyplus1pm_4855199ce640:rssi:::
+#dblog MQTT2_shelly1_862BBE:wifi_sta_rssi:::
+#dblog MQTT2_shelly1_E89F6D869E63:wifi_sta_rssi:::
+
+plot "<IN>" using 1:2 axes x1y1 title 'Balkonkraftwerk' ls l0 lw 1 with lines,\
+     "<IN>" using 1:2 axes x1y1 title 'Außensteckdosen' ls l1 lw 2 with lines,\
+     "<IN>" using 1:2 axes x1y1 title 'Garage Carsten' ls l2 lw 2 with lines,\
+     "<IN>" using 1:2 axes x1y1 title 'Garage Tina' ls l3 lw 2 with lines

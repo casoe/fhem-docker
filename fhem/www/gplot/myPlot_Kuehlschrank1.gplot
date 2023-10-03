@@ -1,10 +1,10 @@
-# Created by FHEM/98_SVG.pm, 2022-10-11 15:50:02
+# Created by FHEM/98_SVG.pm, 2023-10-03 16:03:04
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
 set timefmt "%Y-%m-%d_%H:%M:%S"
 set xlabel " "
-set title 'Kühlschrank Verbrauch'
+set title 'Kühlschrank Keller Verbrauch'
 set ytics 
 set y2tics 
 set grid ytics
@@ -13,6 +13,6 @@ set y2label ""
 set yrange [0:200]
 set y2range [0:200]
 
-#dblog MQTT2_DVES_0371A9:power
+#dblog MQTT2_DVES_0371A9:power:::
 
 plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch in Watt' ls l0 lw 1 with steps
