@@ -2,7 +2,7 @@
 #
 #  88_HMCCUDEV.pm
 #
-#  $Id: 88_HMCCUDEV.pm 27988 2023-09-21 17:38:36Z zap $
+#  $Id: 88_HMCCUDEV.pm 27999 2023-09-26 16:33:11Z zap $
 #
 #  Version 5.0
 #
@@ -31,7 +31,7 @@ sub HMCCUDEV_Set ($@);
 sub HMCCUDEV_Get ($@);
 sub HMCCUDEV_Attr ($@);
 
-my $HMCCUDEV_VERSION = '5.0 232641921';
+my $HMCCUDEV_VERSION = '5.0 232691829';
 
 ######################################################################
 # Initialize module

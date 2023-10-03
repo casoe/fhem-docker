@@ -358,6 +358,7 @@ FHEM/70_ONKYO_AVR.pm         delmar               Multimedia
 FHEM/70_OctoPrint.pm         michael.winkler      Multimedia
 FHEM/70_PHTV.pm              loredo               Multimedia
 FHEM/70_PIONEERAVR.pm        50watt               Multimedia
+FHEM/70_PylonLowVoltage.pm   DS_Starter           Solaranlagen
 FHEM/70_Pushbullet.pm        fhainz               Unterstützende Dienste
 FHEM/70_PushNotifier.pm      xusader              Unterstützende Dienste
 FHEM/70_Pushover.pm          loredo               Unterstützende Dienste
@@ -424,6 +425,7 @@ FHEM/76_msgDialog.pm         orphan/Beta-User     Frontends/Sprachsteuerung http
 FHEM/76_MSGFile.pm           gandy                Automatisierung
 FHEM/76_MSGMail.pm           gandy                Automatisierung
 FHEM/76_SMAEVCharger.pm      jual                 Sonstige Systeme
+FHEM/76_SolarForecast.pm     DS_Starter           Solaranlagen
 FHEM/76_SMAInverter.pm       MadMax/DS_Starter    Sonstige Systeme
 FHEM/77_SMAEM.pm             VolkerKettenbach     Sonstige Systeme
 FHEM/77_SMASTP.pm            VolkerKettenbach     Sonstige Systeme

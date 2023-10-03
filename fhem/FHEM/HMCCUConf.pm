@@ -2,7 +2,7 @@
 #
 #  HMCCUConf.pm
 #
-#  $Id: HMCCUConf.pm 27988 2023-09-21 17:38:36Z zap $
+#  $Id: HMCCUConf.pm 27999 2023-09-26 16:33:11Z zap $
 #
 #  Version 5.0
 #
@@ -326,10 +326,9 @@ $HMCCU_CONFIG_VERSION = '5.0';
 #   A Perl function name
 # Datapoint-Def:
 #   No parameters:                   Paramset:Datapoints:[Parameter=]FixedValue[,...]
-#   Toggle command:                  Paramset:Datapoints
 #   One parameter:                   Paramset:Datapoints:?Parameter
 #   Optional parameter with default: Paramset:Datapoints:?Parameter=Default-Value
-#   List of values:                  Paramset:Datapoints:#Parameter[=FixedValue[,...]]
+#   List of values (also toggle):    Paramset:Datapoints:#Parameter[=FixedValue[,...]]
 #   Internal value (paramset "I"):   Paramset:Datapoints:*Parameter=Default-Value
 # Paramset:
 #   V=VALUES, M=MASTER (channel), D=MASTER (device), I=INTERNAL

@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 27895 2023-08-24 12:46:07Z rudolfkoenig $
+# $Id: fhem.pl 28007 2023-09-28 16:11:48Z rudolfkoenig $
 
 
 use strict;
@@ -279,7 +279,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 27895 2023-08-24 12:46:07Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 28007 2023-09-28 16:11:48Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -4661,6 +4661,7 @@ OldReadingsNum($$$;$)
   my $val = OldReadingsVal($d,$n,$default);
   return undef if(!defined($val));
   $val = ($val =~ /(-?\d+(\.\d+)?)/ ? $1 : "");
+  $val =~ s/^(-?)0+([1-9])/$1$2/; # Forum #135120, dont want octal numbers
   return $default if($val eq "");
   $val = round($val,$round) if(defined $round);
   return $val;
@@ -4708,6 +4709,7 @@ ReadingsNum($$$;$)
   my $val = ReadingsVal($d,$n,$default);
   return undef if(!defined($val));
   $val = ($val =~ /(-?\d+(\.\d+)?)/ ? $1 : "");
+  $val =~ s/^(-?)0+([1-9])/$1$2/; # Forum #135120, dont want octal numbers
   return $default if($val eq "");
   $val = round($val,$round) if(defined $round);
   return $val;
