@@ -1,5 +1,5 @@
 ########################################################################################################################
-# $Id: 76_SolarForecast.pm 28017 2023-10-02 08:11:52Z DS_Starter $
+# $Id: 76_SolarForecast.pm 28027 2023-10-06 19:57:06Z DS_Starter $
 #########################################################################################################################
 #       76_SolarForecast.pm
 #
@@ -144,6 +144,8 @@ BEGIN {
 
 # Versions History intern
 my %vNotesIntern = (
+  "1.0.2"  => "05.10.2023  replace calcRange by cloud2bin ",
+  "1.0.1"  => "03.10.2023  fixes in comRef, bug fix Forum: https://forum.fhem.de/index.php?msg=1288637 ",
   "1.0.0"  => "01.10.2023  preparation for check in ",
   "0.83.3" => "28.09.2023  fix Illegal division by zero, Forum: https://forum.fhem.de/index.php?msg=1288032 ".
                            "delete AllPVforecastsToEvent after event generation ",
@@ -3671,6 +3673,8 @@ sub __VictronVRM_ApiResponseForecast {
 
           my $k = 0;
           while ($jdata->{'records'}{'solar_yield_forecast'}[$k]) {
+              next if(ref $jdata->{'records'}{'solar_yield_forecast'}[$k] ne "ARRAY");                             # Forum: https://forum.fhem.de/index.php?msg=1288637
+              
               my $starttmstr = $jdata->{'records'}{'solar_yield_forecast'}[$k][0];                                 # Millisekunden geliefert
               my $val        = $jdata->{'records'}{'solar_yield_forecast'}[$k][1];
               $starttmstr    = (timestampToTimestring ($starttmstr, $lang))[3];
@@ -3690,6 +3694,8 @@ sub __VictronVRM_ApiResponseForecast {
 
           $k = 0;
           while ($jdata->{'records'}{'vrm_consumption_fc'}[$k]) {
+              next if(ref $jdata->{'records'}{'vrm_consumption_fc'}[$k] ne "ARRAY");                             # Forum: https://forum.fhem.de/index.php?msg=1288637
+              
               my $starttmstr = $jdata->{'records'}{'vrm_consumption_fc'}[$k][0];                                 # Millisekunden geliefert
               my $val        = $jdata->{'records'}{'vrm_consumption_fc'}[$k][1];
               $starttmstr    = (timestampToTimestring ($starttmstr, $lang))[3];
@@ -5532,7 +5538,7 @@ sub ___readCandQ {
   delete $data{$type}{$name}{nexthours}{"NextHour".sprintf("%02d",$num)}{cloudrange};
 
   if ($acu =~ /on_complex/xs) {                                                                       # Autokorrektur complex soll genutzt werden
-      my $range  = calcRange ($cc);                                                                   # Range errechnen
+      my $range  = cloud2bin ($cc);                                                                   # Range errechnen
       ($hc, $hq) = CircularAutokorrVal ($hash, sprintf("%02d",$fh1), $range, undef);                  # Korrekturfaktor/Qualität der Stunde des Tages (complex)
       $hq      //= '-';
       $hc      //= 1;                                                                                 # Korrekturfaktor = 1 (keine Korrektur)                                                                                                        # keine Qualität definiert
@@ -10587,7 +10593,7 @@ sub __Pv_Fc_Complex_Dnum_Hist {
       return;
   }
 
-  my $range = calcRange ($chwcc);
+  my $range = cloud2bin ($chwcc);
 
   if(scalar(@efa)) {
       debugLog ($paref, 'pvCorrection', "Complex Corrf -> Raw Days ($calcd) for average check: ".join " ",@efa);
@@ -10607,7 +10613,7 @@ sub __Pv_Fc_Complex_Dnum_Hist {
           next;
       }
 
-      $histwcc = calcRange ($histwcc);                                                 # V 0.50.1
+      $histwcc = cloud2bin ($histwcc);                                                 # V 0.50.1
 
       if($range == $histwcc) {
           $pvrl  += HistoryVal ($hash, $dayfa, $hour, 'pvrl', 0);
@@ -11210,18 +11216,6 @@ sub _aiMakeIdxRaw {
   $ridx   .= $day.$hod;
 
 return $ridx;
-}
-
-################################################################
-#            Bewölkungs- bzw. Regenrange berechnen
-################################################################
-sub calcRange {
-  my $range = shift;
-
-  #$range = sprintf "%.0f", $range/10;
-  $range = sprintf "%.0f", $range;
-
-return $range;
 }
 
 ################################################################
@@ -13300,25 +13294,26 @@ return $bin;
 sub cloud2bin {
   my $wcc = shift;
 
-  my $bin = $wcc > 95 ? '95' :
-            $wcc > 90 ? '90' :
-            $wcc > 85 ? '85' :
-            $wcc > 80 ? '80' :
-            $wcc > 75 ? '75' :
-            $wcc > 70 ? '70' :
-            $wcc > 65 ? '65' :
-            $wcc > 60 ? '60' :
-            $wcc > 55 ? '55' :
-            $wcc > 50 ? '50' :
-            $wcc > 45 ? '45' :
-            $wcc > 40 ? '40' :
-            $wcc > 35 ? '35' :
-            $wcc > 30 ? '30' :
-            $wcc > 25 ? '25' :
-            $wcc > 20 ? '20' :
-            $wcc > 15 ? '15' :
-            $wcc > 10 ? '10' :
-            $wcc > 5  ? '05' :
+  my $bin = $wcc == 100 ? '100' :
+            $wcc >  95  ? '95'  :
+            $wcc >  90  ? '90'  :
+            $wcc >  85  ? '85'  :
+            $wcc >  80  ? '80'  :
+            $wcc >  75  ? '75'  :
+            $wcc >  70  ? '70'  :
+            $wcc >  65  ? '65'  :
+            $wcc >  60  ? '60'  :
+            $wcc >  55  ? '55'  :
+            $wcc >  50  ? '50'  :
+            $wcc >  45  ? '45'  :
+            $wcc >  40  ? '40'  :
+            $wcc >  35  ? '35'  :
+            $wcc >  30  ? '30'  :
+            $wcc >  25  ? '25'  :
+            $wcc >  20  ? '20'  :
+            $wcc >  15  ? '15'  :
+            $wcc >  10  ? '10'  :
+            $wcc >  5   ? '05'  :
             '00';
 
 return $bin;
@@ -13330,25 +13325,26 @@ return $bin;
 sub rain2bin {
   my $wrp = shift;
 
-  my $bin = $wrp > 95 ? '95' :
-            $wrp > 90 ? '90' :
-            $wrp > 85 ? '85' :
-            $wrp > 80 ? '80' :
-            $wrp > 75 ? '75' :
-            $wrp > 70 ? '70' :
-            $wrp > 65 ? '65' :
-            $wrp > 60 ? '60' :
-            $wrp > 55 ? '55' :
-            $wrp > 50 ? '50' :
-            $wrp > 45 ? '45' :
-            $wrp > 40 ? '40' :
-            $wrp > 35 ? '35' :
-            $wrp > 30 ? '30' :
-            $wrp > 25 ? '25' :
-            $wrp > 20 ? '20' :
-            $wrp > 15 ? '15' :
-            $wrp > 10 ? '10' :
-            $wrp > 5  ? '05' :
+  my $bin = $wrp == 100 ? '100' :
+            $wrp >  95  ? '95'  :
+            $wrp >  90  ? '90'  :
+            $wrp >  85  ? '85'  :
+            $wrp >  80  ? '80'  :
+            $wrp >  75  ? '75'  :
+            $wrp >  70  ? '70'  :
+            $wrp >  65  ? '65'  :
+            $wrp >  60  ? '60'  :
+            $wrp >  55  ? '55'  :
+            $wrp >  50  ? '50'  :
+            $wrp >  45  ? '45'  :
+            $wrp >  40  ? '40'  :
+            $wrp >  35  ? '35'  :
+            $wrp >  30  ? '30'  :
+            $wrp >  25  ? '25'  :
+            $wrp >  20  ? '20'  :
+            $wrp >  15  ? '15'  :
+            $wrp >  10  ? '10'  :
+            $wrp >  5   ? '05'  :
             '00';
 
 return $bin;
@@ -14768,7 +14764,7 @@ to ensure that the system configuration is correct.
             <tr><td>                  </td><td>factor/0..1 - quality of the PV forecast (1 = best quality)                     </td></tr>
             <tr><td> <b>DoN</b>       </td><td>sunrise and sunset status (0 - night, 1 - day)                                  </td></tr>
             <tr><td> <b>hourofday</b> </td><td>current hour of the day                                                         </td></tr>
-            <tr><td> <b>pvapifc</b>   </td><td>expected PV generation (Wh) of the API used                                     </td></tr>
+            <tr><td> <b>pvapifc</b>   </td><td>expected PV generation (Wh) of the used API incl. a possible correction         </td></tr>
             <tr><td> <b>pvaifc</b>    </td><td>expected PV generation of the AI (Wh)                                           </td></tr>
             <tr><td> <b>pvfc</b>      </td><td>PV generation forecast used (Wh)                                                </td></tr>
             <tr><td> <b>aihit</b>     </td><td>delivery status of the AI for the PV forecast (0-no delivery, 1-delivery)       </td></tr>
@@ -16531,7 +16527,7 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
             <tr><td>                  </td><td>Faktor/0..1 - Qualität der PV Prognose (1 = beste Qualität)                        </td></tr>
             <tr><td> <b>DoN</b>       </td><td>Sonnenauf- und untergangsstatus (0 - Nacht, 1 - Tag)                               </td></tr>
             <tr><td> <b>hourofday</b> </td><td>laufende Stunde des Tages                                                          </td></tr>
-            <tr><td> <b>pvapifc</b>   </td><td>erwartete PV Erzeugung (Wh) der verwendeten API                                    </td></tr>
+            <tr><td> <b>pvapifc</b>   </td><td>erwartete PV Erzeugung (Wh) der verwendeten API inkl. einer eventuellen Korrektur  </td></tr>
             <tr><td> <b>pvaifc</b>    </td><td>erwartete PV Erzeugung der KI (Wh)                                                 </td></tr>
             <tr><td> <b>pvfc</b>      </td><td>verwendete PV Erzeugungsprognose (Wh)                                              </td></tr>
             <tr><td> <b>aihit</b>     </td><td>Lieferstatus der KI für die PV Vorhersage (0-keine Lieferung, 1-Lieferung)         </td></tr>
