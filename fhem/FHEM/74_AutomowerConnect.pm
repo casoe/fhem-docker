@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: 74_AutomowerConnect.pm 27838 2023-08-13 18:11:38Z Ellert $
+# $Id: 74_AutomowerConnect.pm 28048 2023-10-13 16:44:05Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::AutomowerConnect;
-our $cvsid = '$Id: 74_AutomowerConnect.pm 27838 2023-08-13 18:11:38Z Ellert $';
+our $cvsid = '$Id: 74_AutomowerConnect.pm 28048 2023-10-13 16:44:05Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -167,6 +167,11 @@ __END__
       <code>set &lt;name&gt; Start &lt;number of minutes&gt;</code><br>
       Starts immediately for &lt;number of minutes&gt;</li>
 
+    <li><a id='AutomowerConnect-set-StartInWorkArea'>StartInWorkArea</a><br>
+      <code>set &lt;name&gt; StartInWorkArea &lt;workAreaId|name&gt; [&lt;number of minutes&gt;]</code><br>
+      Testing: Starts immediately in &lt;workAreaId|name&gt; for &lt;number of minutes&gt;<br>
+       Zone name must not include space.</li>
+
     <li><a id='AutomowerConnect-set-chargingStationPositionToAttribute'>chargingStationPositionToAttribute</a><br>
       <code>set &lt;name&gt; chargingStationPositionToAttribute</code><br>
       Sets the calculated charging station coordinates to the corresponding attributes.</li>
@@ -178,6 +183,14 @@ __END__
     <li><a id='AutomowerConnect-set-cuttingHeight'>cuttingHeight</a><br>
       <code>set &lt;name&gt; cuttingHeight &lt;1..9&gt;</code><br>
       Sets the cutting height. NOTE: Do not use for 550 EPOS and Ceora.</li>
+
+    <li><a id='AutomowerConnect-set-stayOutZone_enable'>stayOutZone_enable</a><br>
+      <code>set &lt;name&gt; stayOutZone_enable &lt;Id|name&gt;</code><br>
+      Testing: Enables stay out zone by Id or zone name. Zone name must not include space and contain at least one alphabetic character.</li>
+
+    <li><a id='AutomowerConnect-set-stayOutZone_disable'>stayOutZone_disable</a><br>
+      <code>set &lt;name&gt; stayOutZone_disable &lt;Id|name&gt;</code><br>
+      Testing: Disables stay out zone by Id or zone name. Zone name must not include space and contain at least one alphabetic character.</li>
 
     <li><a id='AutomowerConnect-set-getNewAccessToken'>getNewAccessToken</a><br>
       <code>set &lt;name&gt; getNewAccessToken</code><br>
@@ -204,7 +217,7 @@ __END__
       Load the command reference example into the attribute mapZones.</li>
 
     <li><a id='AutomowerConnect-set-defaultDesignAttributesToAttribute'>defaultDesignAttributesToAttribute</a><br>
-      <code>set &lt;name&gt; mapZonesTemplateToAttribute</code><br>
+      <code>set &lt;name&gt; defaultDesignAttributesToAttribute</code><br>
       Load default design attributes.</li>
     <br><br>
   </ul>
@@ -223,7 +236,7 @@ __END__
 
     <li><a id='AutomowerConnect-get-MowerData'>MowerData</a><br>
       <code>get &lt;name&gt; MowerData</code><br>
-      Lists all mower data with its hash path exept positon array. The hash path can be used for generating userReadings. The trigger is <i>connected</i>.<br>
+      Lists all mower data with its hash path exept positon array. The hash path can be used for generating userReadings. The trigger is e.g. <i>device_state: connected</i> or <i>mower_wsEvent: &lt;status-event|positions-event|settings-event&gt;</i>.<br>
       Example: created reading <code>serialnumber</code> with hash path <code>$hash->{helper}{mower}{attributes}{system}{serialNumber}</code><br><br>
       <code>attr &lt;name&gt; userReadings serialnumber:connected {$defs{$name}->{helper}{mower}{attributes}{system}{serialNumber}}</code></li>
 
@@ -414,6 +427,10 @@ __END__
       Set timeout for API call, default 5 s. </li><br>
   The response time is meassured and logged if a timeout ist set to 60 s.
 
+    <li><a id='AutomowerConnect-attr-testing'>testing</a><br>
+      <code>attr &lt;name&gt; testing 1</code><br>
+     Enables commands taged as Testing</li><br>
+
     <br><br>
   </ul>
 
@@ -526,6 +543,11 @@ __END__
       <code>set &lt;name&gt; Start &lt;number of minutes&gt;</code><br>
       Startet sofort für &lt;number of minutes&gt;</li>
 
+    <li><a id='AutomowerConnect-set-StartInWorkArea'>StartInWorkArea</a><br>
+      <code>set &lt;name&gt; StartInWorkArea &lt;workAreaId|zone name&gt; [&lt;number of minutes&gt;]</code><br>
+      Testing: Startet sofort in &lt;workAreaId|name&gt; für &lt;number of minutes&gt;<br>
+      Der Name der Zone darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
+
     <li><a id='AutomowerConnect-set-chargingStationPositionToAttribute'>chargingStationPositionToAttribute</a><br>
       <code>set &lt;name&gt; chargingStationPositionToAttribute</code><br>
       Setzt die berechneten Koordinaten der LS in das entsprechende Attribut.</li>
@@ -537,6 +559,14 @@ __END__
      <li><a id='AutomowerConnect-set-cuttingHeight'>cuttingHeight</a><br>
       <code>set &lt;name&gt; cuttingHeight &lt;1..9&gt;</code><br>
       Setzt die Schnitthöhe. HINWEIS: Nicht für 550 EPOS und Ceora geeignet.</li>
+
+    <li><a id='AutomowerConnect-set-stayOutZone_enable'>stayOutZone_enable</a><br>
+      <code>set &lt;name&gt; stayOutZone_enable &lt;Id|zone name&gt;</code><br>
+      Testing: Enabled stayOutZone für die Id oder den Namen der Zone, er darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
+
+    <li><a id='AutomowerConnect-set-stayOutZone_disable'>stayOutZone_disable</a><br>
+      <code>set &lt;name&gt; stayOutZone_disable &lt;Id|zone name&gt;</code><br>
+      Testing: Disabled stayOutZone für die Id oder den Namen der Zone, er darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
 
      <li><a id='AutomowerConnect-set-getNewAccessToken'>getNewAccessToken</a><br>
       <code>set &lt;name&gt; getNewAccessToken</code><br>
@@ -563,7 +593,7 @@ __END__
       Läd das Beispiel aus der Befehlsreferenz in das Attribut mapZones.</li>
 
      <li><a id='AutomowerConnect-set-defaultDesignAttributesToAttribute'>defaultDesignAttributesToAttribute</a><br>
-      <code>set &lt;name&gt; mapZonesTemplateToAttribute</code><br>
+      <code>set &lt;name&gt; defaultDesignAttributesToAttribute</code><br>
       Läd die Standartdesignattribute.</li>
       <br>
   </ul>
@@ -586,7 +616,7 @@ __END__
 
     <li><a id='AutomowerConnect-get-MowerData'>MowerData</a><br>
       <code>get &lt;name&gt; MowerData</code><br>
-      Listet alle Daten des Mähers einschließlich Hashpfad auf ausgenommen das Positonsarray. Der Hashpfad kann zur Erzeugung von userReadings genutzt werden, getriggert wird durch <i>connected</i>.<br>
+      Listet alle Daten des Mähers einschließlich Hashpfad auf ausgenommen das Positonsarray. Der Hashpfad kann zur Erzeugung von userReadings genutzt werden, getriggert wird durch e.g. <i>device_state: connected</i> oder <i>mower_wsEvent: &lt;status-event|positions-event|settings-event&gt;</i>.<br>
       Beispiel: erzeugen des Reading <code>serialnumber</code> mit dem Hashpfad <code>$hash->{helper}{mower}{attributes}{system}{serialNumber}</code><br><br>
       <code>attr &lt;name&gt; userReadings serialnumber:connected {$defs{$name}->{helper}{mower}{attributes}{system}{serialNumber}}</code></li>
 
@@ -776,6 +806,10 @@ __END__
       <code>attr &lt;name&gt; timeoutCMD &lt;[6 to 60]&gt;</code><br>
       Setzt den Timeout für Befehl senden, default 15 s. </li><br>
   Wird ein Timeout auf 60 s gesetzt, wird die Antwortzeit gemessen und geloggt.
+
+    <li><a id='AutomowerConnect-attr-testing'>testing</a><br>
+      <code>attr &lt;name&gt; testing 1</code><br>
+     Macht Befehle verfügbar, die mit Testing markiert sind.</li><br>
 
     <br><br>
   </ul>

@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 14_Hideki.pm 27953 2023-09-12 20:08:07Z Sidey $
+# $Id: 14_Hideki.pm 28054 2023-10-15 10:55:58Z Sidey $
 # The file is taken from the SIGNALduino project
 # see http://www.fhemwiki.de/wiki/SIGNALduino
 # and was modified by a few additions
@@ -24,7 +24,7 @@ use strict;
 use warnings;
 use POSIX;
 use FHEM::Meta;
-
+use Carp;
 
 eval {use Data::Dumper qw(Dumper);1};
 #use Data::Dumper;

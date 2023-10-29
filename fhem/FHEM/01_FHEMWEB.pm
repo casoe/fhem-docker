@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 01_FHEMWEB.pm 27823 2023-08-07 15:28:24Z rudolfkoenig $
+# $Id: 01_FHEMWEB.pm 28102 2023-10-28 19:41:31Z rudolfkoenig $
 package main;
 
 use strict;
@@ -797,6 +797,7 @@ FW_closeConn($)
                      $FW_userAgent =~ m/(iPhone|iPad|iPod)/);
     if(!$FW_httpheader{Connection} || $cc) {
       TcpServer_Close($hash, 1, !$hash->{inform});
+      delete $FW_svgData{$hash->{NAME}};
     }
   }
 

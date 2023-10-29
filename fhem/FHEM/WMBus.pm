@@ -1,4 +1,4 @@
-# $Id: WMBus.pm 25166 2021-11-01 16:04:05Z kaihs $
+# $Id: WMBus.pm 28056 2023-10-15 15:15:22Z kaihs $
 
 package WMBus;
 
@@ -2144,6 +2144,13 @@ sub decodeApplicationLayer($) {
   $self->{statusstring} = join(", ", $self->state2string($self->{status}));
 
   $self->decodeConfigword();
+
+  if ($self->{cifield} == CI_RESP_SML_4 || $self->{cifield} == CI_RESP_SML_12) {
+    # payload is SML encoded, that's not implemented
+    $self->{errormsg} = "payload is SML encoded, can't be decoded, SML payload is " . unpack("H*", substr($applicationlayer,$offset));
+    $self->{errorcode} = ERR_SML_PAYLOAD;
+    return 0;
+  }  
   
   $self->{encryptionMode} = $encryptionModes{$self->{cw_parts}{mode}};
   if ($self->{cw_parts}{mode} == 0) {
@@ -2219,14 +2226,7 @@ sub decodeApplicationLayer($) {
     return 0;
   }
   
-  if ($self->{cifield} == CI_RESP_SML_4 || $self->{cifield} == CI_RESP_SML_12) {
-    # payload is SML encoded, that's not implemented
-    $self->{errormsg} = "payload is SML encoded, can't be decoded, SML payload is " . unpack("H*", substr($applicationlayer,$offset));
-    $self->{errorcode} = ERR_SML_PAYLOAD;
-    return 0;
-  } else {
-    return $self->decodePayload($payload);  
-  }
+  return $self->decodePayload($payload);  
   
 }
 

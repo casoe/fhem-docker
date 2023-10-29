@@ -1,5 +1,5 @@
 #########################################################################################################################
-# $Id: 70_PylonLowVoltage.pm 28012 2023-09-30 06:06:39Z DS_Starter $
+# $Id: 70_PylonLowVoltage.pm 28100 2023-10-28 17:49:08Z DS_Starter $
 #########################################################################################################################
 #
 # 70_PylonLowVoltage.pm
@@ -122,6 +122,8 @@ BEGIN {
 
 # Versions History intern (Versions history by Heiko Maaz)
 my %vNotesIntern = (
+  "0.1.11" => "28.10.2023 add needed data format to commandref ",
+  "0.1.10" => "18.10.2023 new function pseudoHexToText in _callManufacturerInfo for translate battery name and Manufactorer ",
   "0.1.9"  => "25.09.2023 fix possible bat adresses ",
   "0.1.8"  => "23.09.2023 new Attr userBatterytype, change manufacturerInfo, protocolVersion command hash to LENID=0 ",
   "0.1.7"  => "20.09.2023 extend possible number of bats from 6 to 8 ",
@@ -813,8 +815,8 @@ sub _callManufacturerInfo {
   # my $softwareVersion       = 'V'.hex (substr ($res, 33, 2)).'.'.hex (substr ($res, 35, 2));      # unklare Bedeutung
   my $ManufacturerHex       = substr  ($res, 37, 40);
 
-  $readings->{batteryType}  = $ubtt ? $ubtt.' (adapted)' : pack ("H*", $BatteryHex);
-  $readings->{Manufacturer} = pack ("H*", $ManufacturerHex);
+  $readings->{batteryType}  = $ubtt ? $ubtt.' (adapted)' : pseudoHexToText ($BatteryHex); 
+  $readings->{Manufacturer} = pseudoHexToText ($ManufacturerHex);
 
 return;
 }
@@ -1281,6 +1283,25 @@ return $rtnerr;
 }
 
 ###############################################################
+#  Hex-Zeichenkette in ASCII-Zeichenkette einzeln umwandeln
+###############################################################
+sub pseudoHexToText {
+   my $string = shift;
+   
+   my $charcode;
+   my $text = '';
+   
+   for (my $i = 0; $i < length($string); $i = $i + 2) {
+      $charcode = hex substr ($string, $i, 2);                  # charcode = aquivalente Dezimalzahl der angegebenen Hexadezimalzahl
+      next if($charcode == 45);                                 # Hyphen '-' ausblenden 
+      
+      $text = $text.chr ($charcode);
+   }
+   
+return $text;
+}
+
+###############################################################
 #       Fehlerausstieg
 ###############################################################
 sub doOnError {
@@ -1417,6 +1438,20 @@ This module requires the Perl modules:
     <li>IO::Socket::INET    (apt-get install libio-socket-multicast-perl)                          </li>
     <li>IO::Socket::Timeout (Installation e.g. via the CPAN shell or the FHEM Installer module)    </li>
 </ul>
+
+The data format must be set on the RS485 gateway as follows:
+<br>
+
+  <ul>
+     <table>
+     <colgroup> <col width="25%"> <col width="75%"> </colgroup>
+        <tr><td> Start Bit </td><td>- 1 Bit          </td></tr>
+        <tr><td> Data Bit  </td><td>- 8 Bit          </td></tr>
+        <tr><td> Stop Bit  </td><td>- 1 Bit          </td></tr>
+        <tr><td> Parity    </td><td>- without Parity </td></tr>
+     </table>
+  </ul>
+  <br>
 
 <b>Limitations</b>
 <br>
@@ -1594,6 +1629,20 @@ Dieses Modul benötigt die Perl-Module:
     <li>IO::Socket::INET    (apt-get install libio-socket-multicast-perl)                          </li>
     <li>IO::Socket::Timeout (Installation z.B. über die CPAN-Shell oder das FHEM Installer Modul)  </li>
 </ul>
+
+Das Datenformat muß auf dem RS485 Gateway wie folgt eingestellt werden:
+<br>
+
+  <ul>
+     <table>
+     <colgroup> <col width="25%"> <col width="75%"> </colgroup>
+        <tr><td> Start Bit </td><td>- 1 Bit          </td></tr>
+        <tr><td> Data Bit  </td><td>- 8 Bit          </td></tr>
+        <tr><td> Stop Bit  </td><td>- 1 Bit          </td></tr>
+        <tr><td> Parity    </td><td>- ohne Parität   </td></tr>
+     </table>
+  </ul>
+  <br>
 
 <b>Einschränkungen</b>
 <br>

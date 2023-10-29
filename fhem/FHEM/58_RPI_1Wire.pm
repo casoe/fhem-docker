@@ -1,4 +1,4 @@
-#$Id: 58_RPI_1Wire.pm 28020 2023-10-03 20:05:43Z Adimarantis $
+#$Id: 58_RPI_1Wire.pm 28055 2023-10-15 14:54:00Z Adimarantis $
 #Based on GPIO4 by Peter J. Flathmann (peter dot flathmann at web dot de)
 #and various extension to the GPIO4 Module by members of the FHEM forum
 #and RoBue to access 1-Wire-Clones with ID: 28 53 44 54 xx xx xx 
@@ -144,9 +144,10 @@ sub RPI_1Wire_Init {				#
 		}
 	}
 	if ($device eq "BUSMASTER") {
-		if (!-w "$w1_path/$arg/therm_bulk_read") {
+		if (-e "$w1_path/$arg/therm_bulk_read") {
+			$hash->{helper}{write}.="therm_bulk_read " if (!-w "$w1_path/$arg/therm_bulk_read");
+		} else {
 			readingsSingleUpdate($hash, 'therm_bulk_read', "off",0); 
-			$hash->{helper}{write}.="therm_bulk_read " if (-e $ms_path.$id."/therm_bulk_read" )
 		}
 	}
 	RPI_1Wire_Set($hash, $name, "setfromreading");
