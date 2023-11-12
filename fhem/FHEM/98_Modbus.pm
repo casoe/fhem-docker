@@ -1,5 +1,5 @@
 ##############################################################################
-# $Id: 98_Modbus.pm 27700 2023-06-23 14:34:28Z StefanStrobel $
+# $Id: 98_Modbus.pm 28133 2023-11-07 18:38:22Z StefanStrobel $
 # fhem Modul für Geräte mit Modbus-Interface - 
 # Basis für logische Geräte-Module wie zum Beispiel 
 # ModbusAttr.pm or ModbusSET.pm
@@ -263,7 +263,7 @@ BEGIN {                         # functions / variables needed from package main
 
 };
 
-my $Module_Version = '4.5.5 - 9.5.2023';
+my $Module_Version = '4.5.6 - 7.11.2023';
 
 my $PhysAttrs = join (' ', 
         'queueDelay',
@@ -732,6 +732,7 @@ sub DefineLDFn {
         delete $hash->{TCPServer};
         delete $hash->{TCPChild};
     }
+    $hash->{devioNoSTATE} = 1;
     GoToState($hash, 'disconnected');                   # initial state after define - might modify to disabled / inactive
     # connection will be opened later in NotifyFN (INITIALIZED, DEFINED, MODIFIED, ...)
     # for serial connections we use a separate physical device. This is set in Notify
@@ -5575,6 +5576,9 @@ sub TryCall {
         <li><a id="Modbus-attr-silentReconnect">silentReconnect</a><br>
             this attribute controls at what loglevel reconnect messages from devIO will be logged. Without this attribute they will be logged at level 3.
             If this attribute is set to 1 then such messages will be logged at level 4.
+        </li>
+        <li><a id="Modbus-attr-showError">showError</a><br>
+            if this attribute is set to 1 then a new reading LAST_ERROR will be created in case of errors or timeouts.
         </li>
 
             

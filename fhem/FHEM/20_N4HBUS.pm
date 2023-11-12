@@ -4,9 +4,9 @@
 #
 # net4home Busconnector Device
 #
-# (c) 2014-2018 Oliver Koerber <koerber@net4home.de>
+# (c) 2014-2023 Oliver Koerber <koerber@net4home.de>
 #
-# $Id: 20_N4HBUS.pm 15729 2017-12-30 20:38:14Z oliverk $
+# $Id: 20_N4HBUS.pm 28137 2023-11-08 11:28:30Z oliverk $
 #
 ##############################################################################
 
@@ -14,10 +14,11 @@ package main;
 
 use strict;
 use warnings;
+use DevIo;
 use POSIX;
 use Data::Dumper;
 
-my $n4hbus_Version = "1.0.2.0 - 30.12.2017";
+my $n4hbus_Version = "1.0.4.0 - 07.11.2023";
 
 sub N4HBUS_Read($@);
 sub N4HBUS_Write($$$$);
@@ -28,7 +29,6 @@ sub N4HBUS_CompressSection($$);
 sub N4HBUS_Initialize($)
 {
 	my ($hash) = @_;
-	require "$attr{global}{modpath}/FHEM/DevIo.pm";
 
 # Provider
 	$hash->{ReadFn}		= "N4HBUS_Read";
@@ -51,8 +51,8 @@ sub N4HBUS_Define($$) {
 	my @a = split("[ \t]+", $def);
 
 	if(@a != 3) {
-     my $msg = "wrong syntax: define <name> N4HBUS hostname:port";
-     Log3 $hash, 2, $msg;
+     my $msg = "wrong syntax: define <name> N4HBUS hostname/IP:port";
+     Log3 $hash, 1, $msg;
 	 return $msg;
 	}
     DevIo_CloseDev($hash);
@@ -63,13 +63,13 @@ sub N4HBUS_Define($$) {
 	$hash->{VERSION}	= $n4hbus_Version;
 	$hash->{DeviceName} = $dev;
 	$hash->{Clients} 	= ":N4HMODULE:";
-	my %matchList = ( "1:N4HMODULE" => ".*" );
+	my %matchList = ( "1:N4HMODULE" => "^[0-9A-Fa-f]" );
 	$hash->{MatchList} = \%matchList;
 
-	Log3 $hash, 3, "N4HBUS_Define -> $name at $dev";
+	Log3 $hash, 3, "N4HBUS Define -> $name at $dev";
 
 	if($dev eq "none") {
-		Log3 $hash, 1, "N4HBUS device is none, commands will be echoed only";
+		Log3 $hash, 0, "N4HBUS device is none, commands will be echoed only";
 		$attr{$name}{dummy} = 1;
 		return undef;
 	}
@@ -107,7 +107,7 @@ sub N4HBUS_Undef($@) {
 	my ( $hash, $arg ) = @_;       
 	my $name = $hash->{NAME};
 	
-    Log3 $hash, 2, "close port for $name";
+    Log3 $hash, 0, "N4HBUS Close port for $name";
 	DevIo_CloseDev($hash);         
 	
 	return undef;  	
@@ -305,8 +305,10 @@ sub N4HBUS_Write($$$$) {
 
 	# payload type
 	$sendbus = "A10F0000";
+	
 	# payload len0
 	$sendbus = $sendbus."4E000000";
+	
 	#??
 	$sendbus = $sendbus."00";
 
@@ -393,7 +395,8 @@ sub N4HBUS_Read($@) {
 			$hash->{RAWMSG} = $msg;
 
 			my %addvals = (RAWMSG => $data);
-			Dispatch($hash, $msg, \%addvals) if($init_done);
+		    Log3 $hash, 5, "N4HBUS (DECOMP) a10f: Dispatch $msg - ".$hash->{NAME};
+			Dispatch($hash, $msg, \%addvals, 1) if($init_done);
 		}
 	} # a10f - Statuspaket
 	
@@ -408,7 +411,7 @@ sub N4HBUS_Ready($) {
 
 	my ($hash) = @_;
 	
-	Log3 $hash, 1, "N4HBUS_Ready";
+	Log3 $hash, 0, "N4HBUS Connected";
 	return DevIo_OpenDev($hash, 1, "N4HBUS_DoInit");
 }
 
@@ -448,7 +451,7 @@ sub N4HBUS_Ready($) {
   <a name="N4HBUS_Readings"></a>
   <b>Readings</b>
   <ul>
-    <li>state - current state of the Bus connection</li>
+    <li>state - current state of the connection to net4home bus connector</li>
   </ul><br />
   
   <a name="N4HBUS_Attr"></a>

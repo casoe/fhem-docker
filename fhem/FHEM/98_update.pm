@@ -1,5 +1,5 @@
 ################################################################
-# $Id: 98_update.pm 27421 2023-04-10 08:27:24Z rudolfkoenig $
+# $Id: 98_update.pm 28123 2023-11-03 17:50:08Z rudolfkoenig $
 
 package main;
 use strict;
@@ -81,7 +81,7 @@ CommandUpdate($$)
   return "An update is already running" if($upd_running);
   $upd_running = 1;
   if($updateInBackground) {
-    CallFn($cl->{NAME}, "ActivateInformFn", $cl, "log");
+    CallFn($cl->{NAME}, "ActivateInformFn", $cl, "log") if($cl);
     sub updDone(@) { $upd_running=0 }
     BlockingCall("doUpdateInBackground", {src=>$src,arg=>$arg}, "updDone");
     return "Executing the update the background.";

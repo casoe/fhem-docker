@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 00_MQTT2_CLIENT.pm 27654 2023-06-04 15:20:06Z rudolfkoenig $
+# $Id: 00_MQTT2_CLIENT.pm 28149 2023-11-11 10:34:22Z rudolfkoenig $
 package main;
 
 use strict;
@@ -116,6 +116,10 @@ MQTT2_CLIENT_connect($;$)
   if($mc ne -1 && $hash->{nrFailedConnects} >= $mc) {
     Log3 $me, 2, "maxFailedConnects ($mc) reached, no more reconnect attemtps";
     delete($readyfnlist{"$me.".$hash->{DeviceName}}); # Source of retry
+    if("$me.".$hash->{DeviceName} ne $hash->{_readyKey}) { #111959
+      Log3 $me, 2, "RFN ERROR: $me.$hash->{DeviceName} ne $hash->{_readyKey}";
+      delete($readyfnlist{$hash->{_readyKey}});
+    }
     return;
   }
 
@@ -448,7 +452,7 @@ MQTT2_CLIENT_Set($@)
   if($a[0] eq "publish") {
     shift(@a);
     my $retain;
-    if(@a>2 && $a[0] eq "-r") {
+    if(@a>0 && $a[0] eq "-r") {
       $retain = 1;
       shift(@a);
     }

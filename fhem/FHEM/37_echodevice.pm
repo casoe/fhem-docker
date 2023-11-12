@@ -1,6 +1,20 @@
-# $Id: 37_echodevice.pm 28096 2023-10-27 15:01:20Z michael.winkler $
+# $Id: 37_echodevice.pm 28147 2023-11-10 17:07:05Z michael.winkler $
 #
 ##############################################
+#
+# 2023.11.10 v0.2.27
+# - FEATURE: Unterstützung A1WZKXFLI43K86 Fire TV Stick 4K Max
+#            Unterstützung A11QM4H9HGV71H Echo Show 5
+# - CHANGE:  Verbose Settings für HttpUtils
+#
+# 2023.11.08 v0.2.26
+# - BUG:     User-Agent https://forum.fhem.de/index.php?topic=82631.msg1292057#msg1292057
+#
+# 2023.10.31 v0.2.25
+# - FEATURE: Unterstützung ASQZWP4GPYUT7 Echo Plus 2 Gen2
+#
+# 2023.10.31 v0.2.24
+# - CHANGE:  voice_reading TTS Antworten rausfiltern
 #
 # 2023.10.27 v0.2.23
 # - BUG:     Logeinträge bei set "speak" entfernt
@@ -510,7 +524,7 @@ use lib ('./FHEM/lib', './lib');
 use MP3::Info;
 use MIME::Base64;
 
-my $ModulVersion     = "0.2.23";
+my $ModulVersion     = "0.2.27";
 my $AWSPythonVersion = "0.0.3";
 my $NPMLoginTyp		 = "unbekannt";
 my $QueueNumber      = 0;
@@ -1722,6 +1736,11 @@ sub echodevice_SendCommand($$$) {
         $SendUrl   .= "/api/bluetooth?cached=true&_=".int(time);
 	}
 	
+	elsif ($type eq "endpoints") {
+		$SendUrl    = "https://alexa.amazon.de/api/endpoints";
+		$SendMetode = "GET";
+	}
+	
 	elsif ($type eq "notifications") {
         $SendUrl   .= "/api/notifications?cached=true&_=".int(time);
 	}
@@ -2286,6 +2305,7 @@ sub echodevice_HandleCmdQueue($) {
 					   type            => $param->{type},
 					   httpversion     => $param->{httpversion},
 					   queuenumber     => $QueueNumber,
+					   NAME            => $name,
                        callback        => \&echodevice_Parse
                       };
   
@@ -2334,6 +2354,9 @@ sub echodevice_SendLoginCommand($$$) {
 
 	readingsSingleUpdate ($hash, "BrowserUserAgent", $UserAgent ,0);
 	readingsSingleUpdate ($hash, "BrowserLanguage", $HeaderLanguage ,0);
+
+	# This allows HttpUtils to use the 'verbose' setting of the device
+	$param->{NAME} = $name;
 	
 	# COOKIE LOGIN
 	if ($type eq "cookielogin1" ) {
@@ -2487,7 +2510,7 @@ sub echodevice_SendLoginCommand($$$) {
 	
 	if ($type eq "cookielogin6" ) {
 		$param->{url}         = "https://".$hash->{helper}{SERVER}."/api/bootstrap";
-		$param->{header}      = 'Cookie: '.$hash->{helper}{".COOKIE"};
+		$param->{header}      = "User-Agent: ".$UserAgent."\r\nCookie: ".$hash->{helper}{'.COOKIE'};
 		$param->{callback}    = \&echodevice_ParseAuth;
 		$param->{noshutdown}  = 1;
 		$param->{keepalive}   = 1;
@@ -2728,6 +2751,10 @@ sub echodevice_Parse($$$) {
 		return;
 	}
 	
+	if ($msgtype eq "endpoints") {
+		#Log3 $name, 3, "[$name] [echodevice_Parse] [$msgtype] [$msgnumber] $data";
+	}
+	
 	if($msgtype eq "notifications_delete" || $msgtype eq "alarm_on" || $msgtype eq "alarm_off" || $msgtype eq "reminderitem") {
 		
 		my $IODev = $hash->{IODev}->{NAME};
@@ -2829,7 +2856,7 @@ sub echodevice_Parse($$$) {
 					my @recordKeys = split("#",$recordKey->{recordKey});
 					$sourceDeviceIds = @recordKeys[3];
 					$Person = 0;
-					if ($recordKey->{utteranceType} ne "WAKE_WORD_ONLY" and $recordKey->{utteranceType} ne "DEVICE_ARBITRATION") {
+					if ($recordKey->{utteranceType} eq "GENERAL") {
 					
 						if(defined($modules{$hash->{TYPE}}{defptr}{$sourceDeviceIds})) {
 							
@@ -4084,6 +4111,7 @@ sub echodevice_Parse($$$) {
 						   hash            => $hash,
 						   type            => $MP3Filename,
 						   httpversion     => $param->{httpversion},
+						   NAME            => $name,
 						   callback        => \&echodevice_AmazonVoiceMP3
 						};
 
@@ -4143,6 +4171,7 @@ sub echodevice_GetSettings($) {
 	if ($ConnectState eq "connected") {
 
 		if($hash->{model} eq "ACCOUNT") {
+			echodevice_SendCommand($hash,"endpoints","");
 			echodevice_SendCommand($hash,"getnotifications","");
 			echodevice_SendCommand($hash,"alarmvolume","");
 			echodevice_SendCommand($hash,"bluetoothstate","");
@@ -4268,7 +4297,7 @@ sub echodevice_FirstStart($) {
 		if (index($hash->{helper}{".COOKIE"}, "{") != -1) { 
 			# NPM Login erkannt
 			readingsSingleUpdate ($hash, "COOKIE_TYPE", "READING_NPM" ,0);
-			$hash->{helper}{".COOKIE"} =~ /"localCookie":".*session-id=(.*)","?/;
+			$hash->{helper}{".COOKIE"} =~ /"localCookie":".*session-id=(.*?)","?/;
 			$hash->{helper}{".COOKIE"} = "session-id=" . $1;
 			$hash->{helper}{".COOKIE"} =~ /csrf=([-\w]+)[;\s]?(.*)?$/ if(defined($hash->{helper}{".COOKIE"}));
 			$hash->{helper}{".CSRF"}   = $1  if(defined($hash->{helper}{".COOKIE"}));
@@ -4499,6 +4528,7 @@ sub echodevice_getModel($){
 	elsif($ModelNumber eq "AIPK7MM90V7TB"  || $ModelNumber eq "Echo Show")				{return "Echo Show Gen3";}
 	elsif($ModelNumber eq "A4ZP7ZC4PI6TO"  || $ModelNumber eq "Echo Show 5")            {return "Echo Show 5";}
 	elsif($ModelNumber eq "A1XWJRHALS1REP" || $ModelNumber eq "Echo Show 5")            {return "Echo Show 5 Gen2";}
+	elsif($ModelNumber eq "A11QM4H9HGV71H" || $ModelNumber eq "Echo Show 5")            {return "Echo Show 5 Gen3";}
 	elsif($ModelNumber eq "A4ZXE0RM7LQ7A"  || $ModelNumber eq "Echo Show 5")            {return "Echo Show 5 Gen5";}
 	elsif($ModelNumber eq "A1Z88NGR2BK6A2" || $ModelNumber eq "Echo Show 8")            {return "Echo Show 8";}
 	elsif($ModelNumber eq "A15996VY63BQ2D" || $ModelNumber eq "Echo Show 8")			{return "Echo Show 8 Gen2";}
@@ -4506,6 +4536,7 @@ sub echodevice_getModel($){
 	elsif($ModelNumber eq "A2M35JJZWCQOMZ" || $ModelNumber eq "Echo Plus")				{return "Echo Plus";}
 	elsif($ModelNumber eq "A1JJ0KFC4ZPNJ3" || $ModelNumber eq "Echo Input")				{return "Echo Input";}
 	elsif($ModelNumber eq "A18O6U1UQFJ0XK" || $ModelNumber eq "Echo Plus 2")			{return "Echo Plus 2";}
+	elsif($ModelNumber eq "ASQZWP4GPYUT7"  || $ModelNumber eq "Echo Plus 2 gen2")		{return "Echo Plus 2";}
 	elsif($ModelNumber eq "A3VRME03NAXFUB" || $ModelNumber eq "Echo Flex")				{return "Echo Flex";}
 	elsif($ModelNumber eq "A3FX4UWTP28V1P" || $ModelNumber eq "Echo")					{return "Echo Gen3";}
 	elsif($ModelNumber eq "A30YDR2MK8HMRV" || $ModelNumber eq "Echo")					{return "Echo Gen3";}
@@ -4534,6 +4565,7 @@ sub echodevice_getModel($){
 	elsif($ModelNumber eq "A265XOI9586NML" || $ModelNumber eq "Fire TV Stick 4K")		{return "Fire TV Stick 4K";}
 	elsif($ModelNumber eq "A3EVMLQTU6WL1W" || $ModelNumber eq "Fire TV Stick 4K Max")	{return "Fire TV Stick 4K Max";}
 	elsif($ModelNumber eq "A31DTMEEVDDOIV" || $ModelNumber eq "Fire TV Stick 4K")		{return "Fire TV";}
+	elsif($ModelNumber eq "A1WZKXFLI43K86" || $ModelNumber eq "Fire TV Stick 4K Max")   {return "Fire TV Stick 4K Max Gen2";}
 	elsif($ModelNumber eq "A2JKHJ0PX4J3L3" || $ModelNumber eq "ECHO FireTv Cube 4K")	{return "ECHO FireTv Cube 4K";}
 	elsif($ModelNumber eq "A10L5JEZTKKCZ8" || $ModelNumber eq "VOBOT")           		{return "VOBOT";}
 	elsif($ModelNumber eq "A37SHHQ3NUL7B5" || $ModelNumber eq "Bose Home Speaker 500")	{return "Bose Home Speaker 500";}
@@ -5240,7 +5272,7 @@ sub echodevice_NPMWaitForCookie($){
 				readingsSingleUpdate( $hash, "COOKIE_TYPE", "NPM_Login",1 );
 
 				$hash->{helper}{".COOKIE"} = $CookieResult;
-				$hash->{helper}{".COOKIE"} =~ /"localCookie":".*session-id=(.*)","?/;
+				$hash->{helper}{".COOKIE"} =~ /"localCookie":".*session-id=(.*?)","?/;
 				$hash->{helper}{".COOKIE"} = "session-id=" . $1;
 				$hash->{helper}{".COOKIE"} =~ /csrf=([-\w]+)[;\s]?(.*)?$/ if(defined($hash->{helper}{".COOKIE"}));
 				$hash->{helper}{".CSRF"}   = $1  if(defined($hash->{helper}{".COOKIE"}));
@@ -5479,6 +5511,7 @@ sub echodevice_Amazon($$$) {
 		data            => '{"OutputFormat": "' . $AWS_Format . '","Text": "' . $parameter .'","TextType": "text","VoiceId": "' . @VoiceName[2] . '"}',
         hash            => $hash,
 		type            => $type,
+		NAME            => $name,
         callback        => \&echodevice_ParseTTSMP3
     };
 	
@@ -5514,6 +5547,7 @@ sub echodevice_Google($$$) {
 		method          => "GET",
         hash            => $hash,
 		type            => $type,
+		NAME            => $name,
         callback        => \&echodevice_ParseTTSMP3
     };
 

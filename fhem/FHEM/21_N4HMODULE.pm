@@ -4,9 +4,9 @@
 #
 # net4home Busconnector Device
 #
-# (c) 2014-2018 Oliver Koerber <koerber@net4home.de>
+# (c) 2014-2023 Oliver Koerber <koerber@net4home.de>
 #
-# $Id: 21_N4HMODULE.pm 15730 2017-12-30 20:40:07Z oliverk $
+# $Id: 21_N4HMODULE.pm 28138 2023-11-08 11:29:12Z oliverk $
 #
 ##############################################################################
 
@@ -22,7 +22,7 @@ sub N4HMODULE_Get ($$@);
 sub N4HMODULE_Update($@);
 sub N4HMODULE_DbLog_splitFn($$);
 
-my $n4hmodule_Version = "1.0.2.0 - 30.12.2017";
+my $n4hmodule_Version = "1.0.4.0 - 07.11.2023";
 
 my %OT_devices = (
 	"1" 	=> {"name" => "leer", "OTcanSet" => "false", "OTcanReq" => "false", "fields" => [] },
@@ -126,6 +126,7 @@ sub N4HMODULE_Initialize($) {
 	$hash->{DefFn}	       = "N4HMODULE_Define";
 	$hash->{UndefFn}	   = "N4HMODULE_Undefine";
 	$hash->{ParseFn}	   = "N4HMODULE_Parse";
+	$hash->{FingerprintFn} = "N4HMODULE_Fingerprint";
 	$hash->{SetFn}		   = "N4HMODULE_Set";
 	$hash->{GetFn}		   = "N4HMODULE_Get";
 	$hash->{AttrFn}  	   = "N4HMODULE_Attr";
@@ -133,6 +134,8 @@ sub N4HMODULE_Initialize($) {
 						     "$readingFnAttributes ";
 #						     "OT:"  .join(",", sort @otlist);                      
     $hash->{DbLog_splitFn} = "N4HMODULE_DbLog_splitFn";
+	$hash->{Match} 		   = "."; 
+	
 }
 
 
@@ -147,7 +150,7 @@ sub N4HMODULE_Define($$) {
 
 	if(@args < 4) {
 		my $msg = "Usage: define <name> N4HMODULE <N4HBUS> <OBJECTTYPE> <OBJADDR>";
-		Log3 $hash, 2, $msg;
+		Log3 $hash, 1, $msg;
 		return $msg;
 	}
 
@@ -165,9 +168,8 @@ sub N4HMODULE_Define($$) {
 	$hash->{Interval}   = 0;
 	
 	$modules{N4HMODULE}{defptr}{$objadr} = $hash;
-	
 	AssignIoPort($hash, $n4hbus);
-	Log3 $hash, 3, "N4HMODULE_Define -> $name ($ot) at device $n4hbus with objectadr $objadr";
+	Log3 $hash, 3, "N4HMODULE Define -> $name ($ot) at device $n4hbus with objectadr $objadr";
 	
 	$hash->{helper}{from}		= '';
 	$hash->{helper}{value}		= '';
@@ -182,6 +184,9 @@ sub N4HMODULE_Define($$) {
 	
     $attr{$name}{room} = "net4home" if( !defined($attr{$name}{room}) );
 
+    my $state_format;
+	my $icon;
+
 		# Timer zum regelmäßigem aktualisieren auf dem Bus starten
 	if (($ot ==  24) or #Temperatur
         ($ot ==  25) or #Licht
@@ -192,17 +197,19 @@ sub N4HMODULE_Define($$) {
 		($ot == 246) or #Luftdruck-Tendenz
 	    ($ot == 245)) { #Regenmenge l/h
 
-        my $state_format;
-		
+	
         if( $ot == 24 ) { 
           $state_format .= " " if( $state_format );
           $state_format .= "T: temperature";
+		  $icon 		 = "temp_temperature";
         } elsif( $ot == 25 ) {
           $state_format .= " " if( $state_format );
           $state_format .= "L: brightness";
+		  $icon 		 = "weather_light_meter";
         } elsif( $ot == 26 ) {
           $state_format .= " " if( $state_format );
           $state_format .= "H: humidity";
+		  $icon 		 = "weather_humidity";
         } elsif( $ot == 240 ) {
           $state_format .= " " if( $state_format );
           $state_format .= "W: wind";
@@ -218,19 +225,30 @@ sub N4HMODULE_Define($$) {
         }
 		
         $attr{$name}{stateFormat} = $state_format if( !defined($attr{$name}{stateFormat}) && defined($state_format) );
+        $attr{$name}{icon} = $icon if( !defined($attr{$name}{icon}) && defined($icon) );
 
 		RemoveInternalTimer($hash);
 	 
 		$hash->{Interval} = 30;
 
 		# Timer Zeitversetzt starten, damit nicht alles auf den Bus gleichzeit kommt 30 Sekunden + x
-		Log3 $hash, 3, "N4HMODULE_Define (set timer) -> $name ($ot)";
+		Log3 $hash, 3, "N4HMODULE Define (set timer) -> $name ($ot)";
 		InternalTimer( gettimeofday() + 30 + int(rand(15)) , "N4HMODULE_Start", $hash, 0 );
 	} elsif (( $ot ==  34 ) or # TLH
 			(  $ot ==   3 ) or # Aktor, Relais
 			(  $ot ==   5)) {  # Aktor, Dimmer
+		
+
+        if( $ot == 5 ) { 
+		  $icon 		 = "light_control";
+        } elsif( $ot == 34 ) {
+		  $icon 		 = "temp_control";
+        }
+
+        $attr{$name}{icon} = $icon if( !defined($attr{$name}{icon}) && defined($icon) );
+			
 		# get initial value from bus after first start
-		Log3 $hash, 3, "N4HMODULE_Define (get) -> $name ($ot)";
+		Log3 $hash, 3, "N4HMODULE Define (get) -> $name ($ot)";
 		InternalTimer( gettimeofday() + int(rand(10)) , "N4HMODULE_Start", $hash, 0 );
 	} 
    return undef;
@@ -288,7 +306,7 @@ sub N4HMODULE_Undefine($$) {
 	my ($hash,$arg) = @_;
 	my $name   = $hash->{NAME};
 	
-	Log3 $hash, 3, "N4HMODULE_Undefine -> $name";
+	Log3 $hash, 3, "N4HMODULE Undefine -> $name";
 	RemoveInternalTimer( $hash ); 	
     delete($modules{N4HMODULE}{defptr}{$hash->{OBJADR}});
 	return undef;
@@ -335,6 +353,7 @@ sub N4HMODULE_Parse($$) {
 	my $ioName = $iodev->{NAME};
 	my $object	= "";
 
+
 	# Modul suchen
 	my $type8   = hex(substr($msg,0,2));
 	my $ipsrc   = substr($msg,4,2).substr($msg,2,2);
@@ -344,7 +363,7 @@ sub N4HMODULE_Parse($$) {
 	my $ddata   = substr($msg,16, ($datalen*2));
 	my $pos 	= $datalen*2+16;
 	
-#	Log3 "xx", 1, "(DECOMP2): T8($type8) - MI$ipsrc DST-> $ipdst SRC<-$objsrc";
+	# 0c 6100 ff7f d817 05 65 09 05 01 67 4004000001ff4004000001f8403600c000000659
 	
 	if ( length($msg) <= $pos ) {
 		return undef;
@@ -362,7 +381,6 @@ sub N4HMODULE_Parse($$) {
 	}
 
 	my $hash = $modules{N4HMODULE}{defptr}{$object};
-    Log3 $hash, 5, "N4HMODULE (parse): $msg";
 	
 	if (!$hash) {
 		$object = $objsrc;
@@ -370,15 +388,34 @@ sub N4HMODULE_Parse($$) {
 		}
 
 	if(!$hash) {
-		my $ret = "Undefined ObjectAddress ($object)";
-		return "";
+		my $ret = "Undefined ObjectAddress (MI$ipsrc) ($object) ($ipdst) ($ddata) ";
+		Log3 $hash, 5, "N4HMODULE (parse): $ret - $msg";
+		return undef;
 	}	
 		
 		my $devtype = $hash->{OT};
 
 		N4HMODULE_ParsePayload($hash, $devtype, $ipsrc, $objsrc, $ddata);
+
+		my $ret = "(MI$ipsrc) ($object) ($ipdst) ($ddata) ";
+		Log3 $hash, 5, "N4HMODULE (parse): $ret - $msg";
 		return $hash->{NAME};
 
+}
+
+
+
+
+##################################################################################
+sub N4HMODULE_Fingerprint($$) {
+##################################################################################
+
+  my ( $io_name, $msg ) = @_;
+
+  # substr( $msg, 2, 2, "--" ); # entferne Empfangsadresse
+  # substr( $msg, 4, 1, "-" );  # entferne Hop-Count
+
+  return ( $io_name, $msg );
 }
 
 ##################################################################################
@@ -715,7 +752,7 @@ sub N4HMODULE_paramToText($@) {
 	
 # 	+++++++++++++++++++ Licht analog - IN_HW_NR_IS_LICHT_ANALOG
 	if (hex(substr($ddata,2,2)) == 5 ){
-		$rettype = "Brightness";
+		$rettype = "brightness";
 	}	
 
 # 	+++++++++++++++++++ Uhrzeit - IN_HW_NR_IS_CLOCK
@@ -825,7 +862,7 @@ sub N4HMODULE_Set($@) {
     my $cmd  = shift(@a);
 	my $ext  = shift(@a);
 	
-#	Log3 $hash, 5, "N4HMODULE (set): (Name: $name) (CMD: $cmd) (ext: $ext)";
+	Log3 $hash, 5, "N4HMODULE (set): (Name: $name) (CMD: $cmd) (ext: $ext)";
 
 	my $ot 			= $hash->{OT};
 	my $ipdst		= $hash->{OBJADR};
@@ -961,9 +998,6 @@ sub N4HMODULE_Get($$@) {
 	my $ipdst		= $hash->{OBJADR};
 	my $ddata 		= "";
 	my $fieldcmd	= "";
-	my $list = "";
-
-	my $list = "desired-temperature:noArg";
 
 	return "\"get $name\" needs at least one argument" unless(defined($opt));
 
