@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 98_SVG.pm 27261 2023-02-21 09:34:09Z rudolfkoenig $
+# $Id: 98_SVG.pm 28159 2023-11-14 12:59:18Z rudolfkoenig $
 package main;
 
 use strict;
@@ -1405,6 +1405,7 @@ sub
 SVG_escape($)
 {
   my ($txt) = @_;
+  return $1 if($txt =~ m,^<html>(.*)</html>$,);
   $txt =~ s/&/&amp;/g;
   $txt =~ s/</&lt;/g;
   $txt =~ s/>/&gt;/g;

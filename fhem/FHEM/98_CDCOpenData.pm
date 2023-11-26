@@ -1,5 +1,5 @@
 ###############################################################
-# $Id: 98_CDCOpenData.pm 28146 2023-11-10 13:33:37Z jowiemann $
+# $Id: 98_CDCOpenData.pm 28195 2023-11-21 09:14:11Z jowiemann $
 #
 #  98_CDCOpenData.pm
 #
@@ -39,11 +39,11 @@
 ##############################################################################
 # defmod DWD_Regen CDCOpenData
 # attr DWD_Regen INTERVAL 3600
-# attr DWD_Regen datetimeInReadingName 1
 # attr DWD_Regen disable 0
 # attr DWD_Regen locations Bad_Soden:50.1461,8.4986
 #
 ##############################################################################
+# eval "use Net::SSLGlue::FTP;1"                   or $missingModul .= "Net::SSLGlue::FTP install: sudo apt-get install libnet-sslglue-perl ";
 
 package main;
 
@@ -52,25 +52,22 @@ use warnings;
 use Blocking;
 use HttpUtils;
 
-my $ModulVersion = "01.10";
+my $ModulVersion = "01.10f";
 my $missingModul = "";
-my $GunzipError;
-my $Bunzip2Error;
 
 sub CDCOpenData_Log($$$);
 sub CDCOpenData_Initialize($);
 sub CDCOpenData_Readout_Add_Reading ($$$$@);
 sub CDCOpenData_Readout_Process($$);
 
-#eval "use Net::FTP;1"      or $missingModul .= "Net::FTP ";
-eval "use IO::Uncompress::Gunzip qw(gunzip $GunzipError);1"    or $missingModul .= "IO::Uncompress::Gunzip install: sudo apt-get install libio-compress-perl ";
-eval "use IO::Uncompress::Bunzip2 qw(bunzip2 $Bunzip2Error);1" or $missingModul .= "IO::Uncompress::Bunzip2 install: sudo apt-get install libio-compress-perl ";
-eval "use Archive::Tar;1"                      or $missingModul .= "Archive::Tar install: sudo apt-get install libarchive-extract-perl ";
-eval "use Net::SSLGlue::FTP;1"                 or $missingModul .= "Net::SSLGlue::FTP install: sudo apt-get install libnet-sslglue-perl ";
-eval "use POSIX;1"                             or $missingModul .= "POSIX install: sudo apt-get install libtemplate-plugin-posix-perl ";
-eval "use File::Path;1"                        or $missingModul .= "File::Path not available ";
-eval "use FHEM::Scheduler::Cron;1"             or $missingModul .= "FHEM::Scheduler::Cron: update Fhem ";
-eval "use List::Util qw(pairs);1"              or $missingModul .= "List::Util: update Perl ";
+use Net::FTP;
+eval "use IO::Uncompress::Gunzip qw(gunzip);1"   or $missingModul .= "IO::Uncompress::Gunzip install: sudo apt-get install libio-compress-perl ";
+eval "use IO::Uncompress::Bunzip2 qw(bunzip2);1" or $missingModul .= "IO::Uncompress::Bunzip2 install: sudo apt-get install libio-compress-perl ";
+eval "use Archive::Tar;1"                        or $missingModul .= "Archive::Tar install: sudo apt-get install libarchive-extract-perl ";
+eval "use POSIX;1"                               or $missingModul .= "POSIX install: sudo apt-get install libtemplate-plugin-posix-perl ";
+eval "use File::Path;1"                          or $missingModul .= "File::Path not available ";
+eval "use FHEM::Scheduler::Cron;1"               or $missingModul .= "FHEM::Scheduler::Cron: update Fhem ";
+eval "use List::Util qw(pairs);1"                or $missingModul .= "List::Util: update Perl ";
 
 # FIFO Buffer for commands
 my @cmdBuffer=();
@@ -130,7 +127,6 @@ sub CDCOpenData_Initialize($)
                     ."nonblockingTimeOut:50,75,100,125 "
                     ."locations "
                     ."numberOfDays:1,2,3,4,5,6,7,8,9,10 "
-                    ."datetimeInReadingName:0,1 "
                     ."tmpRadolanData "
                     ."disable:0,1 "
                     ."FhemLog3Std:0,1 "
@@ -138,6 +134,7 @@ sub CDCOpenData_Initialize($)
                     ."enableDWDdata:multiple-strict,rainByDay,rainSinceMidnight,rainRadarbyLocation "
                     ."clearRadarFileLog "
                     ."RainRadarFileLog "
+#                    ."ownRadarFileLog "
                     .$readingFnAttributes;
 
 } # end CDCOpenData_Initialize
@@ -178,12 +175,15 @@ sub CDCOpenData_Define($$)
       return $msg;
    }
 
-   $hash->{STATE}              = "Initializing";
-   $hash->{INTERVAL}           = 300;
-   $hash->{TIMEOUT}            = 55;
-   $hash->{TMPDIR}             = "temp_radolan_data_" . $name;
-   $hash->{DWDHOST}            = "opendata.dwd.de";
-   $hash->{fhem}{UPDATE}       = 0;
+   $hash->{NAME}    = $name;
+   $hash->{VERSION} = $ModulVersion;
+
+   $hash->{STATE}        = "Initializing";
+   $hash->{INTERVAL}     = 300;
+   $hash->{TIMEOUT}      = 55;
+   $hash->{TMPDIR}       = "temp_radolan_data_" . $name;
+   $hash->{DWDHOST}      = "opendata.dwd.de";
+   $hash->{fhem}{UPDATE} = 0;
 
    $hash->{helper}{TimerReadout} = $name . ".Readout";
    $hash->{helper}{TimerCmd}     = $name . ".Cmd";
@@ -199,7 +199,9 @@ sub CDCOpenData_Define($$)
 
    # Vorbereitung für CRON Prozess
    $hash->{'CONFIG'}->{'IN_REQUEST'} = 0;
-   $hash->{'CONFIG'}->{'CRON'} = \'0 * * * *';
+
+   my $cron = AttrVal($name, 'cronTime', '0 * * * *');
+   $hash->{'CONFIG'}->{'CRON'} = \$cron;
 
    CDCOpenData_Log $name, 4, "start timer: CDCOpenData_Readout_Start -> hash";
    InternalTimer(gettimeofday() + 1, \&CDCOpenData_Cron_Run, $hash, 0);
@@ -239,6 +241,10 @@ sub CDCOpenData_Delete ($$)
    #setKeyValue($index, undef);
 
    if (my $dLog = AttrVal($name, "RainRadarFileLog", undef)) {
+     fhem('delete ' . $dLog, 1) if defined $defs{$dLog};
+   }
+
+   if (my $dLog = AttrVal($name, "ownRadarFileLog", undef)) {
      fhem('delete ' . $dLog, 1) if defined $defs{$dLog};
    }
 
@@ -286,7 +292,7 @@ sub CDCOpenData_Rename($$)
    if (my $dLog = AttrVal($new, "RainRadarFileLog", undef)) {
      return undef unless defined $defs{$dLog};
 
-     my $dMod  = 'defmod ' . $dLog . ' FileLog ./log/' . $new . '-%Y-%m.log ' . $new . ':Home_rain_radar:.*';
+     my $dMod  = 'defmod ' . $dLog . ' FileLog ./log/' . $new . '-%Y-%m.log ' . $new . ':Home_rain_radar/.*';
      fhem($dMod, 1);
 
      $dMod = 'attr ' . $dLog . ' -silent outputFormat { return $1 . " " . $NAME ." " . $EVENT . "\n" if $EVENT =~ /radar:(\d\d\d\d-\d\d-\d\d_\d\d:\d\d:\d\d)/;; return $TIMESTAMP . " " . $NAME ." " . $EVENT . "\n";; }';
@@ -319,7 +325,7 @@ sub CDCOpenData_Attr($@)
      if ($aName eq "locations") {
        foreach my $location (split / /, $aVal) {
          $location =~ s/.*?://;
-         CDCOpenData_Log $hash, 2, "la,lo -> $location";
+         CDCOpenData_Log $hash, 4, "la,lo -> $location";
          return "The location attribute is a space-separated list of locations in the format latitude,longitude." if $location !~ /[0-9]*\.[0-9]*,[0-9]*\.[0-9]*/;
        }
      }
@@ -476,6 +482,19 @@ sub CDCOpenData_Attr($@)
      }
    }
 
+   if ($aName eq "ownRadarFileLog") {
+     if ($cmd eq "set") {
+
+     }
+
+     if ($cmd eq "del") {
+       if (my $dLog = AttrVal($name, $aName, undef)) {
+         return "FileLog Device: $dLog not defined." unless defined $defs{$dLog};
+         fhem('delete ' . $dLog, 1);
+       }
+     }
+   } # end ownRadarFileLog
+
    if ($aName eq "RainRadarFileLog") {
      if ($cmd eq "set") {
 
@@ -489,7 +508,7 @@ sub CDCOpenData_Attr($@)
 
        } else {
 
-         my $dMod  = 'defmod ' . $aVal . ' FileLog ./log/' . $name . '-%Y-%m.log ' . $name . ':.*?_rain_radar:.*';
+         my $dMod  = 'defmod ' . $aVal . ' FileLog ./log/' . $name . '-%Y-%m.log ' . $name . ':.*?_rain_radar/..:.*';
          fhem($dMod, 1);
 
          $dMod  = 'attr -silent ' . $aVal . ' outputFormat { return $TIMESTAMP." ".$NAME." ".$1." ".$2."\n" if $EVENT =~ /(.*?)\/.*?:\s(.*)/}';
@@ -533,25 +552,6 @@ sub CDCOpenData_Attr($@)
        return "updateOnStart: $aVal. Valid is 0 or 1." if $aVal !~ /[0-1]/;
      }
    }
-
-   if ($aName eq "datetimeInReadingName") {
-     if ($cmd eq "set") {
-
-       return "datetimeInReadingName is depreciated";
-       return "datetimeInReadingName: $aVal. Valid is 0 or 1." if $aVal !~ /[0-1]/;
-       if ($aVal == 1) {
-         fhem( "deletereading $name .*amount-of-rain.*", 1 );
-       } else {
-         fhem( "deletereading $name .*_day_rain:.*", 1 );
-         fhem( "deletereading $name .*_since_midnight:.*", 1 );
-         fhem( "deletereading $name .*_rain_radar:.*", 1 );
-       }
-     }
-
-     if ($cmd eq "del") {
-       fhem( "deletereading $name .*amount-of-rain.*", 1 );
-     }
-   } # end datetimeInReadingName
 
    # Stop the sub if FHEM is not initialized yet
    unless ($init_done) {
@@ -608,7 +608,7 @@ sub CDCOpenData_Cron_Run($)
 
   } else {
 
-    my $cron = AttrVal($name, 'interval', '0 * * * *');
+    my $cron = AttrVal($name, 'cronTime', '0 * * * *');
     $hash->{'CONFIG'}->{'CRON'} = \$cron;
 
     my $err;
@@ -633,8 +633,6 @@ sub CDCOpenData_Set($$@)
    my $resultStr = "";
 
    my $list =  " update:noArg";
-#            .  " Set_2"
-#            .  " ";
 
    if ( lc $cmd eq 'update' ) {
       CDCOpenData_Log $hash, 3, "set $name $cmd " . join(" ", @val);
@@ -642,19 +640,6 @@ sub CDCOpenData_Set($$@)
       CDCOpenData_Readout_Start($hash->{helper}{TimerReadout});
       $hash->{fhem}{UPDATE} = 0;
       return undef;
-
-   } elsif ( lc $cmd eq 'set_1') {
-      if (int @val >= 0 && int @val <= 2) {
-         CDCOpenData_Log $hash, 3, "set $name $cmd " . join(" ", @val);
-         push @cmdBuffer, "call " . join(" ", @val);
-         return CDCOpenData_Set_Cmd_Start $hash->{helper}{TimerCmd};
-      }         
-   }
-
-   elsif ( lc $cmd eq 'set_2' ) {
-      CDCOpenData_Log $hash, 3, "set $name $cmd " . join(" ", @val);
-      push @cmdBuffer, "rescanwlanneighbors " . join(" ", @val);
-      return CDCOpenData_Set_Cmd_Start $hash->{helper}{TimerCmd};
    }
 
    return "Unknown argument $cmd or wrong parameter(s), choose one of $list";
@@ -959,9 +944,11 @@ sub CDCOpenData_get_RegenRadar_atLocations($$$$) {
          CDCOpenData_Log $name, 3, "ftp login failed: $ftp->message";
 
          if ($fromGet) {
+           $ftp->quit;
            $returnStr = "ERROR: ftp login failed: " . $ftp->message;
            return $returnStr;
          } else {
+           $ftp->quit;
            $returnStr = "Error|ftp login failed: " . $ftp->message;
            $returnStr .= "|" . join('|', @roReadings ) if int @roReadings;
            return $returnStr;
@@ -998,7 +985,6 @@ sub CDCOpenData_get_RegenRadar_atLocations($$$$) {
      CDCOpenData_Log $name, 5, "geoRefsAttr: " . $geoRef;
    }
 
-   my $dtReading = AttrVal($name, "datetimeInReadingName", 1);
    my $geoCnt = 0;
    my $geoName = "";
 
@@ -1009,9 +995,13 @@ sub CDCOpenData_get_RegenRadar_atLocations($$$$) {
    my $uncompressed_fh;
    unless ( $uncompressed_fh = IO::Uncompress::Bunzip2->new($remote_tar_bz2_file_handle) ) {
      if ($fromGet) {
+       close $remote_tar_bz2_file_handle;
+       $ftp->quit;
        $returnStr = "ERROR: IO::Uncompress::Bunzip2 failed: $IO::Uncompress::Bunzip2::Bunzip2Error";
        return $returnStr;
      } else {
+       close $remote_tar_bz2_file_handle;
+       $ftp->quit;
        $returnStr = "Error|IO::Uncompress::Bunzip2 failed: $IO::Uncompress::Bunzip2::Bunzip2Error";
        $returnStr .= "|" . join('|', @roReadings ) if int @roReadings;
        return $returnStr;
@@ -1058,6 +1048,8 @@ sub CDCOpenData_get_RegenRadar_atLocations($$$$) {
 		
          $file_content = $tar->get_content($file);
          if ($file_content) {
+           my $rName = $geoName . ":" . $timestamp;
+ 
            # find index of ETX character (it marks the end of the header)
            $ETX_index = index($file_content,"\x03");
 
@@ -1065,16 +1057,15 @@ sub CDCOpenData_get_RegenRadar_atLocations($$$$) {
 
            # unpack the little-endian number and mask out bits 13..16
            # unit of precipitation is 0.01 ltr/m²/h
-           # $rain_forecast = 0.01*(unpack( 'v*', $rain_forecast ) & 0xFFF);
-           $rain_forecast = unpack( 'v*', $rain_forecast ) & 0xFFF;
 
-           my $rName = $geoName . ":" . $timestamp;
+           $rain_forecast = unpack( 'v*', $rain_forecast ) & 0xFFF;
 
            # A value of 2500 in the file marks invalid data.
            # It is reset to -1 in order to keep the y-axis scale small when plotting.
+
            if ($rain_forecast == 2500) {
              $rain_forecast = -1 ;
-             CDCOpenData_Log $name, 3, "Regen Radar: " . $rName . ": fehlerhafter Wert:";
+             CDCOpenData_Log $name, 3, "Regen Radar: " . $rName . ": error in value";
            } else {
              $rain_forecast *= 0.01;
            }
@@ -1089,14 +1080,14 @@ sub CDCOpenData_get_RegenRadar_atLocations($$$$) {
          }
        }
      }
-     
-     #close $fh;
 
      # Close the file handles
      close $uncompressed_fh;
-     close $remote_tar_bz2_file_handle;
 
    }
+
+   close $remote_tar_bz2_file_handle;
+   $ftp->quit;
 
    CDCOpenData_Log $name, 5, "################ End get_RegenRadar_atLocations ################";
 
@@ -1153,9 +1144,11 @@ sub CDCOpenData_Readout_Run_Rain_Since_Midnight ($@) {
          CDCOpenData_Log $name, 3, "ftp login failed: $ftp->message";
 
          if ($fromGet) {
+           $ftp->quit;
            $returnStr = "ERROR: ftp login failed: " . $ftp->message;
            return $returnStr;
          } else {
+           $ftp->quit;
            $returnStr = "Error|ftp login failed: " . $ftp->message;
            $returnStr .= "|" . join('|', @roReadings ) if int @roReadings;
            return $returnStr;
@@ -1221,7 +1214,6 @@ sub CDCOpenData_Readout_Run_Rain_Since_Midnight ($@) {
      CDCOpenData_Log $name, 5, "geoRefsAttr: " . $geoRef;
    }
 
-   my $dtReading = AttrVal($name, "datetimeInReadingName", 1);
    my $geoCnt = 0;
    my $geoName = "";
    my $regenmenge = -1;
@@ -1243,7 +1235,7 @@ sub CDCOpenData_Readout_Run_Rain_Since_Midnight ($@) {
 
    # calculate index of rainfall data for the given geo position:
      my $index = CDCOpenData_index_for_geo_position( (split(/,/,$location))[0], (split(/,/,$location))[1], "" );
-     my $regenmenge = -1;
+     my $regenmenge = 0;
 	
      # extract amount of rain from today's files:
      foreach my $file (@files_today) {	
@@ -1274,15 +1266,13 @@ sub CDCOpenData_Readout_Run_Rain_Since_Midnight ($@) {
          my $twobytes = get_2bytes_from_binfile($tmpDir . $localname, $index);
 
          # unpack the little-endian number and mask out bits 13..16:
-         # $regenmenge += 0.1 * (unpack( 'v*', $twobytes ) & 0xFFF);
-
          my $upMenge = (unpack( 'v*', $twobytes ) & 0xFFF);
 
          # A value of 2500 in the file marks invalid data.
          # It is reset to -1 in order to keep the y-axis scale small when plotting.
 
          if ($upMenge == 2500) {
-           CDCOpenData_Log $name, 3, "Rain_Since_Midnight: fehlerhafter Wert:";
+           CDCOpenData_Log $name, 3, "Rain_Since_Midnight: error in value";
          } else {
            $regenmenge += 0.1 * $upMenge;
          }
@@ -1384,9 +1374,11 @@ sub CDCOpenData_Readout_Run_getRain($@)
          CDCOpenData_Log $name, 3, "ftp login failed: $ftp->message";
 
          if ($fromGet) {
+           $ftp->quit;
            $returnStr = "ERROR: ftp login failed: $ftp->message";
            return $returnStr;
          } else {
+           $ftp->quit;
            $returnStr = "Error|ftp login failed: " . $ftp->message;
            $returnStr .= "|" . join('|', @roReadings ) if int @roReadings;
            return $returnStr;
@@ -1451,7 +1443,6 @@ sub CDCOpenData_Readout_Run_getRain($@)
 
    CDCOpenData_Log $name, 5, "geoRefsAttr: " . $geoRef;
 
-   my $dtReading = AttrVal($name, "datetimeInReadingName", 1);
    my $geoCnt = 0;
    my $geoName = "";
    my $regenmenge = -1;
@@ -1481,7 +1472,6 @@ sub CDCOpenData_Readout_Run_getRain($@)
 
      # unpack the little-endian number and mask out bits 13..16
      # unit of precipitation is 0.1 ltr/m²:
-     # $regenmenge = 0.1*(unpack( 'v*', $regenmenge ) & 0xFFF);
 
      $regenmenge = unpack( 'v*', $regenmenge ) & 0xFFF;
 
@@ -2228,14 +2218,6 @@ sub CDCOpenData_mk_subdirs{
         Default is one hour. 			
       </li>
 
-      <li><a name="datetimeInReadingName"></a>
-         <dt><code>attr &lt;name&gt; datetimeInReadingName &lt;0 | 1&gt;</code></dt>
-         <br>
-         this Attribute is depreciated.<br><br>
-         Default: set<br>
-         If set, then the time of the rain amount is stored in the reading name.<br>
-      </li><br>
-
       <li><a name="enableDWDdata"></a>
          <dt><code>attr &lt;name&gt; enableDWDdata &lt;rainByDay, rainSinceMidnight, rainRadarbyLocation&gt;</code></dt>
          <br>
@@ -2375,14 +2357,6 @@ sub CDCOpenData_mk_subdirs{
         CRON Regel. Wenn gesetzt, dann wird die Ausführung über diese Regel gesteuert.<br>
         Standard ist jede Stunde. 			
       </li>
-
-      <li><a name="datetimeInReadingName"></a>
-         <dt><code>attr &lt;name&gt; datetimeInReadingName &lt;0 | 1&gt;</code></dt>
-         <br>
-         Dieses Attribut wird nicht mehr unterstützt.<br><br>
-         Standard: gesetzt<br>
-         Wenn gesetzt, dann wird der Zeitpunkt der Regenmenge im Readingsnamen hinterlegt.
-      </li><br>
 
       <li><a name="enableDWDdata"></a>
          <dt><code>attr &lt;name&gt; enableDWDdata &lt;rainByDay, rainSinceMidnight, rainRadarbyLocation&gt;</code></dt>

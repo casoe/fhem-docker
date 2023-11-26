@@ -1,5 +1,29 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - feature: 58_RPI_1Wire: added on-for-timer and validated DS2408
+ - change:  10_KNX.pm: minor changes, see Forum #122582
+ - change:  00_KNXIO.pm: minor changes, see Forum #127792
+ - feature: 76_SolarForecast: graphicHeaderOwnspec: show readings of other devs
+                              new set/reset batteryTrigger command
+ - bugfix:  98_CDCOpenData: warning Net::FTP bei Fhem Start
+ - bugfix:  72_FRITZBOX set <name> lockLandevice für FritzOS >= 7.50
+ - feature: 72_FRITZBOX set <name> lockLandevice Parameter rt (realtime)
+ - bugfix:  36_Shelly:dimmer-devices: set..pct will not turn on or off
+ - feature: 36_Shelly:dimmer-devices: set..dim will turn on or off  
+ - bugfix:  76_SolarForecast: attr graphicHeaderOwnspec minor fix
+ - bugfix:  82_LGTV_WebOS: fix connection problem / add SSL Support
+ - bugfix:  98_CDCOpenData: falsche RegEx für FileLog
+ - change:  36_Shelly: removed attr ShellyName, use 'set <name> <ShellyName>' 
+ - feature: 36_Shelly: set <name> ON and OFF for multichannel devices
+ - bugfix:  36_Shelly: misc. 'undefinded value'
+ - feature: 76_SolarForecast: graphicHeaderOwnspec: can add set/attr commands, 
+                              new setter consumerNewPlanning
+ - feature: 72_FB_CALLMONITOR commandRef
+ - feature: 72_FRITZBOX set <name> lockFilterProfile ...
+ - feature: 72_FRITZBOX set <name> energyMode ...
+ - feature: 72_FRITZBOX set <name> phoneBookEntry ...
+ - bugfix:  98_CDCOpenData: Regenmenge bei _rain_since_midnight korrigiert
+ - bugfix:  98_CDCOpenData: Cron Timer bei Systemstart nicht korrekt
  - new:     98_CDCOpenData: Tägliche Regenmenge aus DWD-Radolan Daten einlesen
  - change:  36_Shelly: model of ShellyPMmini to shellypmmini
  - bugfix:  93_DbRep: fix period calculation when using attr timeYearPeriod
