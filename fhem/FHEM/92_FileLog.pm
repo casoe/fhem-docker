@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 92_FileLog.pm 27751 2023-07-11 18:43:36Z rudolfkoenig $
+# $Id: 92_FileLog.pm 28210 2023-11-26 09:42:20Z rudolfkoenig $
 package main;
 
 use strict;
@@ -708,6 +708,11 @@ FileLog_logWrapper($)
 
   if(!$d || !$type || !$file) {
     FW_addContent(">FileLog_logWrapper: bad arguments</div");
+    return 0;
+  }
+
+  if($file =~ m,.*/.*([^/]+$),) { # 135959
+    Log 1, "ERROR: FileLog_logWrapper: / not allowed in filename ($file)";
     return 0;
   }
 

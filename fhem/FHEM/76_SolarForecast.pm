@@ -1,5 +1,5 @@
 ########################################################################################################################
-# $Id: 76_SolarForecast.pm 28205 2023-11-25 17:53:04Z DS_Starter $
+# $Id: 76_SolarForecast.pm 28233 2023-12-01 09:36:39Z DS_Starter $
 #########################################################################################################################
 #       76_SolarForecast.pm
 #
@@ -105,6 +105,7 @@ BEGIN {
           Log3
           modules
           parseParams
+          perlSyntaxCheck
           readingsSingleUpdate
           readingsBulkUpdate
           readingsBulkUpdateIfChanged
@@ -150,6 +151,9 @@ BEGIN {
 
 # Versions History intern
 my %vNotesIntern = (
+  "1.4.1"  => "01.12.2023  ___getFWwidget: adjust for FHEMWEB feature forum:#136019 ",
+  "1.4.0"  => "29.11.2023  graphicHeaderOwnspec: can manage attr / sets of other devs by <attr|set>@<dev> ",
+  "1.3.0"  => "27.11.2023  new Attr graphicHeaderOwnspecValForm ",
   "1.2.0"  => "25.11.2023  graphicHeaderOwnspec: show readings of other devs by <reaging>@<dev>, Set/reset batteryTrigger ",
   "1.1.3"  => "24.11.2023  rename reset arguments according possible adjustable textField width ",
   "1.1.2"  => "20.11.2023  ctrlDebug Adjustment of column width, must have new fhemweb.js Forum:#135850 ",
@@ -454,7 +458,7 @@ my $defmaxvar      = 0.5;                                                       
 my $definterval    = 70;                                                            # Standard Abfrageintervall
 my $defslidenum    = 3;                                                             # max. Anzahl der Arrayelemente in Schieberegistern
 my $webCmdFn       = 'FW_widgetFallbackFn';                                         # FHEMWEB Widgets Funktion
-my @attrreadings   = ();                                                            # Array der Hilfsreadings als Attributspeicher
+my @widgetreadings = ();                                                            # Array der Hilfsreadings als Attributspeicher
 
 my $pvhcache       = $attr{global}{modpath}."/FHEM/FhemUtils/PVH_SolarForecast_";   # Filename-Fragment für PV History (wird mit Devicename ergänzt)
 my $pvccache       = $attr{global}{modpath}."/FHEM/FhemUtils/PVC_SolarForecast_";   # Filename-Fragment für PV Circular (wird mit Devicename ergänzt)
@@ -992,6 +996,7 @@ my %hcsr = (                                                                    
 # $data{$type}{$name}{aidectree}{object}                                         # AI Decision Tree Object
 # $data{$type}{$name}{aidectree}{aitrained}                                      # AI Decision Tree trainierte Daten
 # $data{$type}{$name}{aidectree}{airaw}                                          # Rohdaten für AI Input = Raw Trainigsdaten
+# $data{$type}{$name}{func}                                                      # interne Funktionen
 
 ################################################################
 #               Init Fn
@@ -1068,6 +1073,7 @@ sub Initialize {
                                 "graphicBeam1MaxVal ".
                                 "graphicEnergyUnit:Wh,kWh ".
                                 "graphicHeaderOwnspec:textField-long ".
+                                "graphicHeaderOwnspecValForm:textField-long ".
                                 "graphicHeaderDetail:multiple-strict,all,co,pv,own,status ".
                                 "graphicHeaderShow:1,0 ".
                                 "graphicHistoryHour:slider,0,1,23 ".
@@ -1091,49 +1097,9 @@ sub Initialize {
   # $hash->{FW_addDetailToSummary} = 1;
   # $hash->{FW_atPageEnd} = 1;                         # wenn 1 -> kein Longpoll ohne informid in HTML-Tag
 
- $hash->{AttrRenameMap} = { "beam1Color"         => "graphicBeam1Color",
-                            "beam1Content"       => "graphicBeam1Content",
-                            "beam1FontColor"     => "graphicBeam1FontColor",
-                            "beam2Color"         => "graphicBeam2Color",
-                            "beam2Content"       => "graphicBeam2Content",
-                            "beam2FontColor"     => "graphicBeam2FontColor",
-                            "beamHeight"         => "graphicBeamHeight",
-                            "beamWidth"          => "graphicBeamWidth",
-                            "historyHour"        => "graphicHistoryHour",
-                            "hourCount"          => "graphicHourCount",
-                            "hourStyle"          => "graphicHourStyle",
-                            "layoutType"         => "graphicLayoutType",
-                            "maxValBeam"         => "graphicBeam1MaxVal",
-                            "showDiff"           => "graphicShowDiff",
-                            "showNight"          => "graphicShowNight",
-                            "showWeather"        => "graphicShowWeather",
-                            "spaceSize"          => "graphicSpaceSize",
-                            "weatherColor"       => "graphicWeatherColor",
-                            "weatherColorNight"  => "graphicWeatherColorNight",
-                            "htmlStart"          => "graphicStartHtml",
-                            "htmlEnd"            => "graphicEndHtml",
-                            "showHeader"         => "headerShow",
-                            "headerDetail"       => "graphicHeaderDetail",
-                            "headerShow"         => "graphicHeaderShow",
-                            "cloudFactorDamping" => "affectCloudfactorDamping",
-                            "rainFactorDamping"  => "affectRainfactorDamping",
-                            "numHistDays"        => "affectNumHistDays",
-                            "maxVariancePerDay"  => "affectMaxDayVariance",
-                            "follow70percentRule"=> "affect70percentRule",
-                            "Wh_kWh"             => "graphicEnergyUnit",
-                            "autoRefreshFW"      => "ctrlAutoRefreshFW",
-                            "autoRefresh"        => "ctrlAutoRefresh",
-                            "showLink"           => "ctrlShowLink",
-                            "debug"              => "ctrlDebug",
-                            "optimizeSolCastAPIreqInterval" => "ctrlOptimizeSolCastInterval",
-                            "interval"                      => "ctrlInterval",
-                            "createStatisticReadings"       => "ctrlStatisticReadings",
-                            "createConsumptionRecReadings"  => "ctrlConsRecommendReadings",
-                            "createTomorrowPVFcReadings"    => "ctrlNextDayForecastReadings",
-                            "preferredChargeBattery"        => "affectBatteryPreferredCharge",
-                            "sameWeekdaysForConsfc"         => "affectConsForecastIdentWeekdays",
-                            "ctrlOptimizeSolCastInterval"   => "ctrlSolCastAPIoptimizeReq",
-                          };
+  # $hash->{AttrRenameMap} = { "beam1Color"         => "graphicBeam1Color",
+  #                            "beam1Content"       => "graphicBeam1Content",
+  #                          };
 
   eval { FHEM::Meta::InitMod( __FILE__, $hash ) };     ## no critic 'eval'
 
@@ -4048,6 +4014,7 @@ sub Attr {
   my $aVal  = shift;
 
   my $hash  = $defs{$name};
+  my $type  = $hash->{TYPE};
 
   my ($do,$val);
 
@@ -4078,6 +4045,38 @@ sub Attr {
       deleteReadingspec ($hash, 'Today_PVdeviation');
       delete $data{$type}{$name}{circular}{99}{tdayDvtn};
   }
+  
+  if ($aName eq 'graphicHeaderOwnspecValForm') {
+      if ($cmd ne 'set') {
+          delete $data{$type}{$name}{func}{ghoValForm};
+          return;
+      }
+      
+      if(!$aVal || $aVal !~ m/^\s*\{.*\}\s*$/xs) {
+          return "Usage of $aName is wrong. The function has to be specified as \"{<your own code>}\" ";
+      }
+
+      my $attrVal  = $aVal;
+      my %specials = ( "%DEVICE"  => $name,
+                       "%READING" => $name,
+                       "%VALUE"   => 1,
+                       "%UNIT"    => 'kW',
+                     );
+
+      my $err = perlSyntaxCheck($attrVal, %specials);
+      return $err if($err);
+
+      if ($attrVal =~ m/^\{.*\}$/xs && $attrVal =~ m/=>/ && $attrVal !~ m/\$/ ) {           # Attr wurde als Hash definiert          
+          my $av = eval $attrVal;
+          
+          return $@ if($@);
+                    
+          $av      = eval $attrVal;
+          $attrVal = $av if(ref $av eq "HASH");
+      }
+      
+      $data{$type}{$name}{func}{ghoValForm} = $attrVal;
+  }
 
   if ($cmd eq 'set') {
       if ($aName eq 'ctrlInterval') {
@@ -4106,16 +4105,14 @@ sub Attr {
           }
       }
 
-      if ($aName eq 'ctrlUserExitFn') {
-          if($cmd eq "set" && $init_done) {
-              if(!$aVal || $aVal !~ m/^\s*(\{.*\})\s*$/xs) {
-                  return "Usage of $aName is wrong. The function has to be specified as \"{<your own code>}\" ";
-              }
-
-              $aVal = $1;
-              eval $aVal;
-              return $@ if ($@);
+      if ($aName eq 'ctrlUserExitFn' && $init_done) {
+          if(!$aVal || $aVal !~ m/^\s*(\{.*\})\s*$/xs) {
+              return "Usage of $aName is wrong. The function has to be specified as \"{<your own code>}\" ";
           }
+
+          $aVal = $1;
+          eval $aVal;
+          return $@ if($@);
       }
   }
 
@@ -4690,7 +4687,7 @@ sub centralTask {
       deleteReadingspec    ($hash, "currentForecastDev");
   }
 
-  my $rdev = ReadingsVal  ($name, "currentRadiationDev",  undef);
+  my $rdev = ReadingsVal   ($name, "currentRadiationDev",  undef);
   if ($rdev) {
       readingsSingleUpdate ($hash, "currentRadiationAPI", $rdev, 0);
       deleteReadingspec    ($hash, "currentRadiationDev");
@@ -5068,8 +5065,8 @@ sub _specialActivities {
           deleteReadingspec ($hash, "Today_PVdeviation");
           deleteReadingspec ($hash, "Today_PVreal");
           
-          for my $atr (@attrreadings) {
-              deleteReadingspec ($hash, $atr);
+          for my $wdr (@widgetreadings) {
+              deleteReadingspec ($hash, $wdr);
           }
 
           for my $n (1..24) {
@@ -5236,10 +5233,10 @@ sub _transferWeatherValues {
 
   debugLog ($paref, "collectData", "sunrise/sunset today: $fc0_SunRise / $fc0_SunSet, sunrise/sunset tomorrow: $fc1_SunRise / $fc1_SunSet");
 
-  storeReading ('Today_SunRise', $fc0_SunRise);
-  storeReading ('Today_SunSet', $fc0_SunSet);
+  storeReading ('Today_SunRise',    $fc0_SunRise);
+  storeReading ('Today_SunSet',     $fc0_SunSet);
   storeReading ('Tomorrow_SunRise', $fc1_SunRise);
-  storeReading ('Tomorrow_SunSet', $fc1_SunSet);
+  storeReading ('Tomorrow_SunSet',  $fc1_SunSet);
 
   my $fc0_SunRise_round = sprintf "%02d", (split ":", $fc0_SunRise)[0];
   my $fc0_SunSet_round  = sprintf "%02d", (split ":", $fc0_SunSet)[0];
@@ -7721,9 +7718,9 @@ sub __evaluateArray {
   
   return if(scalar @aa < $defslidenum);
 
-  my $gen1   = @aa[0];
-  my $gen2   = @aa[1];
-  my $gen3   = @aa[2];
+  my $gen1   = $aa[0];
+  my $gen2   = $aa[1];
+  my $gen3   = $aa[2];
 
   my ($a,$h) = parseParams ($tholds);
 
@@ -9107,21 +9104,20 @@ return $aiicon;
 ################################################################
 sub __createOwnSpec {
   my $paref     = shift;
-
   my $hash      = $paref->{hash};
   my $name      = $paref->{name};
-  my $dstyle    = $paref->{dstyle};                                       # TD-Style
+  my $dstyle    = $paref->{dstyle};                                                    # TD-Style
   my $hdrDetail = $paref->{hdrDetail};
 
-  my $vinr = 4;                                                           # Spezifikationen in einer Zeile
+  my $vinr = 4;                                                                        # Spezifikationen in einer Zeile
   my $spec = AttrVal ($name, 'graphicHeaderOwnspec', '');
   my $uatr = AttrVal ($name, 'graphicEnergyUnit',  'Wh');
   my $show = $hdrDetail =~ /all|own/xs ? 1 : 0;
 
   return if(!$spec || !$show);
   
-  my $allsets  = FW_widgetOverride($name, getAllSets ($name), "set")." ";  
-  my $allattrs = FW_widgetOverride($name, getAllAttr ($name), "set")." ";              # Leerzeichen am Ende wichtig für Regexvergleich
+  my $allsets  = ' '.FW_widgetOverride ($name, getAllSets ($name),  'set').' ';  
+  my $allattrs = ' '.FW_widgetOverride ($name, getAllAttr ($name), 'attr').' ';        # Leerzeichen wichtig für Regexvergleich
 
   my @fields = split (/\s+/sx, $spec);
 
@@ -9144,7 +9140,12 @@ sub __createOwnSpec {
       my ($h, $v, $u);
 
       for (my $k = 0 ; $k < $vinr; $k++) {          
-          ($h->{$k}{label}, $h->{$k}{elm}) = split ":", $vals[$col] if($vals[$col]);
+          ($h->{$k}{label}, $h->{$k}{elm}) = split ":", $vals[$col] if($vals[$col]);  # Label und darzustellendes Element
+          
+          $h->{$k}{elm}   //= '';
+          my ($elm, $dev)   = split "@", $h->{$k}{elm};                               # evtl. anderes Devices
+          $dev            //= $name;
+          
           $col++;
           
           if (!$h->{$k}{label}) {
@@ -9152,32 +9153,46 @@ sub __createOwnSpec {
               next;
           }
           
-          if ($h->{$k}{elm} !~ /@/xs) {
-              my $setcmd = ___getFWwidget ($name, $h->{$k}{elm}, $allsets, 'set');
+          my $setcmd = ___getFWwidget ($name, $dev, $elm, $allsets, 'set');           # Set-Kommandos identifizieren
+          
+          if ($setcmd) {
+              $v->{$k} = $setcmd;
+              $u->{$k} = q{};
               
-              if ($setcmd) {
-                  $v->{$k} = $setcmd;
-                  $u->{$k} = q{};
-                  next;
-              }
-              
-              my $attrcmd = ___getFWwidget ($name, $h->{$k}{elm}, $allattrs, 'attr');
-              
-              if ($attrcmd) {
-                  $v->{$k} = $attrcmd;
-                  $u->{$k} = q{};
-                  next;
-              }
+              debugLog ($paref, 'graphic', "graphicHeaderOwnspec - set-command genereated:\n$setcmd");
+              next;
           }
           
-          my ($rdg, $dev) = split "@", $h->{$k}{elm};
-          $dev          //= $name;
+          my $attrcmd = ___getFWwidget ($name, $dev, $elm, $allattrs, 'attr');        # Attr-Kommandos identifizieren
           
-          $v->{$k}             = ReadingsVal ($dev, $rdg, '');
-          ($v->{$k}, $u->{$k}) = split /\s+/, ReadingsVal ($dev, $rdg, '') if($v->{$k} =~ /(Wh|kWh)$/xs);
+          if ($attrcmd) {
+              $v->{$k} = $attrcmd;
+              $u->{$k} = q{};
+              
+              debugLog ($paref, 'graphic', "graphicHeaderOwnspec - attr-command genereated:\n$attrcmd");
+              next;
+          }
+          
+          $v->{$k} = ReadingsVal ($dev, $elm, '');
+          
+          if ($v->{$k} =~ /^\s*(-?\d+(\.\d+)?)/xs) {
+              ($v->{$k}, $u->{$k}) = split /\s+/, ReadingsVal ($dev, $elm, '');       # Value und Unit trennen wenn Value numerisch
+          }
           
           $v->{$k} //= q{};
           $u->{$k} //= q{};
+          
+          $paref->{dev}  = $dev; 
+          $paref->{rdg}  = $elm;
+          $paref->{val}  = $v->{$k};
+          $paref->{unit} = $u->{$k};
+          
+          ($v->{$k}, $u->{$k}) = ___ghoValForm ($paref);
+          
+          delete $paref->{dev};
+          delete $paref->{rdg};
+          delete $paref->{val};
+          delete $paref->{unit};
           
           next if(!$u->{$k});
           
@@ -9187,7 +9202,7 @@ sub __createOwnSpec {
                   $u->{$k} = 'kWh';
               }
           }
-
+          
           if ($uatr eq 'Wh') {
               if ($u->{$k} =~ /^kWh/xs) {
                   $v->{$k} = sprintf "%.0f",($v->{$k} * 1000);
@@ -9217,15 +9232,26 @@ return $ownv;
 ################################################################  
 sub ___getFWwidget {
   my $name = shift;
+  my $dev  = shift // $name;                # Device des Elements, default=$name
   my $elm  = shift;                         # zu prüfendes Element
   my $allc = shift;                         # Kommandovorrat -> ist Element enthalten?
   my $ctyp = shift // 'set';                # Kommandotyp: set/attr
 
-  my $widget = '';
+  return if(!$elm);
   
+  my $widget = '';
   my ($current, $reading);
+  
+  if ($dev ne $name) {                                                                   # Element eines anderen Devices verarbeiten
+      if ($ctyp eq 'set') {
+          $allc = ' '.FW_widgetOverride ($dev, getAllSets($dev), 'set').' ';             # Leerzeichen wichtig für Regexvergleich
+      }
+      elsif ($ctyp eq 'attr') {
+          $allc = ' '.FW_widgetOverride ($dev, getAllAttr($dev), 'attr').' ';               
+      }
+  }
 
-  if ($allc =~ /$elm:?(.*?)\s/xs) {
+  if ($allc =~ /\s$elm:?(.*?)\s/xs) {                                                      # Element in allen Sets oder Attr enthalten
       my $arg = $1;
       $arg    = 'textFieldNL' if(!$arg);
       
@@ -9233,45 +9259,136 @@ sub ___getFWwidget {
           $arg = '#,'.$arg;         
       }
       
-      if ($ctyp eq 'attr') {
-          $current = AttrVal ($name, $elm, '');
-          $reading = '.'.$elm;
-
-          push @attrreadings, $reading;
+      if ($ctyp eq 'attr') {                                                             # Attributwerte als verstecktes Reading abbilden
+          $current = AttrVal ($dev, $elm, '');
+          $reading = '.'.$dev.'_'.$elm;
+      }
+      else {                                                                             
+          $current = ReadingsVal ($dev, $elm, '');
+          if($dev ne $name) {
+              $reading = '.'.$dev.'_'.$elm;                                              # verstecktes Reading in SolCast abbilden wenn Set-Kommando aus fremden Device
+          }
+          else {
+              $reading = $elm;
+          }
+      }
+      
+      if ($reading && $reading =~ /^\./xs) {                                             # verstecktes Reading für spätere Löschung merken
+          push @widgetreadings, $reading;
           readingsSingleUpdate ($defs{$name}, $reading, $current, 0);
       }
       
-      no strict "refs";                                                                    ## no critic 'NoStrict'
-      $widget = &{$webCmdFn} ($FW_wname, $name, "", $elm, $arg);
+      no strict "refs";                                                                  ## no critic 'NoStrict'
+      $widget = &{$webCmdFn} ($FW_wname, $name, '',$elm.' '.$reading, $arg);
       use strict "refs";
 
       if ($widget) {
-          $widget =~ s,^<td[^>]*>(.*)</td>$,$1,x;
-          $widget =~ s,></div>, type='$ctyp'></div>,x;
+          my ($wc) = $widget =~ /current='((<td|<div|<\/div>).*?)'/xs;                   # Eleminierung von störenden HTML Elementen aus aktuellem Readingwert 
+          
+          if ($wc) {
+              $widget  = (split "current=", $widget)[0];
+              $widget .= qq{ current='^ESC^'></div></td>};
+          }
+          
+          $widget =~ s,^<td[^>]*>(.*)</td>$,$1,xs;
+          $widget =~ s,></div>, type='$ctyp'></div>,xs;
       }
       else {
-          $widget = FW_pH ("cmd=$ctyp $name $elm", $elm, 0, "", 1, 1);
+          $widget = FW_pH ("cmd=$ctyp $dev $elm", $elm, 0, "", 1, 1);
       }
       
-      if ($ctyp eq 'attr') {
-          my ($sc) = $widget =~ /current='(.*?)'/xs;
-          my ($sr) = $widget =~ /reading='(.*?)'/xs;
-          $widget  =~ s/$sc/$current/ if(defined $sc);
-          $widget  =~ s/$sr/$reading/ if(defined $sr);
-      }
+      my ($sc) = $widget =~ /dev='(.*?)'/xs;                                             # Device in Widget korrigieren/sublimieren
+      $widget  =~ s/$sc/$dev/ if(defined $sc);
       
-      if ($arg eq 'textField' || $arg eq 'textField-long') {                              # Label (Reading) ausblenden -> siehe fhemweb.js function FW_createTextField Zeile 1657
+      if ($arg eq 'textField' || $arg eq 'textField-long') {                             # Label (Reading) ausblenden -> siehe fhemweb.js function FW_createTextField Zeile 1657
           $widget =~ s/arg='textField/arg='textFieldNL/xs;                                   
       }
       
-      if ($arg =~ 'slider') {                                                             # Widget slider in selectnumbers für Kopfgrafik umsetzen
+      if ($arg =~ 'slider') {                                                            # Widget slider in selectnumbers für Kopfgrafik umsetzen
           my ($wid, $min, $step, $max, $float) = split ",", $arg; 
           $widget =~ s/arg='(.*?)'/arg='selectnumbers,$min,$step,$max,0,lin'/xs;    
       }
   }
-  #Log3 ($name, 1, qq{$name - widget: $widget});
   
 return $widget;
+}
+
+################################################################
+#      ownHeader ValueFormat 
+################################################################
+sub ___ghoValForm {
+  my $paref = shift;
+  my $hash  = $paref->{hash};
+  my $name  = $paref->{name};
+  my $dev   = $paref->{dev};
+  my $rdg   = $paref->{rdg};
+  my $val   = $paref->{val};
+  my $unit  = $paref->{unit};
+  my $type  = $paref->{type};
+  
+  my $fn = $data{$type}{$name}{func}{ghoValForm};
+  return ($val, $unit) if(!$fn || !$dev || !$rdg || !defined $val);
+
+  my $DEVICE  = $dev;
+  my $READING = $rdg;
+  my $VALUE   = $val;
+  my $UNIT    = $unit;
+  my $err;
+      
+  if (!ref $fn && $fn =~ m/^\{.*\}$/xs) {                                       # normale Funktionen    
+      my $efn = eval $fn;
+    
+      if ($@) {
+          Log3 ($name, 2, "$name - ERROR in execute graphicHeaderOwnspecValForm: ".$@);
+          $err = $@;
+      } 
+      else {
+          if (ref $efn ne 'HASH') {
+              $val  = $VALUE;
+              $unit = $UNIT;
+          }
+          else {
+              $fn = $efn; 
+          }
+      }
+  }
+  
+  if (ref $fn eq 'HASH') {                                                     # Funktionshash
+      my $vf = "";
+      $vf = $fn->{$rdg}             if(exists $fn->{$rdg});
+      $vf = $fn->{"$dev.$rdg"}      if(exists $fn->{"$dev.$rdg"});
+      $vf = $fn->{"$rdg.$val"}      if(exists $fn->{"$rdg.$val"});
+      $vf = $fn->{"$dev.$rdg.$val"} if(exists $fn->{"$dev.$rdg.$val"});
+      $fn = $vf;
+      
+      if ($fn =~ m/^%/xs) {
+          $val = sprintf $fn, $val;
+      } 
+      elsif ($fn ne "") {
+          my $vnew = eval $fn;
+          
+          if ($@) {
+              Log3 ($name, 2, "$name - ERROR in execute graphicHeaderOwnspecValForm: ".$@);
+              $err = $@;
+          } 
+          else {
+              $val = $vnew;
+          }
+      }
+  }
+  
+  if ($val =~ /^\s*(-?\d+(\.\d+)?)/xs) {                                       # Value und Unit numerischer Werte trennen
+      ($val, my $u1) = split /\s+/, $val;                              
+      $unit          = $u1 ? $u1 : $unit;
+  }
+  
+  if ($err) {
+      $err            = (split "at", $err)[0];
+      $paref->{state} = 'ERROR - graphicHeaderOwnspecValForm: '.$err;
+      singleUpdateState ($paref);
+  }
+
+return ($val, $unit);
 }
 
 ################################################################
@@ -16109,8 +16226,9 @@ to ensure that the system configuration is correct.
        <br>
 
        <a id="SolarForecast-attr-graphicHeaderOwnspec"></a>
-       <li><b>graphicHeaderOwnspec &lt;Label&gt;:&lt;Reading&gt; &lt;Label&gt;:&lt;Reading&gt; ... </b><br>
+       <li><b>graphicHeaderOwnspec &lt;Label&gt;:&lt;Reading&gt;[@Device] &lt;Label&gt;:&lt;Set&gt;[@Device] &lt;Label&gt;:&lt;Attr&gt;[@Device] ... </b><br>
          Display of any readings, set commands and attributes of the device in the graphic header. <br>
+         Readings, set commands and attributes of other devices can be displayed by specifying the optional [@Device]. <br>
          The values to be displayed are separated by spaces.
          Four values (fields) are displayed per line. <br>
          The input can be made in multiple lines. Values with the units "Wh" or "kWh" are converted according to the
@@ -16153,6 +16271,61 @@ to ensure that the system configuration is correct.
             <tr><td>                                         </td><td>Debug:ctrlDebug : : :                                                                   </td></tr>     
          </table>
        </ul>
+       </li>
+       <br>
+       
+       <a id="SolarForecast-attr-graphicHeaderOwnspecValForm"></a>
+       <li><b>graphicHeaderOwnspecValForm </b><br>
+         The readings to be displayed with the attribute 
+         <a href="#SolarForecast-attr-graphicHeaderOwnspec">graphicHeaderOwnspec</a> can be manipulated with sprintf and 
+         other Perl operations.  <br>
+         There are two basic notation options that cannot be combined with each other. <br>
+         The notations are always specified within two curly brackets {...}.         
+         <br><br> 
+
+         <b>Notation 1: </b> <br>
+         A simple formatting of readings of your own device with sprintf is carried out as shown in line 
+         'Current_AutarkyRate' or 'Current_GridConsumption'. <br>
+         Other Perl operations are to be bracketed with (). The respective readings values and units are available via
+         the variables $VALUE and $UNIT. <br>
+         Readings of other devices are specified by '&lt;Device&gt;.&lt;Reading&gt;'. 
+         <br><br>
+         
+         <ul>
+         <table>
+         <colgroup> <col width="20%"> <col width="80%"> </colgroup>
+            <tr><td>{                                        </td><td>                                               </td></tr>
+            <tr><td> 'Current_AutarkyRate'                   </td><td> => "%.1f %%",                                 </td></tr>
+            <tr><td> 'Current_GridConsumption'               </td><td> => "%.2f $UNIT",                              </td></tr>
+            <tr><td> 'SMA_Energymeter.Cover_RealPower'       </td><td> => q/($VALUE)." W"/,                          </td></tr>
+            <tr><td> 'SMA_Energymeter.L2_Cover_RealPower'    </td><td> => "($VALUE).' W'",                           </td></tr>
+            <tr><td> 'SMA_Energymeter.L1_Cover_RealPower'    </td><td> => '(sprintf "%.2f", ($VALUE / 1000))." kW"', </td></tr>
+            <tr><td>}                                        </td><td>                                               </td></tr>
+         </table>
+         </ul>
+         <br>
+       
+         <b>Notation 2: </b> <br>
+         The manipulation of reading values and units is done via Perl If ... else structures. <br>
+         The device, reading, reading value and unit are available to the structure with the variables $DEVICE, $READING, 
+         $VALUE and $UNIT. <br>
+         If the variables are changed, the new values are transferred to the display accordingly.
+         <br><br>  
+
+         <ul>
+         <table>
+         <colgroup> <col width="5%"> <col width="95%"> </colgroup>
+            <tr><td>{ </td><td>                                                   </td></tr>
+            <tr><td>  </td><td> if ($READING eq 'Current_AutarkyRate') {          </td></tr>
+            <tr><td>  </td><td> &nbsp;&nbsp; $VALUE = sprintf "%.1f", $VALUE;     </td></tr>
+            <tr><td>  </td><td> &nbsp;&nbsp; $UNIT  = "%";                        </td></tr>
+            <tr><td>  </td><td> }                                                 </td></tr>
+            <tr><td>  </td><td> elsif ($READING eq 'Current_GridConsumption') {   </td></tr>
+            <tr><td>  </td><td> &nbsp;&nbsp; ...                                  </td></tr>
+            <tr><td>  </td><td> }                                                 </td></tr>
+            <tr><td>} </td><td>                                                   </td></tr>
+         </table>
+         </ul>               
        </li>
        <br>
 
@@ -18003,9 +18176,9 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
        <br>
 
        <a id="SolarForecast-attr-graphicHeaderOwnspec"></a>
-       <li><b>graphicHeaderOwnspec &lt;Label&gt;:&lt;Reading[@Device]&gt; &lt;Label&gt;:&lt;Reading[@Device]&gt; ... </b><br>
+       <li><b>graphicHeaderOwnspec &lt;Label&gt;:&lt;Reading&gt;[@Device] &lt;Label&gt;:&lt;Set&gt;[@Device] &lt;Label&gt;:&lt;Attr&gt;[@Device] ... </b><br>
          Anzeige beliebiger Readings, Set-Kommandos und Attribute des SolarForecast Devices im Grafikkopf. <br>
-         Durch Angabe des optionalen [@Device] können Readings anderer Devices angezeigt werden. <br>
+         Durch Angabe des optionalen [@Device] können Readings, Set-Kommandos und Attribute anderer Devices angezeigt werden. <br>
          Die anzuzeigenden Werte werden durch Leerzeichen getrennt.
          Es werden vier Werte (Felder) pro Zeile dargestellt. <br>
          Die Eingabe kann mehrzeilig erfolgen. Werte mit den Einheiten "Wh" bzw. "kWh" werden entsprechend der Einstellung
@@ -18048,6 +18221,60 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
             <tr><td>                                         </td><td>Debug:ctrlDebug : : :                                                         </td></tr>
          </table>
        </ul>
+       </li>
+       <br>
+       
+       <a id="SolarForecast-attr-graphicHeaderOwnspecValForm"></a>
+       <li><b>graphicHeaderOwnspecValForm </b><br>
+         Die mit dem Attribut <a href="#SolarForecast-attr-graphicHeaderOwnspec">graphicHeaderOwnspec</a> anzuzeigenden 
+         Readings können mit sprintf und anderen Perl Operationen manipuliert werden. <br>
+         Es stehen zwei grundsätzliche, miteinander nicht kombinierbare Möglichkeiten der Notation zur Verfügung. <br>
+         Die Angabe der Notationen erfolgt grundsätzlich innerhalb von zwei geschweiften Klammern {...}.         
+         <br><br> 
+
+         <b>Notation 1: </b> <br>
+         Eine einfache Formatierung von Readings des eigenen Devices mit sprintf erfolgt wie in Zeile 
+         'Current_AutarkyRate' bzw. 'Current_GridConsumption' angegeben. <br>
+         Andere Perl Operationen sind mit () zu klammern. Die jeweiligen Readingswerte und Einheiten stehen über
+         die Variablen $VALUE und $UNIT zur Verfügung. <br>
+         Readings anderer Devices werden durch die Angabe '&lt;Device&gt;.&lt;Reading&gt;' spezifiziert. 
+         <br><br>
+         
+         <ul>
+         <table>
+         <colgroup> <col width="20%"> <col width="80%"> </colgroup>
+            <tr><td>{                                        </td><td>                                               </td></tr>
+            <tr><td> 'Current_AutarkyRate'                   </td><td> => "%.1f %%",                                 </td></tr>
+            <tr><td> 'Current_GridConsumption'               </td><td> => "%.2f $UNIT",                              </td></tr>
+            <tr><td> 'SMA_Energymeter.Cover_RealPower'       </td><td> => q/($VALUE)." W"/,                          </td></tr>
+            <tr><td> 'SMA_Energymeter.L2_Cover_RealPower'    </td><td> => "($VALUE).' W'",                           </td></tr>
+            <tr><td> 'SMA_Energymeter.L1_Cover_RealPower'    </td><td> => '(sprintf "%.2f", ($VALUE / 1000))." kW"', </td></tr>
+            <tr><td>}                                        </td><td>                                               </td></tr>
+         </table>
+         </ul>
+         <br>
+       
+         <b>Notation 2: </b> <br>
+         Die Manipulation von Readingwerten und Einheiten erfolgt über Perl If ... else Strukturen. <br>
+         Der Struktur stehen Device, Reading, Readingwert und Einheit mit den Variablen $DEVICE, $READING, $VALUE und 
+         $UNIT zur Verfügung. <br>
+         Bei Änderung der Variablen werden die neuen Werte entsprechend in die Anzeige übernommen.
+         <br><br>  
+
+         <ul>
+         <table>
+         <colgroup> <col width="5%"> <col width="95%"> </colgroup>
+            <tr><td>{ </td><td>                                                   </td></tr>
+            <tr><td>  </td><td> if ($READING eq 'Current_AutarkyRate') {          </td></tr>
+            <tr><td>  </td><td> &nbsp;&nbsp; $VALUE = sprintf "%.1f", $VALUE;     </td></tr>
+            <tr><td>  </td><td> &nbsp;&nbsp; $UNIT  = "%";                        </td></tr>
+            <tr><td>  </td><td> }                                                 </td></tr>
+            <tr><td>  </td><td> elsif ($READING eq 'Current_GridConsumption') {   </td></tr>
+            <tr><td>  </td><td> &nbsp;&nbsp; ...                                  </td></tr>
+            <tr><td>  </td><td> }                                                 </td></tr>
+            <tr><td>} </td><td>                                                   </td></tr>
+         </table>
+         </ul>               
        </li>
        <br>
 

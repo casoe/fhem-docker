@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 01_FHEMWEB.pm 28102 2023-10-28 19:41:31Z rudolfkoenig $
+# $Id: 01_FHEMWEB.pm 28231 2023-11-30 16:36:15Z rudolfkoenig $
 package main;
 
 use strict;
@@ -3612,7 +3612,10 @@ FW_widgetFallbackFn()
   # noArg is needed for fhem.cfg.demo / Cinema
   return "" if(!$values || $values eq "noArg");
 
-  my($reading) = split( ' ', $cmd, 2 );
+  my $reading;
+  ($cmd, $reading) = split(' ', $cmd, 2) if($values !~ m/^colorpicker,/);
+  $reading = $cmd if(!defined($reading));
+
   my $current;
   if($cmd eq "desired-temp" || $cmd eq "desiredTemperature") {
     $current = ReadingsVal($d, $cmd, 20);

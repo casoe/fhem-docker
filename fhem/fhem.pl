@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 28126 2023-11-05 11:17:59Z rudolfkoenig $
+# $Id: fhem.pl 28227 2023-11-29 12:33:32Z rudolfkoenig $
 
 
 use strict;
@@ -236,8 +236,9 @@ sub cfgDB_FileWrite;
 use vars qw($addTimerStacktrace);# set to 1 by fhemdebug
 use vars qw($auth_refresh);
 use vars qw($cmdFromAnalyze);   # used by the warnings-sub
-use vars qw($devcount);         # Maximum device number, used for storing
+use vars qw($devcount);         # Maximum device number, used for storing. 
 use vars qw($devcountPrioSave); # Maximum prioSave device number
+use vars qw($devcountTemp);     # number for temp devices like client connect
 use vars qw($unicodeEncoding);  # internal encoding is unicode (wide character)
 use vars qw($featurelevel); 
 use vars qw($fhemForked);       # 1 in a fhemFork()'ed process, else undef
@@ -252,6 +253,7 @@ use vars qw($nextat);           # Time when next timer will be triggered.
 use vars qw($numCPUs);          # Number of CPUs on Linux, else 1
 use vars qw($reread_active);
 use vars qw($selectTimestamp);  # used to check last select exit timestamp
+use vars qw($tmpdevcount);      # Maximum device number, used for storing
 use vars qw($winService);       # the Windows Service object
 
 use vars qw(%attr);             # Attributes
@@ -279,7 +281,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 28126 2023-11-05 11:17:59Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 28227 2023-11-29 12:33:32Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -2144,7 +2146,8 @@ CommandDefine($$)
   $hash{DEF}   = $a[2] if(int(@a) > 2);
   #130588: start early after next save, for a small SubProcess size
   $hash{NR}    = ($modules{$m}{prioSave} && $devcountPrioSave < 30) ? 
-                  $devcountPrioSave++ : $devcount++;
+                    $devcountPrioSave++ :
+                    ($opt{temporary} ? $devcountTemp++ : $devcount++);
   $hash{CFGFN} = $currcfgfile
         if($currcfgfile ne AttrVal("global", "configfile", "") &&
           !configDBUsed());
@@ -4044,6 +4047,7 @@ doGlobalDef($)
 
   $devcountPrioSave = 2;
   $devcount = 30;
+  $devcountTemp = 10000000;
 }
 
 #####################################

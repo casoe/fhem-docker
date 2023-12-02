@@ -1,5 +1,5 @@
 ##############################################
-# $Id: TcpServerUtils.pm 27931 2023-09-04 09:52:58Z rudolfkoenig $
+# $Id: TcpServerUtils.pm 28227 2023-11-29 12:33:32Z rudolfkoenig $
 
 package main;
 use strict;
@@ -342,7 +342,7 @@ TcpServer_Accept($$)
 
   my $cname = "${name}_${caddr}_${port}";
   my %nhash;
-  $nhash{NR}    = $devcount++;
+  $nhash{NR}    = $devcountTemp++;
   $nhash{NAME}  = $cname;
   $nhash{PEER}  = $caddr;
   $nhash{PORT}  = $port;
