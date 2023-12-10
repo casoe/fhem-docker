@@ -1,5 +1,5 @@
 ﻿##########################################################################################################
-# $Id: 93_DbRep.pm 28140 2023-11-08 20:57:09Z DS_Starter $
+# $Id: 93_DbRep.pm 28267 2023-12-08 21:52:20Z DS_Starter $
 ##########################################################################################################
 #       93_DbRep.pm
 #
@@ -59,6 +59,8 @@ no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 # Version History intern
 my %DbRep_vNotesIntern = (
+  "8.52.15" => "08.12.2023  fix use fhem default variables in attr executeBeforeProc/executeAfterProc ".
+                            "forum: https://forum.fhem.de/index.php?msg=1296146 ",
   "8.52.14" => "08.11.2023  fix period calculation when using attr timeYearPeriod ",
   "8.52.13" => "07.11.2023  dumpMySQL clientSide: add create database to dump file ",
   "8.52.12" => "05.11.2023  dumpMySQL clientSide: change the dump file to stricter rights ",
@@ -1651,6 +1653,13 @@ sub DbRep_Attr {
         if($cmd eq "set") {
             if ($aVal =~ m/^\s*(\{.*\}|{.*|.*})\s*$/xs && $aVal !~ /{".*"}/xs) {                             
                 $aVal = $1;
+                
+                my $fdv                   = __DbRep_fhemDefVars ();
+                my ($today, $hms, $we)    = ($fdv->{today}, $fdv->{hms},   $fdv->{we}); 
+                my ($sec, $min, $hour)    = ($fdv->{sec},   $fdv->{min},   $fdv->{hour});
+                my ($mday, $month, $year) = ($fdv->{mday},  $fdv->{month}, $fdv->{year});
+                my ($wday, $yday, $isdst) = ($fdv->{wday},  $fdv->{yday},  $fdv->{isdst});
+                                                                
                 eval $aVal;
                 return $@ if ($@);
             }
@@ -12650,19 +12659,56 @@ sub _DbRep_procCode {
   $fn =~ s/\s*#.*//g;                                          # Kommentare entfernen
   $fn =  join ' ', split /\s+/sx, $fn;                         # Funktion serialisieren
   
-  if ($fn =~ m/^\s*(\{.*\})\s*$/xs) {                          # unnamed Funktion direkt mit {...}
+  if ($fn =~ m/^\s*(\{.*\})\s*$/xs) {                          # unnamed Funktion direkt mit {...}      
       $fn = $1;
-
+      
+      my $fdv                   = __DbRep_fhemDefVars ();
+      my ($today, $hms, $we)    = ($fdv->{today}, $fdv->{hms},   $fdv->{we}); 
+      my ($sec, $min, $hour)    = ($fdv->{sec},   $fdv->{min},   $fdv->{hour});
+      my ($mday, $month, $year) = ($fdv->{mday},  $fdv->{month}, $fdv->{year});
+      my ($wday, $yday, $isdst) = ($fdv->{wday},  $fdv->{yday},  $fdv->{isdst});
+                                                                           
       eval $fn;
-      if ($@) {
-          $err = $@;
-      }
+      $err = $@ if($@);
   }
   else {
       $err = AnalyzeCommandChain (undef, $fn);
   }
       
 return $err;
+}
+
+###################################################################################
+#  FHEM Standardvariablen bereitstellen identisch fhem.pl sub AnalyzePerlCommand
+#  AnalyzePerlCommand kann nicht verwendet werden ohne die bisherige Syntax 
+#  (Übergabe von $name, $hash) zu brechen.
+###################################################################################
+sub __DbRep_fhemDefVars {  
+  my ($sec, $min, $hour, $mday, $month, $year, $wday, $yday, $isdst) = localtime (gettimeofday());
+  $month++; 
+  $year    += 1900;
+  my $today = sprintf '%04d-%02d-%02d', $year, $month, $mday;
+  my $hms   = sprintf '%02d:%02d:%02d', $hour, $min,   $sec;
+  my $we    = IsWe (undef, $wday);
+  
+  my $retvals = {
+      sec   => $sec,
+      min   => $min,
+      hour  => $hour,
+      mday  => $mday,
+      
+      month => $month,
+      year  => $year,
+      wday  => $wday,
+      yday  => $yday,
+      isdst => $isdst,
+      
+      today => $today,
+      hms   => $hms,
+      we    => $we
+  };
+      
+return $retvals;
 }
 
 ##############################################################################################
@@ -14313,12 +14359,12 @@ sub DbRep_setVersionInfo {
   if($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {
       # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;              # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{SMAPortal}{META}}
-      if($modules{$type}{META}{x_version}) {                                                                             # {x_version} ( nur gesetzt wenn $Id: 93_DbRep.pm 28140 2023-11-08 20:57:09Z DS_Starter $ im Kopf komplett! vorhanden )
+      if($modules{$type}{META}{x_version}) {                                                                             # {x_version} ( nur gesetzt wenn $Id: 93_DbRep.pm 28267 2023-12-08 21:52:20Z DS_Starter $ im Kopf komplett! vorhanden )
           $modules{$type}{META}{x_version} =~ s/1.1.1/$v/g;
       } else {
           $modules{$type}{META}{x_version} = $v;
       }
-      return $@ unless (FHEM::Meta::SetInternals($hash));                                                                # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbRep.pm 28140 2023-11-08 20:57:09Z DS_Starter $ im Kopf komplett! vorhanden )
+      return $@ unless (FHEM::Meta::SetInternals($hash));                                                                # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbRep.pm 28267 2023-12-08 21:52:20Z DS_Starter $ im Kopf komplett! vorhanden )
       if(__PACKAGE__ eq "FHEM::$type" || __PACKAGE__ eq $type) {
           # es wird mit Packages gearbeitet -> Perl übliche Modulversion setzen
           # mit {<Modul>->VERSION()} im FHEMWEB kann Modulversion abgefragt werden

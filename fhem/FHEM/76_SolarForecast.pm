@@ -1,5 +1,5 @@
 ########################################################################################################################
-# $Id: 76_SolarForecast.pm 28233 2023-12-01 09:36:39Z DS_Starter $
+# $Id: 76_SolarForecast.pm 28265 2023-12-07 21:18:51Z DS_Starter $
 #########################################################################################################################
 #       76_SolarForecast.pm
 #
@@ -46,6 +46,7 @@ eval "use JSON;1;"                        or my $jsonabs = 'JSON';              
 eval "use AI::DecisionTree;1;"            or my $aidtabs = 'AI::DecisionTree';       ## no critic 'eval'
 
 use FHEM::SynoModules::SMUtils qw(
+                                   checkModVer
                                    evaljson
                                    getClHash
                                    delClHash
@@ -98,6 +99,7 @@ BEGIN {
           getAllGets
           getAllSets
           HttpUtils_NonblockingGet
+          HttpUtils_BlockingGet
           init_done
           InternalTimer
           IsDisabled
@@ -116,6 +118,7 @@ BEGIN {
           ReadingsTimestamp
           ReadingsVal
           RemoveInternalTimer
+          ReplaceEventMap
           readingFnAttributes
           setKeyValue
           sortTopicNum
@@ -126,7 +129,6 @@ BEGIN {
           FW_pH
           FW_room
           FW_detail
-          FW_widgetFallbackFn
           FW_widgetOverride
           FW_wname
         )
@@ -151,6 +153,12 @@ BEGIN {
 
 # Versions History intern
 my %vNotesIntern = (
+  "1.5.1"  => "07.12.2023  function _getftui can now process arguments (compatibility to new ftui widgets), plant check ".
+                           "reviews SolarForecast widget files ",
+  "1.5.0"  => "05.12.2023  new getter ftuiFramefiles ",
+  "1.4.3"  => "03.12.2023  hidden set or attr commands in user specific header area when called by 'get ... html' ".
+                           "plantConfig: check module update in repo ",
+  "1.4.2"  => "02.12.2023  ___getFWwidget: codechange ___getFWwidget using __widgetFallback function ",
   "1.4.1"  => "01.12.2023  ___getFWwidget: adjust for FHEMWEB feature forum:#136019 ",
   "1.4.0"  => "29.11.2023  graphicHeaderOwnspec: can manage attr / sets of other devs by <attr|set>@<dev> ",
   "1.3.0"  => "27.11.2023  new Attr graphicHeaderOwnspecValForm ",
@@ -457,7 +465,6 @@ my $kJtokWh        = 0.00027778;                                                
 my $defmaxvar      = 0.5;                                                           # max. Varianz pro Tagesberechnung Autokorrekturfaktor
 my $definterval    = 70;                                                            # Standard Abfrageintervall
 my $defslidenum    = 3;                                                             # max. Anzahl der Arrayelemente in Schieberegistern
-my $webCmdFn       = 'FW_widgetFallbackFn';                                         # FHEMWEB Widgets Funktion
 my @widgetreadings = ();                                                            # Array der Hilfsreadings als Attributspeicher
 
 my $pvhcache       = $attr{global}{modpath}."/FHEM/FhemUtils/PVH_SolarForecast_";   # Filename-Fragment für PV History (wird mit Devicename ergänzt)
@@ -545,6 +552,12 @@ my @dd    = qw( none
                 radiationProcess
                 saveData2Cache
               );
+                                                                                 # FTUI V2 Widget Files
+  my @fs  = qw( ftui_forecast.css 
+                widget_forecast.js
+                ftui_smaportalspg.css
+                widget_smaportalspg.js
+              );
               
 my $allwidgets = 'icon|sortable|uzsu|knob|noArg|time|text|slider|multiple|select|bitfield|widgetList|colorpicker';
 
@@ -608,6 +621,7 @@ my %hget = (                                                                # Ha
   rooftopData        => { fn => \&_getRoofTopData,              needcred => 0 },
   solApiData         => { fn => \&_getlistSolCastData,          needcred => 0 },
   valDecTree         => { fn => \&_getaiDecTree,                needcred => 0 },
+  ftuiFramefiles     => { fn => \&_ftuiFramefiles,              needcred => 0 },
 );
 
 my %hattr = (                                                                # Hash für Attr-Funktion
@@ -730,6 +744,12 @@ my %hqtxt = (                                                                   
               DE => qq{n&auml;chste SolCast Abfrage}                                                                        },
   fulfd  => { EN => qq{fulfilled},
               DE => qq{erf&uuml;llt}                                                                                        },
+  widok  => { EN => qq{The FHEM Tablet UI widget Files are up to date.},
+              DE => qq{Die FHEM Tablet UI Widget-Dateien sind aktuell.}                                                     },  
+  widnup => { EN => qq{The SolarForecast FHEM Tablet UI widget files are not up to date.},
+              DE => qq{Die FHEM Tablet UI Widget-Dateien sind nicht aktuell.}                                               },
+  widerr => { EN => qq{The FHEM Tablet UI V2 is installed but the update status of widget Files can't be checked.},
+              DE => qq{FTUI V2 ist installiert, der Aktualisierungsstatus der Widgets kann nicht gepr&uuml;ft werden.}      }, 
   pmtp   => { EN => qq{produced more than predicted :-D},
               DE => qq{mehr produziert als vorhergesagt :-D}                                                                },
   petp   => { EN => qq{produced same as predicted :-)},
@@ -2461,6 +2481,7 @@ sub Get {
                 "valConsumerMaster:#,$cml ".
                 "data:noArg ".
                 "forecastQualities:noArg ".
+                "ftuiFramefiles:noArg ".
                 "html:$hol ".
                 "nextHours:noArg ".
                 "pvCircular:noArg ".
@@ -3847,8 +3868,9 @@ return pageAsHtml ($name, '-', $arg);
 sub _getftui {
   my $paref = shift;
   my $name  = $paref->{name};
+  my $arg   = $paref->{arg} // '';
 
-return pageAsHtml ($name, "ftui");
+return pageAsHtml ($name, 'ftui', $arg);
 }
 
 ###############################################################
@@ -4004,6 +4026,222 @@ sub __getaiRuleStrings {                 ## no critic "not used"
   }
 
 return $rs;
+}
+
+###############################################################
+#                       Getter ftuiFramefiles
+# hole Dateien aus dem online Verzeichnis 
+# /fhem/contrib/SolarForecast/
+# Ablage entsprechend Definition in controls_solarforecast.txt
+###############################################################
+sub _ftuiFramefiles {
+  my $paref = shift;
+  my $hash  = $paref->{hash};
+  my $name  = $paref->{name};
+  
+  my $ret;
+  my $upddo = 0;
+  my $root  = $attr{global}{modpath};
+  my $bPath = 'https://svn.fhem.de/trac/browser/trunk/fhem/contrib/SolarForecast/';
+  my $pPath = '?format=txt';
+  my $cfile = 'controls_solarforecast.txt';
+  my $cfurl = $bPath.$cfile.$pPath;
+    
+  for my $file (@fs) {
+      my $lencheck = 1;
+      
+      my ($cmerr, $cmupd, $cmmsg, $cmrec, $cmfile, $cmlen) = checkModVer ($name, $file, $cfurl);
+
+      if ($cmerr && $cmmsg =~ /Automatic\scheck/xs && $cmrec =~ /Compare\syour\slocal/xs) {        # lokales control file ist noch nicht vorhanden -> update ohne Längencheck
+          $cmfile   = 'FHEM/'.$cfile;
+          $file     = $cfile; 
+          $lencheck = 0; 
+          $cmerr    = 0;
+          $cmupd    = 1;   
+
+          Log3 ($name, 3, "$name - automatic install local control file $root/$cmfile");           
+      }
+      
+      if ($cmerr) {
+          $ret = "$cmmsg<br>$cmrec";
+          return $ret; 
+      }
+      
+      if ($cmupd) {
+          $upddo = 1;
+          $ret = __updPreFile ( { name     => $name,
+                                  root     => $root,
+                                  cmfile   => $cmfile,
+                                  cmlen    => $cmlen,
+                                  bPath    => $bPath,
+                                  file     => $file,
+                                  pPath    => $pPath,
+                                  lencheck => $lencheck
+                                }
+                              );
+                             
+          return $ret if($ret);          
+      }
+  }
+  
+  ## finales Update control File
+  ################################          
+  $ret = __updPreFile ( { name     => $name,
+                          root     => $root,
+                          cmfile   => 'FHEM/'.$cfile,
+                          cmlen    => 0,
+                          bPath    => $bPath,
+                          file     => $cfile,
+                          pPath    => $pPath,
+                          lencheck => 0,
+                          finalupd => 1
+                        }
+                      );
+                     
+  return $ret if($ret);
+  
+  if (!$upddo) {
+      return 'SolarForecast FTUI files are already up to date'; 
+  }
+
+return 'SolarForecast FTUI files updated';
+}
+
+###############################################################
+#    File zum Abruf von url vorbereiten und in das 
+#    Zielverzeichnis schreiben
+###############################################################
+sub __updPreFile {
+  my $pars = shift;
+  
+  my $name     = $pars->{name};
+  my $root     = $pars->{root};
+  my $cmfile   = $pars->{cmfile};
+  my $cmlen    = $pars->{cmlen};
+  my $bPath    = $pars->{bPath};
+  my $file     = $pars->{file};
+  my $pPath    = $pars->{pPath};
+  my $lencheck = $pars->{lencheck};
+  my $finalupd = $pars->{finalupd} // 0;
+  
+  my $err;
+  
+  my $dir = $cmfile;
+  $dir    =~ m,^(.*)/([^/]*)$,;
+  $dir    = $1;
+  $dir    = "" if(!defined $dir);                                                          # file in .
+  
+  my @p = split "/", $dir;
+  
+  for (my $i = 0; $i < int @p; $i++) {
+      my $path = "$root/".join ("/", @p[0..$i]);
+       
+      if (!-d $path) {
+          $err  = "The FTUI does not appear to be installed.<br>";
+          $err .= "Please check whether the path $path is present and accessible.<br>";
+          $err .= "After installing FTUI, come back and execute the get command again.";
+          return $err;  
+          
+          #my $ok = mkdir $path;
+          
+          #if (!$ok) {
+          #    $err = "MKDIR ERROR: $!";
+          #    Log3 ($name, 2, "$name - $err");
+          #    return $err;                      
+          #}
+          #else {
+          #    Log3 ($name, 3, "$name - MKDIR $path");  
+          #}
+      }
+  }
+  
+  ($err, my $remFile) = __updGetUrl ($name, $bPath.$file.$pPath);
+  
+  if ($err) {
+      Log3 ($name, 2, "$name - $err");
+      return $err;
+  }
+  
+  if ($lencheck && length $remFile ne $cmlen) {
+      $err = "update ERROR: length of $file is not $cmlen Bytes";
+      Log3 ($name, 2, "$name - $err"); 
+      return $err;
+  }
+  
+  $err = __updWriteFile ($root, $cmfile, $remFile);
+   
+  if ($err) {
+      Log3 ($name, 2, "$name - $err");
+      return $err;
+  }
+  
+  Log3 ($name, 3, "$name - update done $file to $root/$cmfile ".($cmlen ? "(length: $cmlen Bytes)" : '')); 
+  
+  if(!$lencheck && !$finalupd) {
+      return 'SolarForecast update control file installed. Please retry the get command to update FTUI files.';  
+  } 
+
+return;
+}
+
+###############################################################
+#                     File von url holen
+###############################################################
+sub __updGetUrl {
+  my $name = shift;
+  my $url  = shift;
+  
+  $url =~ s/%/%25/g;
+  my %upd_connecthash;
+  my $unicodeEncoding = 1;
+  
+  $upd_connecthash{url}           = $url;
+  $upd_connecthash{keepalive}     = ($url =~ m/localUpdate/ ? 0 : 1);                        # Forum #49798
+  $upd_connecthash{forceEncoding} = '' if($unicodeEncoding);
+  
+  my ($err, $data) = HttpUtils_BlockingGet (\%upd_connecthash);
+  
+  if ($err) {
+      $err = "update ERROR: $err"; 
+      return ($err, '');
+  }
+  
+  if (!$data) {
+      $err = 'update ERROR: empty file received';
+      return ($err, '');
+  }
+  
+return ('', $data);
+}
+
+###############################################################
+#               Updated File schreiben
+###############################################################
+sub __updWriteFile {       
+  my $root    = shift;
+  my $fName   = shift;
+  my $content = shift;
+  
+  my $fPath = "$root/$fName";
+  my $err;
+  
+  if (!open(FD, ">$fPath")) {
+      $err = "update ERROR open $fPath failed: $!";    
+      return $err;
+  }
+  
+  binmode(FD);
+  print FD $content;
+  close(FD);
+
+  my $written = -s "$fPath";
+  
+  if ($written != length $content) {
+      $err = "update ERROR writing $fPath failed: $!";    
+      return $err;
+  }
+
+return;
 }
 
 ################################################################
@@ -8295,11 +8533,11 @@ return;
 ################################################################
 sub pageAsHtml {
   my $name = shift;
-  my $ftui = shift // "";
-  my $gsel = shift // "";                                                                  # direkte Auswahl welche Grafik zurück gegeben werden soll (both, flow, forecast)
+  my $ftui = shift // '';
+  my $gsel = shift // '';                                                                  # direkte Auswahl welche Grafik zurück gegeben werden soll (both, flow, forecast)
 
   my $ret = "<html>";
-  $ret   .= entryGraphic ($name, $ftui, $gsel);
+  $ret   .= entryGraphic ($name, $ftui, $gsel, 1);
   $ret   .= "</html>";
 
 return $ret;
@@ -8310,8 +8548,9 @@ return $ret;
 ################################################################
 sub entryGraphic {
   my $name = shift;
-  my $ftui = shift // "";
-  my $gsel = shift // "";                                                                  # direkte Auswahl welche Grafik zurück gegeben werden soll (both, flow, forecast)
+  my $ftui = shift // '';
+  my $gsel = shift // '';                                                                  # direkte Auswahl welche Grafik zurück gegeben werden soll (both, flow, forecast)
+  my $pah  = shift // 0;                                                                   # 1 wenn durch pageAsHtml aufgerufen
 
   my $hash = $defs{$name};
 
@@ -8340,12 +8579,13 @@ sub entryGraphic {
   if (!$gsel) {
       $gsel = AttrVal ($name, 'graphicSelect', 'both');                                    # Auswahl der anzuzeigenden Grafiken
   }
-
+  
   my $paref = {
       hash           => $hash,
       name           => $name,
       type           => $hash->{TYPE},
       ftui           => $ftui,
+      pah            => $pah,
       maxhours       => $maxhours,
       t              => time,
       modulo         => 1,
@@ -8433,7 +8673,8 @@ sub entryGraphic {
   if ($legendtxt && ($clegend eq 'top')) {
       $ret .= "<tr class='$htr{$m}{cl}'>";
       $ret .= "<td colspan='".($maxhours+2)."' align='center' style='padding-left: 10px; padding-top: 5px; padding-bottom: 5px; word-break: normal'>";
-      $ret .= "$legendtxt</td>";
+      $ret .= $legendtxt;
+      $ret .= "</td>";
       $ret .= "</tr>";
 
       $paref->{modulo}++;
@@ -9108,6 +9349,7 @@ sub __createOwnSpec {
   my $name      = $paref->{name};
   my $dstyle    = $paref->{dstyle};                                                    # TD-Style
   my $hdrDetail = $paref->{hdrDetail};
+  my $pah       = $paref->{pah};                                                       # 1 wenn durch pageAsHtml abgerufen
 
   my $vinr = 4;                                                                        # Spezifikationen in einer Zeile
   my $spec = AttrVal ($name, 'graphicHeaderOwnspec', '');
@@ -9156,6 +9398,11 @@ sub __createOwnSpec {
           my $setcmd = ___getFWwidget ($name, $dev, $elm, $allsets, 'set');           # Set-Kommandos identifizieren
           
           if ($setcmd) {
+              if ($pah) {                                                             # bei get pageAsHtml setter/attr nicht anzeigen (js Fehler)
+                  undef $h->{$k}{label};
+                  $setcmd = '<hidden by pageAsHtml>';
+              }
+              
               $v->{$k} = $setcmd;
               $u->{$k} = q{};
               
@@ -9166,6 +9413,11 @@ sub __createOwnSpec {
           my $attrcmd = ___getFWwidget ($name, $dev, $elm, $allattrs, 'attr');        # Attr-Kommandos identifizieren
           
           if ($attrcmd) {
+              if ($pah) {                                                             # bei get pageAsHtml setter/attr nicht anzeigen (js Fehler)
+                  undef $h->{$k}{label};
+                  $attrcmd = '<hidden by pageAsHtml>';
+              }              
+                            
               $v->{$k} = $attrcmd;
               $u->{$k} = q{};
               
@@ -9233,7 +9485,7 @@ return $ownv;
 sub ___getFWwidget {
   my $name = shift;
   my $dev  = shift // $name;                # Device des Elements, default=$name
-  my $elm  = shift;                         # zu prüfendes Element
+  my $elm  = shift;                         # zu prüfendes Element (setter / attribut)
   my $allc = shift;                         # Kommandovorrat -> ist Element enthalten?
   my $ctyp = shift // 'set';                # Kommandotyp: set/attr
 
@@ -9251,12 +9503,20 @@ sub ___getFWwidget {
       }
   }
 
-  if ($allc =~ /\s$elm:?(.*?)\s/xs) {                                                      # Element in allen Sets oder Attr enthalten
+  if ($allc =~ /\s$elm:?(.*?)\s/xs) {                                                    # Element in allen Sets oder Attr enthalten
       my $arg = $1;
-      $arg    = 'textFieldNL' if(!$arg);
+      
+      if (!$arg || $arg eq 'textField' || $arg eq 'textField-long') {                    # Label (Reading) ausblenden -> siehe fhemweb.js function FW_createTextField Zeile 1657
+          $arg = 'textFieldNL';                                   
+      }
       
       if ($arg !~ /^\#/xs && $arg !~ /^$allwidgets/xs) {
           $arg = '#,'.$arg;         
+      }
+      
+      if ($arg =~ 'slider') {                                                            # Widget slider in selectnumbers für Kopfgrafik umsetzen
+          my ($wid, $min, $step, $max, $float) = split ",", $arg; 
+          $arg = "selectnumbers,$min,$step,$max,0,lin";
       }
       
       if ($ctyp eq 'attr') {                                                             # Attributwerte als verstecktes Reading abbilden
@@ -9277,40 +9537,54 @@ sub ___getFWwidget {
           push @widgetreadings, $reading;
           readingsSingleUpdate ($defs{$name}, $reading, $current, 0);
       }
+                                                                       
+      $widget = ___widgetFallback ( { name     => $name, 
+                                      dev      => $dev,
+                                      ctyp     => $ctyp, 
+                                      elm      => $elm,
+                                      reading  => $reading,
+                                      arg      => $arg 
+                                    } 
+                                  );
       
-      no strict "refs";                                                                  ## no critic 'NoStrict'
-      $widget = &{$webCmdFn} ($FW_wname, $name, '',$elm.' '.$reading, $arg);
-      use strict "refs";
-
-      if ($widget) {
-          my ($wc) = $widget =~ /current='((<td|<div|<\/div>).*?)'/xs;                   # Eleminierung von störenden HTML Elementen aus aktuellem Readingwert 
-          
-          if ($wc) {
-              $widget  = (split "current=", $widget)[0];
-              $widget .= qq{ current='^ESC^'></div></td>};
-          }
-          
-          $widget =~ s,^<td[^>]*>(.*)</td>$,$1,xs;
-          $widget =~ s,></div>, type='$ctyp'></div>,xs;
-      }
-      else {
+      if (!$widget) {
           $widget = FW_pH ("cmd=$ctyp $dev $elm", $elm, 0, "", 1, 1);
-      }
-      
-      my ($sc) = $widget =~ /dev='(.*?)'/xs;                                             # Device in Widget korrigieren/sublimieren
-      $widget  =~ s/$sc/$dev/ if(defined $sc);
-      
-      if ($arg eq 'textField' || $arg eq 'textField-long') {                             # Label (Reading) ausblenden -> siehe fhemweb.js function FW_createTextField Zeile 1657
-          $widget =~ s/arg='textField/arg='textFieldNL/xs;                                   
-      }
-      
-      if ($arg =~ 'slider') {                                                            # Widget slider in selectnumbers für Kopfgrafik umsetzen
-          my ($wid, $min, $step, $max, $float) = split ",", $arg; 
-          $widget =~ s/arg='(.*?)'/arg='selectnumbers,$min,$step,$max,0,lin'/xs;    
       }
   }
   
 return $widget;
+}
+
+################################################################
+#        adaptierte FW_widgetFallbackFn aus FHEMWEB 
+################################################################
+sub ___widgetFallback {
+  my $pars     = shift;
+  my $name     = $pars->{name};
+  my $dev      = $pars->{dev};
+  my $ctyp     = $pars->{ctyp};
+  my $elm      = $pars->{elm};
+  my $reading  = $pars->{reading};
+  my $arg      = $pars->{arg};
+
+  return '' if(!$arg || $arg eq "noArg");
+
+  my $current = ReadingsVal ($name, $reading, undef);
+  
+  if (!defined $current) {
+      $reading = 'state';
+      $current = ' ';
+  }
+  
+  if ($current =~ /((<td|<div|<\/div>).*?)/xs) {                   # Eleminierung von störenden HTML Elementen aus aktuellem Readingwert 
+      $current = ' ';
+  }
+    
+  $current =~ s/$elm //;
+  $current = ReplaceEventMap ($dev, $current, 1);
+
+  return "<div class='fhemWidget' cmd='$elm' reading='$reading' ".
+                "dev='$dev' arg='$arg' current='$current' type='$ctyp'></div>";
 }
 
 ################################################################
@@ -9674,7 +9948,7 @@ sub _graphicConsumerLegend {
   $ctable .= qq{</tr>} if($tro);
 
   if ($clegend ne 'bottom') {
-       $ctable .= qq{<tr><td colspan="12"><hr></td></tr>};
+       $ctable .= qq{<tr><td colspan='12'><hr></td></tr>};
   }
 
   $ctable .= qq{</table>};
@@ -12450,6 +12724,7 @@ sub checkPlantConfig {
       'String Configuration'     => { 'state' => $ok, 'result' => '', 'note' => '', 'info' => 0, 'warn' => 0, 'fault' => 0 },
       'DWD Weather Attributes'   => { 'state' => $ok, 'result' => '', 'note' => '', 'info' => 0, 'warn' => 0, 'fault' => 0 },
       'Common Settings'          => { 'state' => $ok, 'result' => '', 'note' => '', 'info' => 0, 'warn' => 0, 'fault' => 0 },
+      'FTUI Widget Files'        => { 'state' => $ok, 'result' => '', 'note' => '', 'info' => 0, 'warn' => 0, 'fault' => 0 },
   };
 
   my $sub = sub {
@@ -12510,7 +12785,7 @@ sub checkPlantConfig {
 
   ## Check Attribute DWD Wetterdevice
   #####################################
-  my $fcname = ReadingsVal($name, 'currentWeatherDev', '');
+  my $fcname = ReadingsVal ($name, 'currentWeatherDev', '');
 
   if (!$fcname || !$defs{$fcname}) {
       $result->{'DWD Weather Attributes'}{state}   = $nok;
@@ -12618,7 +12893,7 @@ sub checkPlantConfig {
   my $aiprep   = isPrepared4AI ($hash, 'full');
   my $aiusemsg = CurrentVal    ($hash, 'aicanuse', '');
   my $einstds  = "";
-
+  
   if (!$eocr || $eocr ne '.*') {
       $einstds                              = 'to .*' if($eocr ne '.*');
       $result->{'Common Settings'}{state}   = $info;
@@ -12637,8 +12912,30 @@ sub checkPlantConfig {
   if (!$aiprep) {
       $result->{'Common Settings'}{state}   = $info;
       $result->{'Common Settings'}{result} .= qq{The AI support is not used. <br>};
-      $result->{'Common Settings'}{note}   .= qq{$aiusemsg<br>};
+      $result->{'Common Settings'}{note}   .= qq{$aiusemsg.<br>};
       $result->{'Common Settings'}{info}    = 1;
+  }
+  
+  my ($cmerr, $cmupd, $cmmsg, $cmrec) = checkModVer ($name, '76_SolarForecast', 'https://fhem.de/fhemupdate/controls_fhem.txt');
+  
+  if (!$cmerr && !$cmupd) {
+      $result->{'Common Settings'}{note}   .= qq{$cmmsg<br>};
+      $result->{'Common Settings'}{note}   .= qq{checked module: <br>};
+      $result->{'Common Settings'}{note}   .= qq{76_SolarForecast <br>};
+  }
+  
+  if ($cmerr) {
+      $result->{'Common Settings'}{state}   = $warn;
+      $result->{'Common Settings'}{result} .= qq{$cmmsg <br>};
+      $result->{'Common Settings'}{note}   .= qq{$cmrec <br>};
+      $result->{'Common Settings'}{warn}    = 1;
+  }
+  
+  if ($cmupd) {
+      $result->{'Common Settings'}{state}   = $warn;
+      $result->{'Common Settings'}{result} .= qq{$cmmsg <br>};
+      $result->{'Common Settings'}{note}   .= qq{$cmrec <br>};
+      $result->{'Common Settings'}{warn}    = 1;
   }
 
   ## allg. Settings bei Nutzung Forecast.Solar API
@@ -12792,6 +13089,54 @@ sub checkPlantConfig {
           $result->{'Common Settings'}{note}   .= qq{global dnsServer, global language <br>};
           $result->{'Common Settings'}{note}   .= qq{pvCorrectionFactor_Auto, vrmCredentials, event-on-change-reading, ctrlLanguage <br>};
       }
+  }
+  
+  ## FTUI Widget Support
+  ########################
+  my $root  = $attr{global}{modpath};
+  my $tpath = "$root/www/tablet/css";
+  my $upd   = 0;
+  $err      = 0;
+
+  if (!-d $tpath) {
+      $result->{'FTUI Widget Files'}{result}  .= qq{The FHEM Tablet UI V2 does not appear to be installed. <br>};
+      $result->{'FTUI Widget Files'}{note}    .= qq{There is no need to install SolarForecast FTUI widgets.<br>};
+  }
+  else {
+      my $bPath = 'https://svn.fhem.de/trac/browser/trunk/fhem/contrib/SolarForecast/';
+      my $pPath = '?format=txt';
+      my $cfile = 'controls_solarforecast.txt';
+      my $cfurl = $bPath.$cfile.$pPath;  
+      
+      for my $file (@fs) {      
+          my ($cmerr, $cmupd) = checkModVer ($name, $file, $cfurl);
+
+          $err = 1 if($cmerr);
+          $upd = 1 if($cmupd);
+      }      
+     
+      if ($err) {
+          $result->{'FTUI Widget Files'}{state}   = $warn;
+          $result->{'FTUI Widget Files'}{result} .= $hqtxt{widerr}{$lang};
+          $result->{'FTUI Widget Files'}{note}   .= qq{Try the test again later. If the error is permanent, please inform the maintainer.<br>};         
+          $result->{'FTUI Widget Files'}{warn}    = 1;
+          
+          $upd = 0;
+      }
+
+      if ($upd) {
+          $result->{'FTUI Widget Files'}{state}   = $warn;
+          $result->{'FTUI Widget Files'}{result} .= $hqtxt{widnup}{$lang};
+          $result->{'FTUI Widget Files'}{note}   .= qq{Update the FHEM Tablet UI Widget Files with the command:  <br>};  
+          $result->{'FTUI Widget Files'}{note}   .= qq{"get $name ftuiFramefiles".  <br>};          
+          $result->{'FTUI Widget Files'}{warn}    = 1;         
+      }     
+      
+      if (!$result->{'FTUI Widget Files'}{fault} && !$result->{'FTUI Widget Files'}{warn} && !$result->{'FTUI Widget Files'}{info}) {
+          $result->{'FTUI Widget Files'}{result}  .= $hqtxt{widok}{$lang};
+          $result->{'FTUI Widget Files'}{note}    .= qq{checked Files: <br>};
+          $result->{'FTUI Widget Files'}{note}    .= (join ', ', @fs).qq{ <br>};
+      }      
   }
 
   ## Ausgabe
@@ -15318,12 +15663,29 @@ to ensure that the system configuration is correct.
       </li>
     </ul>
     <br>
+    
+    <ul>
+      <a id="SolarForecast-get-ftuiFramefiles"></a>
+      <li><b>ftuiFramefiles </b> <br><br>
+      SolarForecast provides widgets for 
+      <a href='https://wiki.fhem.de/wiki/FHEM_Tablet_UI' target='_blank'>FHEM Tablet UI v2 (FTUI2)</a>. <br>
+      If FTUI2 is installed on the system, the files for the framework can be loaded into the FTUI directory structure 
+      with this command. <br>
+      The setup and use of the widgets is described in Wiki
+      <a href='https://wiki.fhem.de/wiki/SolarForecast_FTUI_Widget' target='_blank'>SolarForecast FTUI Widget</a>.
+      </li>
+    </ul>
+    <br>   
 
     <ul>
       <a id="SolarForecast-get-html"></a>
       <li><b>html </b> <br><br>
-      The solar graphic is retrieved and rendered as HTML code. One of the following selections can be given as an
-      argument to the command: <br><br>
+      The SolarForecast graphic is retrieved and displayed as HTML code. <br>
+      <b>Note:</b> By the attribute <a href="#SolarForecast-attr-graphicHeaderOwnspec">graphicHeaderOwnspec</a>
+      generated set or attribute commands in the user-specific area of the header are generally hidden for technical 
+      reasons. <br>
+      One of the following selections can be given as an argument to the command: 
+      <br><br>
 
       <ul>
         <table>
@@ -17270,12 +17632,30 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
       </li>
     </ul>
     <br>
+    
+    <ul>
+      <a id="SolarForecast-get-ftuiFramefiles"></a>
+      <li><b>ftuiFramefiles </b> <br><br>
+      SolarForecast stellt Widgets für 
+      <a href='https://wiki.fhem.de/wiki/FHEM_Tablet_UI' target='_blank'>FHEM Tablet UI v2 (FTUI2)</a> zur Verfügung. <br>
+      Ist FTUI2 auf dem System installiert, können die Dateien für das Framework mit diesem Kommando in die
+      FTUI-Verzeichnisstruktur geladen werden. <br>
+      Die Einrichtung und Verwendung der Widgets ist im Wiki
+      <a href='https://wiki.fhem.de/wiki/SolarForecast_FTUI_Widget' target='_blank'>SolarForecast FTUI Widget</a> 
+      beschrieben.
+      </li>
+    </ul>
+    <br> 
 
     <ul>
       <a id="SolarForecast-get-html"></a>
       <li><b>html </b> <br><br>
-      Die Solar Grafik wird als HTML-Code abgerufen und wiedergegeben. Als Argument kann dem Befehl eine der folgenden
-      Selektionen mitgegeben werden: <br><br>
+      Die SolarForecast Grafik wird als HTML-Code abgerufen und wiedergegeben. <br>
+      <b>Hinweis:</b> Durch das Attribut <a href="#SolarForecast-attr-graphicHeaderOwnspec ">graphicHeaderOwnspec</a>
+      generierte set-Kommandos oder Attribut-Befehle im Anwender spezifischen Bereich des Headers werden aus technischen 
+      Gründen generell ausgeblendet. <br>
+      Als Argument kann dem Befehl eine der folgenden Selektionen mitgegeben werden: 
+      <br><br>
 
       <ul>
         <table>
@@ -18455,7 +18835,7 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
         "utf8": 0,
         "HttpUtils": 0,
         "JSON": 4.020,
-        "FHEM::SynoModules::SMUtils": 1.0220,
+        "FHEM::SynoModules::SMUtils": 1.0270,
         "Time::HiRes": 0,
         "MIME::Base64": 0,
         "Storable": 0

@@ -1,8 +1,8 @@
 ##############################################
 # 00_THZ
-# $Id: 00_THZ.pm 28108 2023-10-30 09:08:21Z immi $
-# by immi 10/2023
-my $thzversion = "0.209";
+# $Id: 00_THZ.pm 28264 2023-12-07 19:49:07Z immi $
+# by immi 11/2023
+my $thzversion = "0.210";
 # this code is based on the hard work of Robert; I just tried to port it
 # http://robert.penz.name/heat-pump-lwz/
 ########################################################################################
@@ -400,11 +400,12 @@ my %parsinghash = (
 ########################################################################################
 
 my %setsX39technician =(
-#   "zResetLast10errors"		=> {cmd2=>"D1",     argMin =>   "0",	argMax =>  "0",	type =>"0clean",  unit =>""},
+#   "zResetLast10errors"	=> {cmd2=>"D1",     argMin =>   "0",	argMax =>  "0",	type =>"0clean",  unit =>""},
    "zResetLast10errors"		=> {cmd2=>"D1",     argMin =>   "0",	argMax =>  "0",	type =>"D1last",  unit =>""},
 #  "zPassiveCoolingtrigger"	=> {cmd2=>"0A0597", argMin =>   "0",	argMax =>  "50",	type =>"1clean",  unit =>""},
   "zPumpHC"			=> {cmd2=>"0A0052", argMin =>   "0",	argMax =>  "1",	type =>"0clean",  unit =>""},  
-  "zPumpDHW"			=> {cmd2=>"0A0056", argMin =>   "0",	argMax =>  "1",	type =>"0clean",  unit =>""}
+  "zPumpDHW"			=> {cmd2=>"0A0056", argMin =>   "0",	argMax =>  "1",	type =>"0clean",  unit =>""},
+  "zControlValveDHW"  	 	=> {cmd2=>"0A0653", argMin =>   "0",    argMax =>  "1", type =>"1clean",  unit =>""}
  );
 
 
