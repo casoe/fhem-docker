@@ -5,4 +5,4 @@ Windows Registry Editor Version 5.00
 [HKEY_CLASSES_ROOT\signalcaptcha\shell]
 [HKEY_CLASSES_ROOT\signalcaptcha\shell\open]
 [HKEY_CLASSES_ROOT\signalcaptcha\shell\open\command]
-@="powershell.exe Start-Process -FilePath ( $('http://192.168.2.5:8083/fhem?cmd=set%%20signalBot%%20captcha%%20'+($('%1')+$('&fwcsrf=csrf_319980982093912') -replace '^(.*)/&','$1&') ) )"
+@="powershell.exe Start-Process -FilePath ( $('http://192.168.2.5:8083/fhem?cmd=set%%20signalBot%%20captcha%%20'+($('%1')+$('&fwcsrf=csrf_259153287749239') -replace '^(.*)/&','$1&') ) )"
