@@ -4,7 +4,7 @@ services:
     fhem:
         restart: always
         network_mode: host
-        image: ghcr.io/fhem/fhem/fhem-minimal-docker:bullseye
+        image: ghcr.io/fhem/fhem-minimal-docker:bullseye
         volumes:
             - "./fhem/:/opt/fhem/"
         devices:
