@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 01_FHEMWEB.pm 27566 2023-05-14 08:52:22Z rudolfkoenig $
+# $Id: 01_FHEMWEB.pm 28235 2023-12-02 09:34:43Z rudolfkoenig $
 package main;
 
 use strict;
@@ -797,6 +797,7 @@ FW_closeConn($)
                      $FW_userAgent =~ m/(iPhone|iPad|iPod)/);
     if(!$FW_httpheader{Connection} || $cc) {
       TcpServer_Close($hash, 1, !$hash->{inform});
+      delete $FW_svgData{$hash->{NAME}};
     }
   }
 
@@ -1600,8 +1601,16 @@ FW_doDetail($)
   $attrList =~ s/\bgroup\b/group:$groupList/;
 
   $attrList = FW_widgetOverride($d, $attrList, "attr");
-  $attrList =~ s/\\/\\\\/g;
-  $attrList =~ s/'/\\'/g;
+  if($attrList =~ m/[\\']/) {
+    $attrList =~ s/([\\'])/\\$1/g;
+    foreach my $k (keys %attrTypeHash) { # Forum #134526
+      if($k =~ m/[\\']/) {
+        my $nk = $k;
+        $nk =~ s/([\\'])/\\$1/g;
+        $attrTypeHash{$nk} = $attrTypeHash{$k};
+      }
+    }
+  }
   FW_pO FW_detailSelect($d, "attr", $attrList, undef, \%attrTypeHash);
 
   FW_makeTable("Attributes", $d, $attr{$d}, "deleteattr");
@@ -2028,7 +2037,7 @@ sub
 FW_showRoom()
 {
   my $roomRe = $FW_room;
-  $roomRe =~ s/([[\]().+*?])/\\$1/g;
+  $roomRe =~ s/([[\\\]().+*?])/\\$1/g;
   return 0 if(!$FW_room ||
               AttrVal($FW_wname,"forbiddenroom","") =~ m/\b$roomRe\b/);
 
@@ -3603,22 +3612,22 @@ FW_widgetFallbackFn()
   # noArg is needed for fhem.cfg.demo / Cinema
   return "" if(!$values || $values eq "noArg");
 
-  my($reading) = split( ' ', $cmd, 2 );
+  my($source) = split(' ', $cmd, 2); # cmd part only, #136049
   my $current;
   if($cmd eq "desired-temp" || $cmd eq "desiredTemperature") {
     $current = ReadingsVal($d, $cmd, 20);
     $current =~ s/ .*//;        # Cut off Celsius
     $current = sprintf("%2.1f", int(2*$current)/2) if($current =~ m/[0-9.-]/);
   } else {
-    $current = ReadingsVal($d, $reading, undef);
+    $current = ReadingsVal($d, $source, undef);
     if( !defined($current) ) {
-      $reading = 'state';
+      $source = 'state';
       $current = Value($d);
     }
     $current =~ s/$cmd //;
     $current = ReplaceEventMap($d, $current, 1);
   }
-  return "<td><div class='fhemWidget' cmd='$cmd' reading='$reading' ".
+  return "<td><div class='fhemWidget' cmd='$cmd' reading='$source' ".
                 "dev='$d' arg='$values' current='$current'></div></td>";
 }
 # Widgets END

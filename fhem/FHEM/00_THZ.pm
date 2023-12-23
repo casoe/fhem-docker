@@ -1,8 +1,8 @@
 ##############################################
 # 00_THZ
-# $Id: 00_THZ.pm 27446 2023-04-14 19:26:16Z immi $
-# by immi 04/2023
-my $thzversion = "0.207";
+# $Id: 00_THZ.pm 28264 2023-12-07 19:49:07Z immi $
+# by immi 11/2023
+my $thzversion = "0.210";
 # this code is based on the hard work of Robert; I just tried to port it
 # http://robert.penz.name/heat-pump-lwz/
 ########################################################################################
@@ -399,12 +399,13 @@ my %parsinghash = (
 # 
 ########################################################################################
 
-my %sets439technician =(
-#   "zResetLast10errors"		=> {cmd2=>"D1",     argMin =>   "0",	argMax =>  "0",	type =>"0clean",  unit =>""},
+my %setsX39technician =(
+#   "zResetLast10errors"	=> {cmd2=>"D1",     argMin =>   "0",	argMax =>  "0",	type =>"0clean",  unit =>""},
    "zResetLast10errors"		=> {cmd2=>"D1",     argMin =>   "0",	argMax =>  "0",	type =>"D1last",  unit =>""},
 #  "zPassiveCoolingtrigger"	=> {cmd2=>"0A0597", argMin =>   "0",	argMax =>  "50",	type =>"1clean",  unit =>""},
   "zPumpHC"			=> {cmd2=>"0A0052", argMin =>   "0",	argMax =>  "1",	type =>"0clean",  unit =>""},  
-  "zPumpDHW"			=> {cmd2=>"0A0056", argMin =>   "0",	argMax =>  "1",	type =>"0clean",  unit =>""}
+  "zPumpDHW"			=> {cmd2=>"0A0056", argMin =>   "0",	argMax =>  "1",	type =>"0clean",  unit =>""},
+  "zControlValveDHW"  	 	=> {cmd2=>"0A0653", argMin =>   "0",    argMax =>  "1", type =>"1clean",  unit =>""}
  );
 
 
@@ -428,7 +429,7 @@ my %sets439539common = (
   "p02RoomTempNightHC2SummerMode"=> {cmd2=>"0C056B", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
   "p03RoomTempStandbyHC2SummerMode"=> {cmd2=>"0C056A", argMin =>  "12",	argMax =>   "32",	type =>"5temp",  unit =>" °C"},
   "p16GradientHC2"		=> {cmd2=>"0C010E", argMin => "0.1",	argMax =>    "5",	type =>"6gradient", unit =>""}, # /100
-  "p17LowEndHC2"		=> {cmd2=>"0C059E", argMin =>   "0",	argMax =>   "10", type =>"5temp",  unit =>" K"},
+  "p17LowEndHC2"		=> {cmd2=>"0C059E", argMin =>   "0",	argMax =>   "10", 	type =>"5temp",  unit =>" K"},
   "p18RoomInfluenceHC2"		=> {cmd2=>"0C010F", argMin =>   "0",	argMax =>  "100",	type =>"0clean", unit =>" %"}, 
   "p04DHWsetDayTemp"		=> {cmd2=>"0A0013", argMin =>  "10",	argMax =>   "55",	type =>"5temp",  unit =>" °C"},
   "p05DHWsetNightTemp"		=> {cmd2=>"0A05BF", argMin =>  "10",	argMax =>   "55",	type =>"5temp",  unit =>" °C"},
@@ -637,7 +638,11 @@ my %sets539only =(
   "p99CoolingHC1Switch"		=> {cmd2=>"0B0287", argMin =>   "0",	argMax =>  "1",		type =>"1clean", unit =>""},
   "p99CoolingHC1SetTemp"	=> {cmd2=>"0B0582", argMin =>  "12",	argMax =>  "27",	type =>"5temp",  unit =>" °C"},    #suggested by TheTrumpeter
   "p99CoolingHC1HysterFlowTemp"	=> {cmd2=>"0B0583", argMin =>  "0.5",	argMax =>  "5",		type =>"5temp",  unit =>" K"}, #suggested by TheTrumpeter
-  "p99CoolingHC1HysterRoomTemp"	=> {cmd2=>"0B0584", argMin =>  "0.5",	argMax =>  "3",		type =>"5temp",  unit =>" K"}  #suggested by TheTrumpeter
+  "p99CoolingHC1HysterRoomTemp"	=> {cmd2=>"0B0584", argMin =>  "0.5",	argMax =>  "3",		type =>"5temp",  unit =>" K"},  #suggested by TheTrumpeter
+  "p99CoolingHC2Switch"		=> {cmd2=>"0C0287", argMin =>   "0",	argMax =>  "1",		type =>"1clean", unit =>""},     #suggested by rett_de
+  "p99CoolingHC2SetTemp"	=> {cmd2=>"0C0582", argMin =>  "12",	argMax =>  "27",	type =>"5temp",  unit =>" °C"},    #suggested by rett_de
+  "p99CoolingHC2HysterFlowTemp"	=> {cmd2=>"0C0583", argMin =>  "0.5",	argMax =>  "5",		type =>"5temp",  unit =>" K"}, #suggested by rett_de
+  "p99CoolingHC2HysterRoomTemp"	=> {cmd2=>"0C0584", argMin =>  "0.5",	argMax =>  "3",		type =>"5temp",  unit =>" K"}  #suggested by Trett_de
 );
   
 
@@ -811,7 +816,8 @@ my %getsonly539 = (  #info from belu and godmorgon
   "sSetHumidityMin"	=> {cmd2=>"0A09D2", type =>"1clean", unit =>" %"},
   "sSetHumidityMax"	=> {cmd2=>"0A09D3", type =>"1clean", unit =>" %"},
   "sCoolHCTotal"	=> {cmd2=>"0A0648", cmd3 =>"0A0649", type =>"1clean", unit =>" kWh"},
-  "sDewPointHC1"	=> {cmd2=>"0B0264", type =>"5temp",  unit =>" °C"}
+  "sDewPointHC1"	=> {cmd2=>"0B0264", type =>"5temp",  unit =>" °C"},
+  "sDewPointHC2"	=> {cmd2=>"0C0264", type =>"5temp",  unit =>" °C"}
  );
 %getsonly539=(%getsonly539, %getsonly439);
 
@@ -939,7 +945,7 @@ sub THZ_Initialize($) {
 		    ."interval_sBoostHCTotal:0,3600,7200,28800,43200,86400 "
 		    ."interval_sFlowRate:0,3600,7200,28800,43200,86400 "
 		    ."interval_sDisplay:0,60,120,180,300 "
-		    ."firmware:4.39,2.06,2.14,2.14j,5.39,4.39technician "
+		    ."firmware:4.39,2.06,2.14,2.14j,5.39,4.39technician,5.39technician "
 		    ."interval_sDewPointHC1:0,60,120,180,300 "
 		    ."simpleReadTimeout:0.25,0.5,0.75,1,2,4,6 " #standard has been 0.75 since msg468515 If blocking attribut is NOT enabled then set the timeout value to a maximum value of 0.75 sec.
 		    ."nonblocking:0,1 "
@@ -1996,7 +2002,7 @@ sub THZ_Attr(@) {
             %sets = (%sets206, %setsonly214);
             %gets = (%getsonly2xx, %getsonly214, %sets206);
         }
-	elsif ($attrVal eq "2.14j") {
+        elsif ($attrVal eq "2.14j") {
             %sets = (%sets206, %setsonly214);
             %gets = (%getsonly2xx, %getsonly214j, %sets206);
         }
@@ -2004,8 +2010,12 @@ sub THZ_Attr(@) {
             %sets=(%sets439539common, %sets539only);
             %gets=(%getsonly539, %sets);
         }
+        elsif ($attrVal eq "5.39technician") {
+            %sets=(%sets439539common, %sets539only, %setsX39technician);
+            %gets=(%getsonly539, %sets);
+        }
         elsif ($attrVal eq "4.39technician") {
-            %sets=(%sets439539common, %sets439only, %sets439technician);
+            %sets=(%sets439539common, %sets439only, %setsX39technician);
             %gets=(%getsonly439, %sets);
         }
         else { #in all other cases I assume $attrVal eq "4.39" cambiato nella v0140

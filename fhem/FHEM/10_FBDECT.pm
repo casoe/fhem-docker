@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_FBDECT.pm 25069 2021-10-13 05:58:51Z rudolfkoenig $
+# $Id: 10_FBDECT.pm 28212 2023-11-26 10:50:43Z rudolfkoenig $
 package main;
 
 # See also https://avm.de/fileadmin/user_upload/Global/Service/Schnittstellen/AHA-HTTP-Interface.pdf
@@ -844,8 +844,9 @@ sub
 FBDECT_Undef($$)
 {
   my ($hash, $arg) = @_;
-  my $homeId = $hash->{homeId};
+  my $iodev = $hash->{IODev};
   my $id = $hash->{id};
+  delete $modules{FBDECT}{defptr}{"$iodev->{NAME}:$id"} if($iodev && ref($iodev) eq "HASH");
   delete $modules{FBDECT}{defptr}{$id};
   return undef;
 }

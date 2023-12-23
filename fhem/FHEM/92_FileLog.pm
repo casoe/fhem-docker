@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 92_FileLog.pm 26959 2023-01-04 12:56:01Z rudolfkoenig $
+# $Id: 92_FileLog.pm 28210 2023-11-26 09:42:20Z rudolfkoenig $
 package main;
 
 use strict;
@@ -591,6 +591,15 @@ FileLog_fhemwebFn($$$$)
       }
       my ($lt, $name) = split(":", $ln);
       $name = $lt if(!$name);
+      if($ln eq "text:linesInTheFile") {
+        my $path = qx(dirname $defs{$d}{currentlogfile});
+        chomp $path;
+        my $filename = "$path/$f";
+        my ($err, @content) =
+                FileRead( {(FileName => $filename, ForceType => "FILE" )} );
+        $name = "$lt (".scalar(@content).")";
+        @content = ();
+      }
       $ret .= FW_pH("$FW_ME/FileLog_logWrapper&dev=$d&type=$lt&file=$f",
                     "<div class=\"dval\">$name</div>", 1, "dval", 1);
     }
@@ -699,6 +708,11 @@ FileLog_logWrapper($)
 
   if(!$d || !$type || !$file) {
     FW_addContent(">FileLog_logWrapper: bad arguments</div");
+    return 0;
+  }
+
+  if($file =~ m,.*/.*([^/]+$),) { # 135959
+    Log 1, "ERROR: FileLog_logWrapper: / not allowed in filename ($file)";
     return 0;
   }
 
@@ -1587,7 +1601,10 @@ FileLog_regexpFn($$)
         the part after is the string displayed in the web frontend.<br>
         Example:<br>
            attr ks300log1 logtype
-                temp4rain10:Temp/Rain,hum6wind8:Hum/Wind,text:Raw-data
+                temp4rain10:Temp/Rain,hum6wind8:Hum/Wind,text:Raw-data<br>
+        If the special value "text:linesInTheFile" is used, you will see 
+        the number of lines in each Logfile in the corrsponding device overview.
+        <br>
     </li><br>
 
     <li><a href="#mseclog">mseclog</a></li><br>
@@ -1945,7 +1962,10 @@ FileLog_regexpFn($$)
           </li>
            <li>text<br>
                Zeigt das LogFile in seiner urspr&uuml;nglichen Form (Nur
-               Text).Eine gnuplot-Definition ist nicht notwendig.
+               Text).Eine gnuplot-Definition ist nicht notwendig.<br>
+               Wird der Attributwert text:linesInTheFile verwendet,
+               werden in der Ger&auml;te&uuml;bersicht die Anzahl der
+               enthaltenen Zeilen pro Logdatei angezeigt.
                </li>
         </ul>
         Beispiel:<br> attr ks300log1 logtype

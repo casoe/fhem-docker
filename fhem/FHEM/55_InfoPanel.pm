@@ -1,4 +1,4 @@
-# $Id: 55_InfoPanel.pm 27670 2023-06-10 16:05:18Z betateilchen $
+# $Id: 55_InfoPanel.pm 27724 2023-07-04 17:45:32Z betateilchen $
 
 =for comment
 ##############################################
@@ -74,7 +74,9 @@
 # 2023-02-20 - 27257 - added:   show alias in overview
 # 2023-05-12 - 27557 - added:   support for named parameters in define
 #                               for new define syntax
-# 2023-06-10 -       - changed: commandref updated to id syntax
+# 2023-06-10 - 27670 - changed: commandref updated to id syntax
+#
+# 2023-07-04 - 27724 - changed: minor bugfix for perl 5.36
 #
 ##############################################
 =cut
@@ -271,7 +273,7 @@ sub btIP_Notify {
   return if(!grep(m/^FILEWRITE $hash->{LAYOUTFILE}$/, @{$dev->{CHANGED}}));
 
   Log3(undef, 4, "InfoPanel: $hash->{NAME} reread layout after edit.");
-  undef = btIP_readLayout($hash);
+  btIP_readLayout($hash);
   return;
 }
 

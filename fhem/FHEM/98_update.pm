@@ -1,5 +1,5 @@
 ################################################################
-# $Id: 98_update.pm 27421 2023-04-10 08:27:24Z rudolfkoenig $
+# $Id: 98_update.pm 28211 2023-11-26 10:08:09Z rudolfkoenig $
 
 package main;
 use strict;
@@ -81,7 +81,7 @@ CommandUpdate($$)
   return "An update is already running" if($upd_running);
   $upd_running = 1;
   if($updateInBackground) {
-    CallFn($cl->{NAME}, "ActivateInformFn", $cl, "log");
+    CallFn($cl->{NAME}, "ActivateInformFn", $cl, "log") if($cl);
     sub updDone(@) { $upd_running=0 }
     BlockingCall("doUpdateInBackground", {src=>$src,arg=>$arg}, "updDone");
     return "Executing the update the background.";
@@ -312,7 +312,7 @@ doUpdate($$$$)
     $canJoin = 1;
   }
 
-  my @excl = split(" ", AttrVal("global", "exclude_from_update", ""));
+  my @excl = split(/[\s,]+/, AttrVal("global", "exclude_from_update", ""));
   my $noSzCheck = AttrVal("global", "updateNoFileCheck", configDBUsed());
   my $hideExcl = AttrVal("global", "hideExcludedUpdates", 0); #Forum #124670
 
@@ -672,10 +672,11 @@ upd_writeFile($$$$)
 
     <a id="update-attr-exclude_from_update"></a>
     <li>exclude_from_update<br>
-        Contains a space separated list of fileNames (regexps) which will be
-        excluded by an update. The special value commandref will disable calling
-        commandref_join at the end, i.e commandref.html will be out of date.
-        The module-only documentation is not affected and is up-to-date.<br>
+        Contains a space or comma separated list of fileNames (regexps) which
+        will be excluded by an update. The special value commandref will
+        disable calling commandref_join at the end, i.e commandref.html will be
+        out of date.  The module-only documentation is not affected and is
+        up-to-date.<br>
         Example:<br>
         <ul>
           attr global exclude_from_update 21_OWTEMP.pm FS20.off.png
@@ -782,11 +783,12 @@ upd_writeFile($$$$)
 
     <a id="update-attr-exclude_from_update"></a>
     <li>exclude_from_update<br>
-        Enth&auml;lt eine Liste durch Leerzeichen getrennter Dateinamen
-        (Regexp), welche nicht beim update ber&uuml;cksichtigt werden.<br>
-        Falls der Wert commandref enth&auml;lt, dann wird commandref_join.pl
-        nach dem update nicht aufgerufen, d.h. die Gesamtdokumentation ist
-        nicht mehr aktuell. Die Moduldokumentation bleibt weiterhin aktuell.
+        Enth&auml;lt eine durch Leerzeichen oder Komma getrennte Liste von
+        Dateinamen (Regexp), welche beim update nicht ber&uuml;cksichtigt
+        werden.<br> Falls der Wert commandref enth&auml;lt, dann wird
+        commandref_join.pl nach dem update nicht aufgerufen, d.h. die
+        Gesamtdokumentation ist nicht mehr aktuell. Die Moduldokumentation
+        bleibt weiterhin aktuell.
         <br>
         Beispiel:<br>
         <ul>

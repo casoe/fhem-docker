@@ -7,6 +7,7 @@
 #
 #   Special thanks goes to comitters:
 #       - Vitolinker / Commandref
+#       - ska- / SSL_startHandshake - SSL Port 3001 Support
 #
 #
 #  This script is free software; you can redistribute it and/or modify
@@ -25,7 +26,7 @@
 #  GNU General Public License for more details.
 #
 #
-# $Id: 82_LGTV_WebOS.pm 27575 2023-05-16 02:31:41Z CoolTux $
+# $Id: 82_LGTV_WebOS.pm 28182 2023-11-17 20:26:24Z CoolTux $
 #
 ###############################################################################
 package FHEM::LGTV_WebOS;

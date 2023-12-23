@@ -1,6 +1,38 @@
-# $Id: 37_echodevice.pm 26735 2022-11-22 11:48:55Z michael.winkler $
+# $Id: 37_echodevice.pm 28176 2023-11-16 11:04:33Z michael.winkler $
 #
 ##############################################
+#
+# 2023.11.15 v0.2.29
+# - FEATURE: Unterstützung A1D6RDUOWH31HF JLR Incontrol
+#
+# 2023.11.12 v0.2.28
+# - FEATURE: Unterstützung A347N36W21919O Yamaha ATS-2090 Soundbar
+#
+# 2023.11.10 v0.2.27
+# - FEATURE: Unterstützung A1WZKXFLI43K86 Fire TV Stick 4K Max
+#            Unterstützung A11QM4H9HGV71H Echo Show 5
+# - CHANGE:  Verbose Settings für HttpUtils
+#
+# 2023.11.08 v0.2.26
+# - BUG:     User-Agent https://forum.fhem.de/index.php?topic=82631.msg1292057#msg1292057
+#
+# 2023.10.31 v0.2.25
+# - FEATURE: Unterstützung ASQZWP4GPYUT7 Echo Plus 2 Gen2
+#
+# 2023.10.31 v0.2.24
+# - CHANGE:  voice_reading TTS Antworten rausfiltern
+#
+# 2023.10.27 v0.2.23
+# - BUG:     Logeinträge bei set "speak" entfernt
+#
+# 2023.10.27 v0.2.22
+# - CHANGE:  voice_reading auf neue API umgestellt
+# - FEATURE  voice_person (Zeigt wer das letzte Voice Command gesagt hat, wenn eingerichtet)
+#
+# 2023.01.19 v0.2.21
+# - BUG:     Refresh Token
+#            Attribut "fhem_home"
+# - FEATURE  Neues Reading "parse_error"
 #
 # 2022.11.22 v0.2.20
 # - FEATURE: Unterstützung A4ZXE0RM7LQ7A Echo Dot Gen5
@@ -498,7 +530,7 @@ use lib ('./FHEM/lib', './lib');
 use MP3::Info;
 use MIME::Base64;
 
-my $ModulVersion     = "0.2.19";
+my $ModulVersion     = "0.2.29";
 my $AWSPythonVersion = "0.0.3";
 my $NPMLoginTyp		 = "unbekannt";
 my $QueueNumber      = 0;
@@ -671,7 +703,7 @@ sub echodevice_Get($@) {
 		$usage .= "help:noArg  " ;
 	}
 	elsif ($hash->{model} eq "ACCOUNT") {
-		$usage .= "settings:noArg devices:noArg actions:noArg tracks:noArg help:noArg conversations:noArg html_results:noArg address status:noArg customer-history-records:noArg";
+		$usage .= "settings:noArg devices:noArg actions:noArg tracks:noArg help:noArg conversations:noArg html_results:noArg address status:noArg customer-history-records:noArg NPM_check:noArg";
 	}
 	else {
 		$usage .= "tunein settings:noArg primeplayeigene_albums primeplayeigene_tracks primeplayeigene_artists primeplayeigeneplaylist:noArg help:noArg html_results:noArg ";
@@ -818,6 +850,13 @@ sub echodevice_Get($@) {
 		
 	}
 	
+	if ($command eq "NPM_check") {
+		
+		$return = echodevice_NPMCheck($hash);
+		
+		return $return;	
+	}
+	
 	if ($ConnectState ne "connected") {
 		return "$name is not connected. Aborting...";
 	}
@@ -893,7 +932,7 @@ sub echodevice_Set($@) {
 		$usage .= 'AWS_Access_Key AWS_Secret_Key TTS_IPAddress TTS_Filename TTS_TuneIn POM_TuneIn POM_IPAddress POM_Filename AWS_OutputFormat:mp3,ogg_vorbis,pcm textmessage ';# if(defined($hash->{helper}{".COMMSID"}));
 		$usage .= 'config_address_from config_address_to config_address_between mobilmessage ';
 		$usage .= 'login:noArg loginwithcaptcha login2FACode ' if($hash->{LOGINMODE} eq "NORMAL");
-		$usage .= 'NPM_install:noArg NPM_login:new,refresh '   if($hash->{LOGINMODE} eq "NPM");
+		$usage .= 'NPM_install:noArg NPM_login:new,refresh NPM_check:noArg'   if($hash->{LOGINMODE} eq "NPM");
 		
 		# Einkaufsliste
 		my $ShoppingListe = ReadingsVal($name, "list_SHOPPING_ITEM", "");
@@ -906,7 +945,7 @@ sub echodevice_Set($@) {
 	
 	elsif ($hash->{model} eq "Echo Multiroom" || $hash->{model} eq "Sonos Display" || $hash->{model} eq "Echo Stereopaar") {
 		$usage .= 'volume:slider,0,1,100 play:noArg pause:noArg next:noArg previous:noArg forward:noArg rewind:noArg shuffle:on,off repeat:on,off ';
-		$usage .= 'tunein primeplaylist primeplaysender primeplayeigene primeplayeigeneplaylist tts tts_translate:textField-long playownmusic:textField-long saveownplaylist:textField-long ';
+		$usage .= 'tunein primeplaylist primeplaysender primeplayeigene primeplayeigeneplaylist tts tts_translate:textField-long playownmusic:textField-long saveownplaylist:textField-long speak speak_ssml ';
 		
 		if(defined($tracks)) {
 				$tracks =~ s/ /_/g;
@@ -1703,6 +1742,11 @@ sub echodevice_SendCommand($$$) {
         $SendUrl   .= "/api/bluetooth?cached=true&_=".int(time);
 	}
 	
+	elsif ($type eq "endpoints") {
+		$SendUrl    = "https://alexa.amazon.de/api/endpoints";
+		$SendMetode = "GET";
+	}
+	
 	elsif ($type eq "notifications") {
         $SendUrl   .= "/api/notifications?cached=true&_=".int(time);
 	}
@@ -1730,8 +1774,16 @@ sub echodevice_SendCommand($$$) {
 	elsif ($type eq "alarmvolume") {
         $SendUrl   .= "/api/device-notification-state?_=".int(time);
 	}
-	
+
 	elsif ($type eq "activities") {
+		$SendUrl    = "https://www.amazon.de/alexa-privacy/apd/rvh/customer-history-records/?startTime=0&endTime=2005090388459&recordType=VOICE_HISTORY&maxRecordSize=100";
+		$SendMetode = "GET";
+		$SendDataL  = "" ;
+		$SendData   = "";
+		
+	}
+
+	elsif ($type eq "activities1") {
 		if (int(AttrVal($name,"intervalvoice",999999)) != 999999) {
 			$SendUrl   .= "/api/activities?startTime=&size=10&offset=1&_=".int(time);
 		}
@@ -2109,10 +2161,12 @@ sub echodevice_SendCommand($$$) {
 		my $SpeakVolume;
 		$SpeakVolume = int(AttrVal($hash->{IODev}{NAME},"speak_volume",0));
 		$SpeakVolume = int(AttrVal($name,"speak_volume",0)) if($SpeakVolume == 0);
-		
+				
 		if($SpeakVolume > 0){
 		#if(ReadingsVal($name , "volume", 50) < ReadingsVal($name , "volume_alarm", 50)) {
-			$SendData = '{"behaviorId":"PREVIEW","sequenceJson":"{\"@type\":\"com.amazon.alexa.behaviors.model.Sequence\",\"startNode\":{\"@type\":\"com.amazon.alexa.behaviors.model.SerialNode\",\"nodesToExecute\":[{\"@type\":\"com.amazon.alexa.behaviors.model.OpaquePayloadOperationNode\",\"type\":\"Alexa.DeviceControls.Volume\",\"operationPayload\":{\"deviceSerialNumber\":\"' . $hash->{helper}{".SERIAL"} . '\",\"customerId\":\"' . $hash->{IODev}->{helper}{".CUSTOMER"} .'\",\"locale\":\"de-DE\",\"value\":\"'.$SpeakVolume.'\",\"deviceType\":\"' . $hash->{helper}{DEVICETYPE} . '\"}},{\"@type\":\"com.amazon.alexa.behaviors.model.OpaquePayloadOperationNode\",\"type\":\"Alexa.Speak\",\"operationPayload\":{\"locale\":\"de-DE\",\"deviceSerialNumber\":\"' . $hash->{helper}{".SERIAL"} . '\",\"customerId\":\"' . $hash->{IODev}->{helper}{".CUSTOMER"} .'\",\"deviceType\":\"' . $hash->{helper}{DEVICETYPE} . '\",\"textToSpeak\":\"'.$SendData.'\"}},{\"@type\":\"com.amazon.alexa.behaviors.model.OpaquePayloadOperationNode\",\"type\":\"Alexa.DeviceControls.Volume\",\"operationPayload\":{\"deviceSerialNumber\":\"' . $hash->{helper}{".SERIAL"} . '\",\"customerId\":\"' . $hash->{IODev}->{helper}{".CUSTOMER"} .'\",\"locale\":\"de-DE\",\"value\":\"'.ReadingsVal($name , "volume", 50).'\",\"deviceType\":\"' . $hash->{helper}{DEVICETYPE} . '\"}}]}}","status":"ENABLED"}'
+			#Log3 $name, 3, "[$name] [SpeakVolume] send...";
+			$SendData = '{"behaviorId":"PREVIEW","sequenceJson":"{\"@type\":\"com.amazon.alexa.behaviors.model.Sequence\",\"startNode\":{\"@type\":\"com.amazon.alexa.behaviors.model.SerialNode\",\"nodesToExecute\":[{\"@type\":\"com.amazon.alexa.behaviors.model.OpaquePayloadOperationNode\",\"type\":\"Alexa.DeviceControls.Volume\",\"operationPayload\":{\"deviceSerialNumber\":\"' . $hash->{helper}{".SERIAL"} . '\",\"customerId\":\"' . $hash->{IODev}->{helper}{".CUSTOMER"} .'\",\"locale\":\"de-DE\",\"value\":\"'.$SpeakVolume.'\",\"deviceType\":\"' . $hash->{helper}{DEVICETYPE} . '\"}},{\"@type\":\"com.amazon.alexa.behaviors.model.OpaquePayloadOperationNode\",\"type\":\"Alexa.Speak\",\"operationPayload\":{\"locale\":\"de-DE\",\"deviceSerialNumber\":\"' . $hash->{helper}{".SERIAL"} . '\",\"customerId\":\"' . $hash->{IODev}->{helper}{".CUSTOMER"} .'\",\"deviceType\":\"' . $hash->{helper}{DEVICETYPE} . '\",\"textToSpeak\":\"'.$SendData.'\"}},{\"@type\":\"com.amazon.alexa.behaviors.model.OpaquePayloadOperationNode\",\"type\":\"Alexa.DeviceControls.Volume\",\"operationPayload\":{\"deviceSerialNumber\":\"' . $hash->{helper}{".SERIAL"} . '\",\"customerId\":\"' . $hash->{IODev}->{helper}{".CUSTOMER"} .'\",\"locale\":\"de-DE\",\"value\":\"'.ReadingsVal($name , "volume", 50).'\",\"deviceType\":\"' . $hash->{helper}{DEVICETYPE} . '\"}}]}}","status":"ENABLED"}';
+			#Log3 $name, 3, "[$name] [SpeakVolume] send... $SendData";
 		}
 		else {
 			$SendData = echodevice_getsequenceJson($hash,$type,$SendData);
@@ -2213,7 +2267,7 @@ sub echodevice_SendCommand($$$) {
 sub echodevice_HandleCmdQueue($) {
     my ($hash, $param)  = @_;
     my $name            = $hash->{NAME};
-	
+
 	return undef if(!defined($hash->{helper}{CMD_QUEUE})); 
 	$hash->{helper}{RUNNING_REQUEST} = 0 if(!defined($hash->{helper}{RUNNING_REQUEST})); 
 	
@@ -2237,7 +2291,7 @@ sub echodevice_HandleCmdQueue($) {
 	
 #	if($hash->{model} eq "ACCOUNT") {$AmazonHeader = "Cookie: ".$hash->{helper}{".COOKIE"}."\r\ncsrf: ".$hash->{helper}{".CSRF"}."\r\nContent-Type: application/json; charset=UTF-8";}
 #	else 							{$AmazonHeader = "Cookie: ".$hash->{IODev}->{helper}{".COOKIE"}."\r\ncsrf: ".$hash->{IODev}->{helper}{".CSRF"}."\r\nContent-Type: application/json; charset=UTF-8";}
-	
+
 	if($hash->{model} eq "ACCOUNT") {$AmazonHeader = "User-Agent: ". $UserAgent ."\r\nAccept-Language: " . $HeaderLanguage . "\r\nDNT: 1\r\nConnection: keep-alive\r\nUpgrade-Insecure-Requests: 1\r\nCookie:".$hash->{helper}{".COOKIE"}."\r\ncsrf: ".$hash->{helper}{".CSRF"}."\r\nContent-Type: application/json; charset=UTF-8";}
 	else 							{$AmazonHeader = "User-Agent: ". $UserAgent ."\r\nAccept-Language: " . $HeaderLanguage . "\r\nDNT: 1\r\nConnection: keep-alive\r\nUpgrade-Insecure-Requests: 1\r\nCookie:".$hash->{IODev}->{helper}{".COOKIE"}."\r\ncsrf: ".$hash->{IODev}->{helper}{".CSRF"}."\r\nContent-Type: application/json; charset=UTF-8";}
 	
@@ -2257,6 +2311,7 @@ sub echodevice_HandleCmdQueue($) {
 					   type            => $param->{type},
 					   httpversion     => $param->{httpversion},
 					   queuenumber     => $QueueNumber,
+					   NAME            => $name,
                        callback        => \&echodevice_Parse
                       };
   
@@ -2305,6 +2360,9 @@ sub echodevice_SendLoginCommand($$$) {
 
 	readingsSingleUpdate ($hash, "BrowserUserAgent", $UserAgent ,0);
 	readingsSingleUpdate ($hash, "BrowserLanguage", $HeaderLanguage ,0);
+
+	# This allows HttpUtils to use the 'verbose' setting of the device
+	$param->{NAME} = $name;
 	
 	# COOKIE LOGIN
 	if ($type eq "cookielogin1" ) {
@@ -2458,7 +2516,7 @@ sub echodevice_SendLoginCommand($$$) {
 	
 	if ($type eq "cookielogin6" ) {
 		$param->{url}         = "https://".$hash->{helper}{SERVER}."/api/bootstrap";
-		$param->{header}      = 'Cookie: '.$hash->{helper}{".COOKIE"};
+		$param->{header}      = "User-Agent: ".$UserAgent."\r\nCookie: ".$hash->{helper}{'.COOKIE'};
 		$param->{callback}    = \&echodevice_ParseAuth;
 		$param->{noshutdown}  = 1;
 		$param->{keepalive}   = 1;
@@ -2486,6 +2544,15 @@ sub echodevice_Parse($$$) {
 	
 	if ($msgtype eq "account") {
 		Log3 $name, 4, "[$name] [echodevice_Parse] [$msgtype] [$msgnumber] DATA Dumper=" . Dumper(echodevice_anonymize($hash, $data));
+	}
+	
+	# Rate exceeded: Too many requests https://forum.fhem.de/index.php/topic,82631.msg1251020.html#msg1251020
+	if (Dumper(echodevice_anonymize($hash, $data)) =~ m/Too many requests/ ) {
+		readingsSingleUpdate ($hash, "parse_error", "Too many requests" ,0);
+		Log3 $name, 3, "[$name] [echodevice_Parse] [$msgtype] [$msgnumber] Too many requests" ;
+	}
+	else {
+		readingsSingleUpdate ($hash, "parse_error", "OK" ,0);
 	}
 	
 	# Nächsten Auftrag starten
@@ -2690,6 +2757,10 @@ sub echodevice_Parse($$$) {
 		return;
 	}
 	
+	if ($msgtype eq "endpoints") {
+		#Log3 $name, 3, "[$name] [echodevice_Parse] [$msgtype] [$msgnumber] $data";
+	}
+	
 	if($msgtype eq "notifications_delete" || $msgtype eq "alarm_on" || $msgtype eq "alarm_off" || $msgtype eq "reminderitem") {
 		
 		my $IODev = $hash->{IODev}->{NAME};
@@ -2782,8 +2853,79 @@ sub echodevice_Parse($$$) {
 	if (index($data, '{') == -1) {$data = '{"data": "nodata"}';}
 	
 	my $json = eval { JSON->new->utf8(0)->decode($data) };
-		
+	my $Person ;
 	if($msgtype eq "activities") {
+		if (ref($json) eq "HASH") {
+			if(defined($json->{customerHistoryRecords}) && ref($json->{customerHistoryRecords}) eq "ARRAY") {
+				foreach my $recordKey (@{$json->{customerHistoryRecords}}) {
+					
+					my @recordKeys = split("#",$recordKey->{recordKey});
+					$sourceDeviceIds = @recordKeys[3];
+					$Person = 0;
+					if ($recordKey->{utteranceType} eq "GENERAL") {
+					
+						if(defined($modules{$hash->{TYPE}}{defptr}{$sourceDeviceIds})) {
+							
+							my $echohash = $modules{$hash->{TYPE}}{defptr}{$sourceDeviceIds};
+							my $timestamp = int(ReadingsVal($echohash->{NAME},'voice_timestamp',9999));
+
+							if($timestamp >= int($recordKey->{voiceHistoryRecordItems}[0]{timestamp})) {
+								if ($recordKey->{voiceHistoryRecordItems}[0]{personsInfo}[0]{personFirstName} ne ReadingsVal($echohash->{NAME},'voice_person',"unbekannt") and $recordKey->{voiceHistoryRecordItems}[0]{personsInfo}[0]{personFirstName} ne "") {
+									$Person = 1;
+								}
+								else {
+									next;
+								}
+							}
+
+							$echohash->{".updateTimestamp"} = FmtDateTime(int($card->{creationTimestamp}/1000));
+							readingsBeginUpdate($echohash);
+							
+							if ($Person eq 1) {
+								readingsBulkUpdate($echohash, "voice_person", $recordKey->{voiceHistoryRecordItems}[0]{personsInfo}[0]{personFirstName}, 1);
+							}
+							else {
+								if ($recordKey->{voiceHistoryRecordItems}[0]{personsInfo}[0]{personFirstName} ne "") {
+									readingsBulkUpdate($echohash, "voice_person", $recordKey->{voiceHistoryRecordItems}[0]{personsInfo}[0]{personFirstName}, 1);	
+								}
+								readingsBulkUpdate($echohash, "voice_timestamp", $recordKey->{voiceHistoryRecordItems}[0]{timestamp}, 1);
+								readingsBulkUpdate($echohash, "voice", $recordKey->{voiceHistoryRecordItems}[0]{transcriptText}, 1);
+							}
+
+							readingsEndUpdate($echohash,1);
+							$echohash->{CHANGETIME}[0] = FmtDateTime(int($card->{creationTimestamp}/1000));
+								
+							
+						}
+					
+					#Log3 $name, 3, "[$name] [echodevice_Parse] [" . $echohash->{NAME} . "] Alexatext = ".$sourceDeviceIds . " transcriptText=" . $recordKey->{voiceHistoryRecordItems}[0]{transcriptText} ." Person=" . $recordKey->{voiceHistoryRecordItems}[0]{personsInfo}[0]{personFirstName};	
+						
+					}
+
+					
+				}
+			}
+			
+			# Timer für Realtime Check!
+			my $IntervalVoice = int(AttrVal($name,"intervalvoice",999999));
+			
+			if ($IntervalVoice != 999999 && $hash->{STATE} eq "connected" && AttrVal($name,"disable",0) == 0) {
+				Log3 $name, 5, "[$name] [echodevice_Parse] [$msgtype] [$msgnumber] refresh voice command IntervalVoice=$IntervalVoice ";
+				$hash->{helper}{echodevice_refreshvoice} = 1;
+				$hash->{helper}{echodevice_refreshvoice_lastdate} = time();
+				RemoveInternalTimer($hash, "echodevice_refreshvoice");
+				InternalTimer(gettimeofday() + $IntervalVoice , "echodevice_refreshvoice", $hash, 0);
+			}
+			else {
+				$hash->{helper}{echodevice_refreshvoice} = 0;
+			}
+		}
+		else {
+			Log3 $name, 3, "[$name] [echodevice_Parse] [$msgtype] [$msgnumber] WRONG JSON Type Type=" . ref($json);
+		}
+	} 
+ 
+ 	if($msgtype eq "activities2") {
 		if (ref($json) eq "HASH") {
 			if(defined($json->{activities}) && ref($json->{activities}) eq "ARRAY") {
 				foreach my $card (@{$json->{activities}}) {
@@ -3665,7 +3807,7 @@ sub echodevice_Parse($$$) {
 					readingsBulkUpdate($devicehash, "presence", ($device->{online}?"present":"absent"), 1);
 					#readingsBulkUpdate($devicehash, "state", "absent", 1) if(!$device->{online});
 					readingsBulkUpdate($devicehash, "version", $device->{softwareVersion}, 1);
-					readingsEndUpdate($devicehash,1);
+					
 					$devicehash->{helper}{".SERIAL"} = $device->{serialNumber};
 					$devicehash->{helper}{DEVICETYPE} = $device->{deviceType};
 					$devicehash->{helper}{NAME} = $device->{accountName};
@@ -3673,6 +3815,19 @@ sub echodevice_Parse($$$) {
 					$devicehash->{helper}{VERSION} = $device->{softwareVersion};
 					$devicehash->{helper}{".CUSTOMER"} = $device->{deviceOwnerCustomerId};
 
+					# Multiroom
+					if ($device->{deviceType} eq "A3C9PE6TNYLTCH") {
+						Log3 $name, 4, "[echodevice_GetSettings] Multiroom Device erkannt" ;
+						my $EchoMembers = "";
+						foreach my $clusterMember (@{$device->{clusterMembers}}) { 
+							if ($EchoMembers eq "") {$EchoMembers = $clusterMember;} else {$EchoMembers = $EchoMembers . "," . $clusterMember;}
+						}
+						Log3 $name, 4, "[echodevice_GetSettings] Multiroom Devices $EchoMembers" ;
+						readingsBulkUpdate($devicehash, "clusterMembers", $EchoMembers, 1);
+					}
+					
+					readingsEndUpdate($devicehash,1);
+					
 					if ($device->{deviceFamily} eq "ECHO" || $device->{deviceFamily} eq "KNIGHT") {
 						Log3 $name, 4, "[echodevice_GetSettings] SET 5 DEF=" . $devicehash->{DEF} . " TYPE=".$device->{deviceType}. 'SN Hash=' . $devicehash->{helper}{".SERIAL"} . ' SN Result=' . $device->{serialNumber} ;
 						$hash->{helper}{".SERIAL"} = $device->{serialNumber};
@@ -3962,6 +4117,7 @@ sub echodevice_Parse($$$) {
 						   hash            => $hash,
 						   type            => $MP3Filename,
 						   httpversion     => $param->{httpversion},
+						   NAME            => $name,
 						   callback        => \&echodevice_AmazonVoiceMP3
 						};
 
@@ -4021,6 +4177,7 @@ sub echodevice_GetSettings($) {
 	if ($ConnectState eq "connected") {
 
 		if($hash->{model} eq "ACCOUNT") {
+			echodevice_SendCommand($hash,"endpoints","");
 			echodevice_SendCommand($hash,"getnotifications","");
 			echodevice_SendCommand($hash,"alarmvolume","");
 			echodevice_SendCommand($hash,"bluetoothstate","");
@@ -4146,7 +4303,7 @@ sub echodevice_FirstStart($) {
 		if (index($hash->{helper}{".COOKIE"}, "{") != -1) { 
 			# NPM Login erkannt
 			readingsSingleUpdate ($hash, "COOKIE_TYPE", "READING_NPM" ,0);
-			$hash->{helper}{".COOKIE"} =~ /"localCookie":".*session-id=(.*)","?/;
+			$hash->{helper}{".COOKIE"} =~ /"localCookie":".*session-id=(.*?)","?/;
 			$hash->{helper}{".COOKIE"} = "session-id=" . $1;
 			$hash->{helper}{".COOKIE"} =~ /csrf=([-\w]+)[;\s]?(.*)?$/ if(defined($hash->{helper}{".COOKIE"}));
 			$hash->{helper}{".CSRF"}   = $1  if(defined($hash->{helper}{".COOKIE"}));
@@ -4362,94 +4519,99 @@ sub echodevice_getModel($){
 	my ($ModelNumber) = @_;
 	my $name = $hash->{NAME};
 	
-	if   ($ModelNumber eq "AB72C64C86AW2"  || $ModelNumber eq "Echo")            		{return "Echo";}
-	elsif($ModelNumber eq "A3S5BH2HU6VAYF" || $ModelNumber eq "Echo Dot")        		{return "Echo Dot";}
-	elsif($ModelNumber eq "A32DOYMUN6DTXA" || $ModelNumber eq "Echo Dot")        		{return "Echo Dot Gen3";}
-	elsif($ModelNumber eq "A32DDESGESSHZA" || $ModelNumber eq "Echo Dot")				{return "Echo Dot Gen3";}
-	elsif($ModelNumber eq "A1RABVCI4QCIKC" || $ModelNumber eq "Echo Dot")				{return "Echo Dot Gen3";}
-	elsif($ModelNumber eq "A3RMGO6LYLH7YN" || $ModelNumber eq "Echo Dot")				{return "Echo Dot Gen4";}
-	elsif($ModelNumber eq "A2U21SRK4QGSE1" || $ModelNumber eq "Echo Dot")				{return "Echo Dot Gen4";}
-	elsif($ModelNumber eq "A2H4LV5GIZ1JFT" || $ModelNumber eq "Echo Dot")				{return "Echo Dot Gen4 with Clock";}
-	elsif($ModelNumber eq "A2DS1Q2TPDJ48U" || $ModelNumber eq "Echo Dot")				{return "Echo Dot Gen5 with Clock";}
- 	elsif($ModelNumber eq "A10A33FOX2NUBK" || $ModelNumber eq "Echo Spot")				{return "Echo Spot";}
-	elsif($ModelNumber eq "A1NL4BVLQ4L3N3" || $ModelNumber eq "Echo Show")				{return "Echo Show";}
-	elsif($ModelNumber eq "AWZZ5CVHX2CD"   || $ModelNumber eq "Echo Show")				{return "Echo Show Gen2";}
-	elsif($ModelNumber eq "AIPK7MM90V7TB"  || $ModelNumber eq "Echo Show")				{return "Echo Show Gen3";}
-	elsif($ModelNumber eq "A4ZP7ZC4PI6TO"  || $ModelNumber eq "Echo Show 5")            {return "Echo Show 5";}
-	elsif($ModelNumber eq "A1XWJRHALS1REP" || $ModelNumber eq "Echo Show 5")            {return "Echo Show 5 Gen2";}
-	elsif($ModelNumber eq "A4ZXE0RM7LQ7A"  || $ModelNumber eq "Echo Show 5")            {return "Echo Show 5 Gen5";}
-	elsif($ModelNumber eq "A1Z88NGR2BK6A2" || $ModelNumber eq "Echo Show 8")            {return "Echo Show 8";}
-	elsif($ModelNumber eq "A15996VY63BQ2D" || $ModelNumber eq "Echo Show 8")			{return "Echo Show 8 Gen2";}
-	elsif($ModelNumber eq "A1EIANJ7PNB0Q7" || $ModelNumber eq "Echo Show 15")			{return "Echo Show 15 Gen1";}
-	elsif($ModelNumber eq "A2M35JJZWCQOMZ" || $ModelNumber eq "Echo Plus")				{return "Echo Plus";}
-	elsif($ModelNumber eq "A1JJ0KFC4ZPNJ3" || $ModelNumber eq "Echo Input")				{return "Echo Input";}
-	elsif($ModelNumber eq "A18O6U1UQFJ0XK" || $ModelNumber eq "Echo Plus 2")			{return "Echo Plus 2";}
-	elsif($ModelNumber eq "A3VRME03NAXFUB" || $ModelNumber eq "Echo Flex")				{return "Echo Flex";}
-	elsif($ModelNumber eq "A3FX4UWTP28V1P" || $ModelNumber eq "Echo")					{return "Echo Gen3";}
-	elsif($ModelNumber eq "A30YDR2MK8HMRV" || $ModelNumber eq "Echo")					{return "Echo Gen3";}
-	elsif($ModelNumber eq "A3RBAYBE7VM004" || $ModelNumber eq "Echo Studio")			{return "Echo Studio";}
-	elsif($ModelNumber eq "A3SSG6GR8UU7SN" || $ModelNumber eq "Echo Sub")				{return "Echo Sub";}
-	elsif($ModelNumber eq "AILBSA2LNTOYL"  || $ModelNumber eq "Reverb")					{return "Reverb";}
-	elsif($ModelNumber eq "A15ERDAKK5HQQG" || $ModelNumber eq "Sonos Display")			{return "Sonos Display";}
-	elsif($ModelNumber eq "A2OSP3UA4VC85F" || $ModelNumber eq "Sonos One")				{return "Sonos One";}
-	elsif($ModelNumber eq "A3NPD82ABCPIDP" || $ModelNumber eq "Sonos Beam")				{return "Sonos Beam";}
-	elsif($ModelNumber eq "A2Z8O30CD35N8F" || $ModelNumber eq "Sonos Arc")				{return "Sonos Arc";}
-	elsif($ModelNumber eq "A7WXQPH584YP"   || $ModelNumber eq "Echo Gen2")				{return "Echo Gen2";}
-	elsif($ModelNumber eq "A3C9PE6TNYLTCH" || $ModelNumber eq "Echo Multiroom")  		{return "Echo Multiroom";}
-	elsif($ModelNumber eq "AP1F6KUH00XPV"  || $ModelNumber eq "Echo Stereopaar")		{return "Echo Stereopaar";}
-	elsif($ModelNumber eq "A1DL2DVDQVK3Q"  || $ModelNumber eq "Fire Tab HD 10")			{return "Fire Tab HD 10";}
-	elsif($ModelNumber eq "A3R9S4ZZECZ6YL" || $ModelNumber eq "Fire Tab HD 10")			{return "Fire Tab HD 10";}
-	elsif($ModelNumber eq "A3L0T0VL9A921N" || $ModelNumber eq "Fire Tab HD 8")			{return "Fire Tab HD 8";}
-	elsif($ModelNumber eq "A2M4YX06LWP8WI" || $ModelNumber eq "Fire Tab 7")				{return "Fire Tab 7";}	
-	elsif($ModelNumber eq "A2E0SNTXJVT7WK" || $ModelNumber eq "Fire TV V1")				{return "Fire TV V1";}
-	elsif($ModelNumber eq "A2GFL5ZMWNE0PX" || $ModelNumber eq "Fire TV")				{return "Fire TV";}
-	elsif($ModelNumber eq "A12GXV8XMS007S" || $ModelNumber eq "Fire TV")				{return "Fire TV";}
-	elsif($ModelNumber eq "A3HF4YRA2L7XGC" || $ModelNumber eq "Fire TV Cube")			{return "Fire TV Cube";}
-	elsif($ModelNumber eq "A1VGB7MHSIEYFK" || $ModelNumber eq "Fire TV Cube Gen3")		{return "Fire TV Cube Gen3";}
-	elsif($ModelNumber eq "ADVBD696BHNV5"  || $ModelNumber eq "Fire TV Stick V1")		{return "Fire TV Stick V1";}
-	elsif($ModelNumber eq "A2LWARUGJLBYEW" || $ModelNumber eq "Fire TV Stick V2")		{return "Fire TV Stick V2";}
-	elsif($ModelNumber eq "AKPGW064GI9HE"  || $ModelNumber eq "Fire TV Stick 4K")		{return "Fire TV Stick 4K";}
-	elsif($ModelNumber eq "A265XOI9586NML" || $ModelNumber eq "Fire TV Stick 4K")		{return "Fire TV Stick 4K";}
-	elsif($ModelNumber eq "A3EVMLQTU6WL1W" || $ModelNumber eq "Fire TV Stick 4K Max")	{return "Fire TV Stick 4K Max";}
-	elsif($ModelNumber eq "A31DTMEEVDDOIV" || $ModelNumber eq "Fire TV Stick 4K")		{return "Fire TV";}
-	elsif($ModelNumber eq "A2JKHJ0PX4J3L3" || $ModelNumber eq "ECHO FireTv Cube 4K")	{return "ECHO FireTv Cube 4K";}
-	elsif($ModelNumber eq "A10L5JEZTKKCZ8" || $ModelNumber eq "VOBOT")           		{return "VOBOT";}
-	elsif($ModelNumber eq "A37SHHQ3NUL7B5" || $ModelNumber eq "Bose Home Speaker 500")	{return "Bose Home Speaker 500";}
-	elsif($ModelNumber eq "AVN2TMX8MU2YM"  || $ModelNumber eq "Bose Home Speaker 500")	{return "Bose Home Speaker 500";}
-	elsif($ModelNumber eq "A1RTAM01W29CUP" || $ModelNumber eq "Alexa App for PC")       {return "Alexa App for PC";}
-	elsif($ModelNumber eq "A21Z3CGI8UIP0F" || $ModelNumber eq "HEOS")                   {return "HEOS";}
-	elsif($ModelNumber eq "AKOAGQTKAS9YB"  || $ModelNumber eq "Echo Connect")			{return "Echo Connect";}
-	elsif($ModelNumber eq "A3NTO4JLV9QWRB" || $ModelNumber eq "Gigaset L800HX")			{return "Gigaset L800HX";}
-	elsif($ModelNumber eq "A1HNT9YTOBE735" || $ModelNumber eq "Telekom Smart Speaker")	{return "Telekom Smart Speaker";}
-	elsif($ModelNumber eq "A1WAR447VT003J" || $ModelNumber eq "Yamaha MusicCast 20")	{return "Yamaha MusicCast 20";}
-	elsif($ModelNumber eq "AVE5HX13UR5NO"  || $ModelNumber eq "Zero Touch (Logitech)")	{return "Zero Touch (Logitech)";}
-	elsif($ModelNumber eq "A3GZUE7F9MEB4U" || $ModelNumber eq "Sony WH-100XM3")			{return "Sony WH-100XM3";}
-	elsif($ModelNumber eq "A2J0R2SD7G9LPA" || $ModelNumber eq "Lenovo P10")				{return "Lenovo P10";}
-	elsif($ModelNumber eq "A1J16TEDOYCZTN" || $ModelNumber eq "Amazon Tablet")			{return "Amazon Tablet";}
-	elsif($ModelNumber eq "A38EHHIB10L47V" || $ModelNumber eq "Fire HD 8 Tablet")		{return "Fire HD 8 Tablet";}
-	elsif($ModelNumber eq "A112LJ20W14H95" || $ModelNumber eq "Media Display")			{return "Media Display";}
-	elsif($ModelNumber eq "A1H0CMF1XM0ZP4" || $ModelNumber eq "Bose Soundtouch")		{return "Bose Soundtouch";}
+	if   ($ModelNumber eq "AB72C64C86AW2"  || $ModelNumber eq "Echo")            			{return "Echo";}
+	elsif($ModelNumber eq "A3S5BH2HU6VAYF" || $ModelNumber eq "Echo Dot")        			{return "Echo Dot";}
+	elsif($ModelNumber eq "A32DOYMUN6DTXA" || $ModelNumber eq "Echo Dot")        			{return "Echo Dot Gen3";}
+	elsif($ModelNumber eq "A32DDESGESSHZA" || $ModelNumber eq "Echo Dot")					{return "Echo Dot Gen3";}
+	elsif($ModelNumber eq "A1RABVCI4QCIKC" || $ModelNumber eq "Echo Dot")					{return "Echo Dot Gen3";}
+	elsif($ModelNumber eq "A3RMGO6LYLH7YN" || $ModelNumber eq "Echo Dot")					{return "Echo Dot Gen4";}
+	elsif($ModelNumber eq "A2U21SRK4QGSE1" || $ModelNumber eq "Echo Dot")					{return "Echo Dot Gen4";}
+	elsif($ModelNumber eq "A2H4LV5GIZ1JFT" || $ModelNumber eq "Echo Dot")					{return "Echo Dot Gen4 with Clock";}
+	elsif($ModelNumber eq "A2DS1Q2TPDJ48U" || $ModelNumber eq "Echo Dot")					{return "Echo Dot Gen5 with Clock";}
+ 	elsif($ModelNumber eq "A10A33FOX2NUBK" || $ModelNumber eq "Echo Spot")					{return "Echo Spot";}
+	elsif($ModelNumber eq "A1NL4BVLQ4L3N3" || $ModelNumber eq "Echo Show")					{return "Echo Show";}
+	elsif($ModelNumber eq "AWZZ5CVHX2CD"   || $ModelNumber eq "Echo Show")					{return "Echo Show Gen2";}
+	elsif($ModelNumber eq "AIPK7MM90V7TB"  || $ModelNumber eq "Echo Show")					{return "Echo Show Gen3";}
+	elsif($ModelNumber eq "A4ZP7ZC4PI6TO"  || $ModelNumber eq "Echo Show 5")        	    {return "Echo Show 5";}
+	elsif($ModelNumber eq "A1XWJRHALS1REP" || $ModelNumber eq "Echo Show 5")				{return "Echo Show 5 Gen2";}
+	elsif($ModelNumber eq "A11QM4H9HGV71H" || $ModelNumber eq "Echo Show 5")				{return "Echo Show 5 Gen3";}
+	elsif($ModelNumber eq "A4ZXE0RM7LQ7A"  || $ModelNumber eq "Echo Show 5")				{return "Echo Show 5 Gen5";}
+	elsif($ModelNumber eq "A1Z88NGR2BK6A2" || $ModelNumber eq "Echo Show 8")				{return "Echo Show 8";}
+	elsif($ModelNumber eq "A15996VY63BQ2D" || $ModelNumber eq "Echo Show 8")				{return "Echo Show 8 Gen2";}
+	elsif($ModelNumber eq "A1EIANJ7PNB0Q7" || $ModelNumber eq "Echo Show 15")				{return "Echo Show 15 Gen1";}
+	elsif($ModelNumber eq "A2M35JJZWCQOMZ" || $ModelNumber eq "Echo Plus")					{return "Echo Plus";}
+	elsif($ModelNumber eq "A1JJ0KFC4ZPNJ3" || $ModelNumber eq "Echo Input")					{return "Echo Input";}
+	elsif($ModelNumber eq "A18O6U1UQFJ0XK" || $ModelNumber eq "Echo Plus 2")				{return "Echo Plus 2";}
+	elsif($ModelNumber eq "ASQZWP4GPYUT7"  || $ModelNumber eq "Echo Plus 2 gen2")			{return "Echo Plus 2";}
+	elsif($ModelNumber eq "A3VRME03NAXFUB" || $ModelNumber eq "Echo Flex")					{return "Echo Flex";}
+	elsif($ModelNumber eq "A3FX4UWTP28V1P" || $ModelNumber eq "Echo")						{return "Echo Gen3";}
+	elsif($ModelNumber eq "A30YDR2MK8HMRV" || $ModelNumber eq "Echo")						{return "Echo Gen3";}
+	elsif($ModelNumber eq "A3RBAYBE7VM004" || $ModelNumber eq "Echo Studio")				{return "Echo Studio";}
+	elsif($ModelNumber eq "A3SSG6GR8UU7SN" || $ModelNumber eq "Echo Sub")					{return "Echo Sub";}
+	elsif($ModelNumber eq "AILBSA2LNTOYL"  || $ModelNumber eq "Reverb")						{return "Reverb";}
+	elsif($ModelNumber eq "A15ERDAKK5HQQG" || $ModelNumber eq "Sonos Display")				{return "Sonos Display";}
+	elsif($ModelNumber eq "A2OSP3UA4VC85F" || $ModelNumber eq "Sonos One")					{return "Sonos One";}
+	elsif($ModelNumber eq "A3NPD82ABCPIDP" || $ModelNumber eq "Sonos Beam")					{return "Sonos Beam";}
+	elsif($ModelNumber eq "A2Z8O30CD35N8F" || $ModelNumber eq "Sonos Arc")					{return "Sonos Arc";}
+	elsif($ModelNumber eq "A7WXQPH584YP"   || $ModelNumber eq "Echo Gen2")					{return "Echo Gen2";}
+	elsif($ModelNumber eq "A3C9PE6TNYLTCH" || $ModelNumber eq "Echo Multiroom")  			{return "Echo Multiroom";}
+	elsif($ModelNumber eq "AP1F6KUH00XPV"  || $ModelNumber eq "Echo Stereopaar")			{return "Echo Stereopaar";}
+	elsif($ModelNumber eq "A1DL2DVDQVK3Q"  || $ModelNumber eq "Fire Tab HD 10")				{return "Fire Tab HD 10";}
+	elsif($ModelNumber eq "A3R9S4ZZECZ6YL" || $ModelNumber eq "Fire Tab HD 10")				{return "Fire Tab HD 10";}
+	elsif($ModelNumber eq "A3L0T0VL9A921N" || $ModelNumber eq "Fire Tab HD 8")				{return "Fire Tab HD 8";}
+	elsif($ModelNumber eq "A2M4YX06LWP8WI" || $ModelNumber eq "Fire Tab 7")					{return "Fire Tab 7";}	
+	elsif($ModelNumber eq "A2E0SNTXJVT7WK" || $ModelNumber eq "Fire TV V1")					{return "Fire TV V1";}
+	elsif($ModelNumber eq "A2GFL5ZMWNE0PX" || $ModelNumber eq "Fire TV")					{return "Fire TV";}
+	elsif($ModelNumber eq "A12GXV8XMS007S" || $ModelNumber eq "Fire TV")					{return "Fire TV";}
+	elsif($ModelNumber eq "A3HF4YRA2L7XGC" || $ModelNumber eq "Fire TV Cube")				{return "Fire TV Cube";}
+	elsif($ModelNumber eq "A1VGB7MHSIEYFK" || $ModelNumber eq "Fire TV Cube Gen3")			{return "Fire TV Cube Gen3";}
+	elsif($ModelNumber eq "ADVBD696BHNV5"  || $ModelNumber eq "Fire TV Stick V1")			{return "Fire TV Stick V1";}
+	elsif($ModelNumber eq "A2LWARUGJLBYEW" || $ModelNumber eq "Fire TV Stick V2")			{return "Fire TV Stick V2";}
+	elsif($ModelNumber eq "AKPGW064GI9HE"  || $ModelNumber eq "Fire TV Stick 4K")			{return "Fire TV Stick 4K";}
+	elsif($ModelNumber eq "A265XOI9586NML" || $ModelNumber eq "Fire TV Stick 4K")			{return "Fire TV Stick 4K";}
+	elsif($ModelNumber eq "A3EVMLQTU6WL1W" || $ModelNumber eq "Fire TV Stick 4K Max")		{return "Fire TV Stick 4K Max";}
+	elsif($ModelNumber eq "A31DTMEEVDDOIV" || $ModelNumber eq "Fire TV Stick 4K")			{return "Fire TV";}
+	elsif($ModelNumber eq "A1WZKXFLI43K86" || $ModelNumber eq "Fire TV Stick 4K Max")		{return "Fire TV Stick 4K Max Gen2";}
+	elsif($ModelNumber eq "A2JKHJ0PX4J3L3" || $ModelNumber eq "ECHO FireTv Cube 4K")		{return "ECHO FireTv Cube 4K";}
+	elsif($ModelNumber eq "A10L5JEZTKKCZ8" || $ModelNumber eq "VOBOT")           			{return "VOBOT";}
+	elsif($ModelNumber eq "A37SHHQ3NUL7B5" || $ModelNumber eq "Bose Home Speaker 500")		{return "Bose Home Speaker 500";}
+	elsif($ModelNumber eq "AVN2TMX8MU2YM"  || $ModelNumber eq "Bose Home Speaker 500")		{return "Bose Home Speaker 500";}
+	elsif($ModelNumber eq "A1RTAM01W29CUP" || $ModelNumber eq "Alexa App for PC")			{return "Alexa App for PC";}
+	elsif($ModelNumber eq "A21Z3CGI8UIP0F" || $ModelNumber eq "HEOS")						{return "HEOS";}
+	elsif($ModelNumber eq "AKOAGQTKAS9YB"  || $ModelNumber eq "Echo Connect")				{return "Echo Connect";}
+	elsif($ModelNumber eq "A3NTO4JLV9QWRB" || $ModelNumber eq "Gigaset L800HX")				{return "Gigaset L800HX";}
+	elsif($ModelNumber eq "A1HNT9YTOBE735" || $ModelNumber eq "Telekom Smart Speaker")		{return "Telekom Smart Speaker";}
+	elsif($ModelNumber eq "A1WAR447VT003J" || $ModelNumber eq "Yamaha MusicCast 20")		{return "Yamaha MusicCast 20";}
+	elsif($ModelNumber eq "AVE5HX13UR5NO"  || $ModelNumber eq "Zero Touch (Logitech)")		{return "Zero Touch (Logitech)";}
+	elsif($ModelNumber eq "A3GZUE7F9MEB4U" || $ModelNumber eq "Sony WH-100XM3")				{return "Sony WH-100XM3";}
+	elsif($ModelNumber eq "A2J0R2SD7G9LPA" || $ModelNumber eq "Lenovo P10")					{return "Lenovo P10";}
+	elsif($ModelNumber eq "A1J16TEDOYCZTN" || $ModelNumber eq "Amazon Tablet")				{return "Amazon Tablet";}
+	elsif($ModelNumber eq "A38EHHIB10L47V" || $ModelNumber eq "Fire HD 8 Tablet")			{return "Fire HD 8 Tablet";}
+	elsif($ModelNumber eq "A112LJ20W14H95" || $ModelNumber eq "Media Display")				{return "Media Display";}
+	elsif($ModelNumber eq "A1H0CMF1XM0ZP4" || $ModelNumber eq "Bose Soundtouch")			{return "Bose Soundtouch";}
 	elsif($ModelNumber eq "AAMFMBBEW2960"  || $ModelNumber eq "Garmin DriveSmart 65 with Amazon Alexa")	{return "Garmin DriveSmart 65 with Amazon Alexa";}
-	elsif($ModelNumber eq "A2IVLV5VM2W81"  || $ModelNumber eq "Mobile Voice iOS")		{return "Mobile Voice iOS";}
-	elsif($ModelNumber eq "A2TF17PFR55MTB" || $ModelNumber eq "Mobile Voice Android")	{return "Mobile Voice Android";}
-	elsif($ModelNumber eq "A3V3VA38K169FO" || $ModelNumber eq "Fire Tablet")			{return "Fire Tablet";}
-	elsif($ModelNumber eq "AVD3HM0HOJAAL"  || $ModelNumber eq "Sonos One")				{return "Sonos One";}
-	elsif($ModelNumber eq "A1C66CX2XD756O" || $ModelNumber eq "Fire HD 8 Tablet")		{return "Fire HD 8 Tablet";}
-	elsif($ModelNumber eq "A17LGWINFBUTZZ" || $ModelNumber eq "Anker Roav Car Charger")	{return "Anker Roav Car Charger";}
-	elsif($ModelNumber eq "A2XPGY5LRKB9BE" || $ModelNumber eq "FitBit watch")			{return "FitBit watch";}
-	elsif($ModelNumber eq "A2Y04QPFCANLPQ" || $ModelNumber eq "Bose QC35 II")			{return "Bose QC35 II";}
-	elsif($ModelNumber eq "A2WFDCBDEXOXR8" || $ModelNumber eq "Bose Soundbar")			{return "Bose Soundbar";}
-	elsif($ModelNumber eq "A3BW5ZVFHRCQPO" || $ModelNumber eq "Alexa Car")				{return "Alexa Car";}
-	elsif($ModelNumber eq "A303PJF6ISQ7IC" || $ModelNumber eq "Echo Auto")				{return "Echo Auto";}
-	elsif($ModelNumber eq "A1ZB65LA390I4K" || $ModelNumber eq "Fire HD 10 Tablet")		{return "Fire HD 10 Tablet";}
-	elsif($ModelNumber eq "AVU7CPPF2ZRAS"  || $ModelNumber eq "Fire HD 8 Plus (2020)")	{return "Fire HD 8 Plus (2020)";}
-	elsif($ModelNumber eq "A24Z7PEXY4MDTK" || $ModelNumber eq "Sony WF-1000X")			{return "Sony WF-1000X";}
-	elsif($ModelNumber eq "ABN8JEI7OQF61"  || $ModelNumber eq "Sony WF-1000XM3")		{return "Sony WF-1000XM3";}
-	elsif($ModelNumber eq "A7S41FQ5TWBC9"  || $ModelNumber eq "Sony WH-1000XM4")		{return "Sony WH-1000XM4";}
-	elsif($ModelNumber eq "A2WN1FJ2HG09UN" || $ModelNumber eq "Ultimate Alexa")	        {return "Ultimate Alexa";}
-	elsif($ModelNumber eq "A23FPV4BT7FH68" || $ModelNumber eq "Yamaha YAS-209 Soundbar"){return "Yamaha YAS-209 Soundbar";}
-	elsif($ModelNumber eq "A39Y3UG1XLEJLZ" || $ModelNumber eq "Fitbit Sense")			{return "Fitbit Sense";}
-	elsif($ModelNumber eq "AQCGW9PSYWRF"   || $ModelNumber eq "Polk React Soundbar")	{return "Polk React Soundbar";}
+	elsif($ModelNumber eq "A2IVLV5VM2W81"  || $ModelNumber eq "Mobile Voice iOS")			{return "Mobile Voice iOS";}
+	elsif($ModelNumber eq "A2TF17PFR55MTB" || $ModelNumber eq "Mobile Voice Android")		{return "Mobile Voice Android";}
+	elsif($ModelNumber eq "A3V3VA38K169FO" || $ModelNumber eq "Fire Tablet")				{return "Fire Tablet";}
+	elsif($ModelNumber eq "AVD3HM0HOJAAL"  || $ModelNumber eq "Sonos One")					{return "Sonos One";}
+	elsif($ModelNumber eq "A1C66CX2XD756O" || $ModelNumber eq "Fire HD 8 Tablet")			{return "Fire HD 8 Tablet";}
+	elsif($ModelNumber eq "A17LGWINFBUTZZ" || $ModelNumber eq "Anker Roav Car Charger")		{return "Anker Roav Car Charger";}
+	elsif($ModelNumber eq "A2XPGY5LRKB9BE" || $ModelNumber eq "FitBit watch")				{return "FitBit watch";}
+	elsif($ModelNumber eq "A2Y04QPFCANLPQ" || $ModelNumber eq "Bose QC35 II")				{return "Bose QC35 II";}
+	elsif($ModelNumber eq "A2WFDCBDEXOXR8" || $ModelNumber eq "Bose Soundbar")				{return "Bose Soundbar";}
+	elsif($ModelNumber eq "A3BW5ZVFHRCQPO" || $ModelNumber eq "Alexa Car")					{return "Alexa Car";}
+	elsif($ModelNumber eq "A303PJF6ISQ7IC" || $ModelNumber eq "Echo Auto")					{return "Echo Auto";}
+	elsif($ModelNumber eq "A1ZB65LA390I4K" || $ModelNumber eq "Fire HD 10 Tablet")			{return "Fire HD 10 Tablet";}
+	elsif($ModelNumber eq "AVU7CPPF2ZRAS"  || $ModelNumber eq "Fire HD 8 Plus (2020)")		{return "Fire HD 8 Plus (2020)";}
+	elsif($ModelNumber eq "A24Z7PEXY4MDTK" || $ModelNumber eq "Sony WF-1000X")				{return "Sony WF-1000X";}
+	elsif($ModelNumber eq "ABN8JEI7OQF61"  || $ModelNumber eq "Sony WF-1000XM3")			{return "Sony WF-1000XM3";}
+	elsif($ModelNumber eq "A7S41FQ5TWBC9"  || $ModelNumber eq "Sony WH-1000XM4")			{return "Sony WH-1000XM4";}
+	elsif($ModelNumber eq "A2WN1FJ2HG09UN" || $ModelNumber eq "Ultimate Alexa")				{return "Ultimate Alexa";}
+	elsif($ModelNumber eq "A23FPV4BT7FH68" || $ModelNumber eq "Yamaha YAS-209 Soundbar")	{return "Yamaha YAS-209 Soundbar";}
+	elsif($ModelNumber eq "A347N36W21919O" || $ModelNumber eq "Yamaha ATS-2090 Soundbar")	{return "Yamaha ATS-2090 Soundbar";}
+	elsif($ModelNumber eq "A39Y3UG1XLEJLZ" || $ModelNumber eq "Fitbit Sense")				{return "Fitbit Sense";}
+	elsif($ModelNumber eq "A1D6RDUOWH31HF" || $ModelNumber eq "JLR Incontrol")				{return "JLR Incontrol";}
+	elsif($ModelNumber eq "AQCGW9PSYWRF"   || $ModelNumber eq "Polk React Soundbar")		{return "Polk React Soundbar";}
 
 	elsif($ModelNumber eq "")               {return "";}
 	elsif($ModelNumber eq "ACCOUNT")        {return "ACCOUNT";}
@@ -4787,7 +4949,7 @@ sub echodevice_NPMLoginNew($){
 	} while ($NodeLoop eq "1");
 	
 	# Prüfen ob das alexa-cookie Mdoul vorhanden ist
-	if (!(-e "cache/alexa-cookie/node_modules/alexa-cookie2/alexa-cookie.js")) {
+	if (!(-e $npm_fhem_home . "/cache/alexa-cookie/node_modules/alexa-cookie2/alexa-cookie.js")) {
 		$InstallResult .= '<p>Das alexa-cookie Modul wurde nicht gefunden. Bitte fuehrt am Amazon Account Device einen set "<strong>NPM_install</strong>" durch </p>';
 		$InstallResult .= '<br><form><input type="button" value="Zur&uuml;ck" onClick="history.go(-1);return true;"></form>';
 		$InstallResult .= "</html>";
@@ -4797,7 +4959,7 @@ sub echodevice_NPMLoginNew($){
 	}
 	
 	# Version prüfen;
-	echodevice_NPMCheckVersion($hash,"cache/alexa-cookie/node_modules/alexa-cookie2/package.json","echodevice_NPMLoginNew");
+	echodevice_NPMCheckVersion($hash, $npm_fhem_home . "/cache/alexa-cookie/node_modules/alexa-cookie2/package.json","echodevice_NPMLoginNew");
 	
 	my $ProxyPort = AttrVal($name,"npm_proxy_port","3002");
 	my $OwnIP     = "127.0.0.1";
@@ -5015,7 +5177,7 @@ sub echodevice_NPMLoginRefresh($){
 
 	# Prüfen ob das alexa-cookie Mdoul vorhanden ist
 	Log3 $name, 4, "[$name] [echodevice_NPMLoginRefresh] check alexa-cookie.js" ;
-	if (!(-e "cache/alexa-cookie/node_modules/alexa-cookie2/alexa-cookie.js")) {
+	if (!(-e $npm_fhem_home . "/cache/alexa-cookie/node_modules/alexa-cookie2/alexa-cookie.js")) {
 		$InstallResult .= '<p>Das alexa-cookie Modul wurde nicht gefunden. Bitte fuehrt am Amazon Account Device einen set "<strong>NPM_install</strong>" durch </p>';
 		$InstallResult .= '<br><form><input type="button" value="Zur&uuml;ck" onClick="history.go(-1);return true;"></form>';
 		$InstallResult .= "</html>";
@@ -5025,7 +5187,7 @@ sub echodevice_NPMLoginRefresh($){
 	}
 	
 	# Version prüfen;
-	echodevice_NPMCheckVersion($hash,"cache/alexa-cookie/node_modules/alexa-cookie2/package.json","echodevice_NPMLoginRefresh");
+	echodevice_NPMCheckVersion($hash,$npm_fhem_home . "/cache/alexa-cookie/node_modules/alexa-cookie2/package.json","echodevice_NPMLoginRefresh");
 	
 	# Prüfen ob das Refresh Cookie gültig ist!
 	Log3 $name, 4, "[$name] [echodevice_NPMLoginRefresh] check Refresh Cookie String" ;
@@ -5099,10 +5261,10 @@ sub echodevice_NPMWaitForCookie($){
 	my $CookieResult;
 	
 	if ($NPMLoginTyp =~ m/Refresh/) {
-		$ExistSkript = $number . "refresh-cookie.js = true"  if (-e $npm_fhem_home . "cache/alexa-cookie/" . $number . "refresh-cookie.js");
+		$ExistSkript = $number . "refresh-cookie.js = true"  if (-e $npm_fhem_home . "/cache/alexa-cookie/" . $number . "refresh-cookie.js");
 	}
 	else {
-		$ExistSkript = $number . "create-cookie.js = true" if (-e $npm_fhem_home . "cache/alexa-cookie/" . $number . "create-cookie.js");
+		$ExistSkript = $number . "create-cookie.js = true" if (-e $npm_fhem_home . "/cache/alexa-cookie/" . $number . "create-cookie.js");
 	}
 	
 	if (-e $filename) {
@@ -5118,7 +5280,7 @@ sub echodevice_NPMWaitForCookie($){
 				readingsSingleUpdate( $hash, "COOKIE_TYPE", "NPM_Login",1 );
 
 				$hash->{helper}{".COOKIE"} = $CookieResult;
-				$hash->{helper}{".COOKIE"} =~ /"localCookie":".*session-id=(.*)","?/;
+				$hash->{helper}{".COOKIE"} =~ /"localCookie":".*session-id=(.*?)","?/;
 				$hash->{helper}{".COOKIE"} = "session-id=" . $1;
 				$hash->{helper}{".COOKIE"} =~ /csrf=([-\w]+)[;\s]?(.*)?$/ if(defined($hash->{helper}{".COOKIE"}));
 				$hash->{helper}{".CSRF"}   = $1  if(defined($hash->{helper}{".COOKIE"}));
@@ -5163,6 +5325,35 @@ sub echodevice_NPMCheckVersion ($$$) {
 	else {Log3 $name, 4, "[$name] [$LogBereich] Version alexa-cookie.js = unknown";}
 	
 	return $Modulversion;
+}
+
+sub echodevice_NPMCheck($) {
+	my ($hash) = @_;
+	my $name = $hash->{NAME};
+
+	# Attribute auslesen
+	my $npm_fhem_home = AttrVal($name,"fhem_home","/opt/fhem");
+	
+	# Cache Verzeichnis prüfen
+	my $InstallResult = '<html><p><strong>ERGEBNIS ls -l ' . $npm_fhem_home .'/cache</strong></p><br>';
+	open CMD,'-|','ls -l ' . $npm_fhem_home . '/cache' or die $@;
+	my $line;
+	while (defined($line=<CMD>)) {$InstallResult .= $line. "<br>";}
+	close CMD;
+
+	# alexa-cookie Verzeichnis prüfen
+	$InstallResult .= '<html><p><strong>ERGEBNIS ls -l ' . $npm_fhem_home .'/cache/alexa-cookie</strong></p><br>';
+	open CMD,'-|','ls -l ' . $npm_fhem_home . '/cache/alexa-cookie' or die $@;
+	my $line;
+	while (defined($line=<CMD>)) {$InstallResult .= $line. "<br>";}
+	close CMD;
+
+	# Zurückbutton
+	$InstallResult .= "</html>";
+	$InstallResult =~ s/'/&#x0027/g;
+	
+	return $InstallResult;
+	
 }
 
 ##########################
@@ -5328,6 +5519,7 @@ sub echodevice_Amazon($$$) {
 		data            => '{"OutputFormat": "' . $AWS_Format . '","Text": "' . $parameter .'","TextType": "text","VoiceId": "' . @VoiceName[2] . '"}',
         hash            => $hash,
 		type            => $type,
+		NAME            => $name,
         callback        => \&echodevice_ParseTTSMP3
     };
 	
@@ -5363,6 +5555,7 @@ sub echodevice_Google($$$) {
 		method          => "GET",
         hash            => $hash,
 		type            => $type,
+		NAME            => $name,
         callback        => \&echodevice_ParseTTSMP3
     };
 

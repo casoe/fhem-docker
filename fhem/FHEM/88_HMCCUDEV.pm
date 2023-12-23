@@ -2,7 +2,7 @@
 #
 #  88_HMCCUDEV.pm
 #
-#  $Id: 88_HMCCUDEV.pm 26565 2022-10-20 12:24:12Z zap $
+#  $Id: 88_HMCCUDEV.pm 27999 2023-09-26 16:33:11Z zap $
 #
 #  Version 5.0
 #
@@ -31,7 +31,7 @@ sub HMCCUDEV_Set ($@);
 sub HMCCUDEV_Get ($@);
 sub HMCCUDEV_Attr ($@);
 
-my $HMCCUDEV_VERSION = '5.0 222930908';
+my $HMCCUDEV_VERSION = '5.0 232691829';
 
 ######################################################################
 # Initialize module
@@ -52,7 +52,7 @@ sub HMCCUDEV_Initialize ($)
 	$hash->{parseParams} = 1;
 
 	$hash->{AttrList} = 'IODev ccuaggregate:textField-long ccucalculate:textField-long '. 
-		'ccuflags:multiple-strict,ackState,hideStdReadings,replaceStdReadings,noBoundsChecking,logCommand,noReadings,trace,simulate,showMasterReadings,showLinkReadings,showDeviceReadings,showServiceReadings '.
+		'ccuflags:multiple-strict,ackState,hideStdReadings,replaceStdReadings,noAutoSubstitute,noBoundsChecking,logCommand,noReadings,trace,simulate,showMasterReadings,showLinkReadings,showDeviceReadings,showServiceReadings '.
 		'ccureadingfilter:textField-long '.
 		'ccureadingformat:name,namelc,address,addresslc,datapoint,datapointlc '.
 		'ccureadingname:textField-long ccuSetOnChange ccuReadingPrefix devStateFlags '.

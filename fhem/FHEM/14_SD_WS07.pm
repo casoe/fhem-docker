@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 14_SD_WS07.pm 26981 2023-01-06 11:43:36Z Sidey $
+# $Id: 14_SD_WS07.pm 27952 2023-09-12 20:03:08Z Sidey $
 # 
 # The purpose of this module is to support serval eurochron
 # weather sensors like eas8007 which use the same protocol
@@ -57,7 +57,7 @@ sub SD_WS07_Initialize
 
 #############################
 sub
-SD_WS07_Define($$)
+SD_WS07_Define
 {
   my ($hash, $def) = @_;
   my @a = split("[ \t][ \t]*", $def);
@@ -78,7 +78,7 @@ SD_WS07_Define($$)
 
 #####################################
 sub
-SD_WS07_Undef($$)
+SD_WS07_Undef
 {
   my ($hash, $name) = @_;
   delete($modules{SD_WS07}{defptr}{$hash->{CODE}})
@@ -90,7 +90,7 @@ SD_WS07_Undef($$)
 
 ###################################
 sub
-SD_WS07_Parse($$)
+SD_WS07_Parse
 {
   my ($iohash, $msg) = @_;
   my (undef ,$rawData) = split("#",$msg);

@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 27498 2023-04-30 08:50:41Z rudolfkoenig $
+# $Id: fhem.pl 28227 2023-11-29 12:33:32Z rudolfkoenig $
 
 
 use strict;
@@ -236,8 +236,9 @@ sub cfgDB_FileWrite;
 use vars qw($addTimerStacktrace);# set to 1 by fhemdebug
 use vars qw($auth_refresh);
 use vars qw($cmdFromAnalyze);   # used by the warnings-sub
-use vars qw($devcount);         # Maximum device number, used for storing
+use vars qw($devcount);         # Maximum device number, used for storing. 
 use vars qw($devcountPrioSave); # Maximum prioSave device number
+use vars qw($devcountTemp);     # number for temp devices like client connect
 use vars qw($unicodeEncoding);  # internal encoding is unicode (wide character)
 use vars qw($featurelevel); 
 use vars qw($fhemForked);       # 1 in a fhemFork()'ed process, else undef
@@ -252,6 +253,7 @@ use vars qw($nextat);           # Time when next timer will be triggered.
 use vars qw($numCPUs);          # Number of CPUs on Linux, else 1
 use vars qw($reread_active);
 use vars qw($selectTimestamp);  # used to check last select exit timestamp
+use vars qw($tmpdevcount);      # Maximum device number, used for storing
 use vars qw($winService);       # the Windows Service object
 
 use vars qw(%attr);             # Attributes
@@ -279,7 +281,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 27498 2023-04-30 08:50:41Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 28227 2023-11-29 12:33:32Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -846,12 +848,14 @@ while (1) {
     next if(!$h);                 # due to rereadcfg / delete
     next if($h->{NEXT_OPEN} && gettimeofday() < $h->{NEXT_OPEN});
 
+    $h->{_readyKey} = $p; # Endless-Loop-Debugging #111959
     if(CallFn($h->{NAME}, "ReadyFn", $h)) {
       if($readyfnlist{$p}) {                    # delete itself inside ReadyFn
         CallFn($h->{NAME}, "ReadFn", $h);
       }
-
     }
+    delete($h->{_readyKey});
+
   }
 
 }
@@ -1447,9 +1451,9 @@ OpenLogfile($)
     open($LOG, '>&STDOUT') || die "Can't dup stdout: $!";
 
   } else {
-    HandleArchiving($defs{global}) if($defs{global}{currentlogfile});
     $defs{global}{currentlogfile} = $param;
     $defs{global}{logfile} = $attr{global}{logfile};
+    HandleArchiving($defs{global});
 
     restoreDir_mkDir($currlogfile=~m,^/,? "":".", $currlogfile, 1);
     open($LOG, ">>$currlogfile") || return("Can't open $currlogfile: $!");
@@ -2142,7 +2146,8 @@ CommandDefine($$)
   $hash{DEF}   = $a[2] if(int(@a) > 2);
   #130588: start early after next save, for a small SubProcess size
   $hash{NR}    = ($modules{$m}{prioSave} && $devcountPrioSave < 30) ? 
-                  $devcountPrioSave++ : $devcount++;
+                    $devcountPrioSave++ :
+                    ($opt{temporary} ? $devcountTemp++ : $devcount++);
   $hash{CFGFN} = $currcfgfile
         if($currcfgfile ne AttrVal("global", "configfile", "") &&
           !configDBUsed());
@@ -4042,6 +4047,7 @@ doGlobalDef($)
 
   $devcountPrioSave = 2;
   $devcount = 30;
+  $devcountTemp = 10000000;
 }
 
 #####################################
@@ -4110,8 +4116,6 @@ HandleArchiving($;$)
   my $ard = $attr{$ln}{archivedir};
   return if(!defined($nra));
 
-  $nra++ if($ln eq "global"); # Forum #61450
-
   # If nrarchive is set, then check the last files:
   # Get a list of files:
 
@@ -4123,16 +4127,18 @@ HandleArchiving($;$)
   }
 
   $file =~ s/%./.+/g;
+  my $clf = $log->{currentlogfile};
+  $clf = $2 if($clf =~ m,^(.+)/([^/]+)$,);
+
   my @t = localtime(gettimeofday());
   $dir = ResolveDateWildcards($dir, @t);
   return if(!opendir(DH, $dir));
-  my @files = sort grep {/^$file$/} readdir(DH);
+  my @files = sort grep {$_ =~ m/^$file$/ && $_ ne $clf } readdir(DH);
   @files = sort { (stat("$dir/$a"))[9] <=> (stat("$dir/$b"))[9] } @files
         if(AttrVal("global", "archivesort", "alphanum") eq "timestamp");
   closedir(DH);
 
   my $max = int(@files)-$nra;
-  $max-- if($flogInitial);
   for(my $i = 0; $i < $max; $i++) {
     if($ard) {
       Log 2, "Moving $files[$i] to $ard";
@@ -4661,6 +4667,7 @@ OldReadingsNum($$$;$)
   my $val = OldReadingsVal($d,$n,$default);
   return undef if(!defined($val));
   $val = ($val =~ /(-?\d+(\.\d+)?)/ ? $1 : "");
+  $val =~ s/^(-?)0+([1-9])/$1$2/; # Forum #135120, dont want octal numbers
   return $default if($val eq "");
   $val = round($val,$round) if(defined $round);
   return $val;
@@ -4708,6 +4715,7 @@ ReadingsNum($$$;$)
   my $val = ReadingsVal($d,$n,$default);
   return undef if(!defined($val));
   $val = ($val =~ /(-?\d+(\.\d+)?)/ ? $1 : "");
+  $val =~ s/^(-?)0+([1-9])/$1$2/; # Forum #135120, dont want octal numbers
   return $default if($val eq "");
   $val = round($val,$round) if(defined $round);
   return $val;
@@ -5630,7 +5638,8 @@ createNtfyHash()
   my %d2a_cache;
   %ntfyHash = ("*" => []);
   foreach my $d (@ntfyList) {
-    my $ndl = $defs{$d}{NOTIFYDEV};
+    my $ndl = $attr{$d}{overrideNotifydev};
+    $ndl = $defs{$d}{NOTIFYDEV} if(!$ndl);
     next if(!$ndl);
     my @ndlarr;
     if($d2a_cache{$ndl}) {
@@ -5648,7 +5657,8 @@ createNtfyHash()
 
   my @nhk = keys %ntfyHash;
   foreach my $d (@ntfyList) {
-    my $ndl = $defs{$d}{NOTIFYDEV};
+    my $ndl = $attr{$d}{overrideNotifydev};
+    $ndl = $defs{$d}{NOTIFYDEV} if(!$ndl);
     my $arr = ($ndl ? $d2a_cache{$ndl} : \@nhk);
     map { push @{$ntfyHash{$_}}, $d } @{$arr};
   }

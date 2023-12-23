@@ -1,5 +1,170 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - bugfix:  36_Shelly: store newkeys in helper after init
+ - feature: 36_Shelly: Add Gen3 Mini devices (fw gen2 compatibility)
+                       Roller devices: use 'set ... pos' equivalent to 'pct'
+                       dimmer-devices: set ... dim-for-timer 
+ - feature: 76_SolarForecast: attr ctrlBatSocManagement for battery management,
+                              currentBatteryDev: new optional key 'cap' and 
+                              some more improvents/fixes
+ - bugfix:  00_KNXIO: fix problem IO-write queing (high load), Forum #127792 
+ - feature: Update to new version, see Forum #127701
+ - feature: 20_X10: added SetExtensions, see Forum #136278
+ - bugfix: 98_CDCOpenData: Fehlerbehandlung SFTP
+ - feature: 70_PylonLowVoltage: extend possible number of batteries up to 14
+ - bugfix:  93_DbRep: use fhem default vars in attr executeBeforeProc/AfterProc
+ - feature: 76_SolarForecast: plant check reviews SolarForecast widget files
+ - bugfix:  38_netatmo: fixed login problems by adapting to latest auth changes
+ - feature: 76_SolarForecast: new get ftuiFramefiles command
+ - feature: 76_SolarForecast: plantConfig: check module update in repo
+ - feature: 76_SolarForecast: graphicHeaderOwnspec can show set-commands and
+                              attributes of other devices
+ - feature: 72_FRITZBOX: neue set <name> 
+       energyMode <default|eco>
+       ledSetting <led:on|off> und/oder <bright:1..3> und/oder <env:on|off>
+       energyMode <default|eco>
+ - feature: 72_FRITZBOX: neue get <name> luaInfo ledSettings, globalFilters
+ - feature: 72_FRITZBOX: neu attr <name> FhemLog3Std <0 | 1>
+                         neu attr <name> enableBoxReadings <liste>
+ - feature: 72_FRITZBOX: spezielles Log bei attr <name> verbose 5
+                siehe auch commandRef 
+ - feature: 98_CDCOpenData: commandRef für attr <name> FhemLog3Std <0 | 1>
+ - feature: 98_CDCOpenData: spezielles Debug-Log bei verbose 5
+                siehe auch commandRef
+ - feature: 98_CDCOpenData: neues Attribut ownRadarFileLog
+                siehe auch commandRef
+ - feature: 98_CDCOpenData: neues  <name> htmlBarAsStateFormat <on|off>
+                siehe auch commandRef
+ - bugfix:  73_GardenaSmartBridge: multiple bugfixes,
+                changed published gateway informations
+ - feature: 76_SolarForecast: new Attr graphicHeaderOwnspecValForm
+ - feature: 58_RPI_1Wire: added on-for-timer and validated DS2408
+ - change:  10_KNX.pm: minor changes, see Forum #122582
+ - change:  00_KNXIO.pm: minor changes, see Forum #127792
+ - feature: 76_SolarForecast: graphicHeaderOwnspec: show readings of other devs
+                              new set/reset batteryTrigger command
+ - bugfix:  98_CDCOpenData: warning Net::FTP bei Fhem Start
+ - bugfix:  72_FRITZBOX set <name> lockLandevice für FritzOS >= 7.50
+ - feature: 72_FRITZBOX set <name> lockLandevice Parameter rt (realtime)
+ - bugfix:  36_Shelly:dimmer-devices: set..pct will not turn on or off
+ - feature: 36_Shelly:dimmer-devices: set..dim will turn on or off  
+ - bugfix:  76_SolarForecast: attr graphicHeaderOwnspec minor fix
+ - bugfix:  82_LGTV_WebOS: fix connection problem / add SSL Support
+ - bugfix:  98_CDCOpenData: falsche RegEx für FileLog
+ - change:  36_Shelly: removed attr ShellyName, use 'set <name> <ShellyName>' 
+ - feature: 36_Shelly: set <name> ON and OFF for multichannel devices
+ - bugfix:  36_Shelly: misc. 'undefinded value'
+ - feature: 76_SolarForecast: graphicHeaderOwnspec: can add set/attr commands, 
+                              new setter consumerNewPlanning
+ - feature: 72_FB_CALLMONITOR commandRef
+ - feature: 72_FRITZBOX set <name> lockFilterProfile ...
+ - feature: 72_FRITZBOX set <name> energyMode ...
+ - feature: 72_FRITZBOX set <name> phoneBookEntry ...
+ - bugfix:  98_CDCOpenData: Regenmenge bei _rain_since_midnight korrigiert
+ - bugfix:  98_CDCOpenData: Cron Timer bei Systemstart nicht korrekt
+ - new:     98_CDCOpenData: Tägliche Regenmenge aus DWD-Radolan Daten einlesen
+ - change:  36_Shelly: model of ShellyPMmini to shellypmmini
+ - bugfix:  93_DbRep: fix period calculation when using attr timeYearPeriod
+ - change:  93_DbRep: dumpMySQL clientSide: add create database to dump file
+ - change:  93_DbRep: dumpMySQL clientSide: change dump file to stricter rights
+ - bugfix:  47_OBIS: Implement "nohacks" attribute
+ - bugfix:  36_Shelly: undefinded values on restart
+ - bugfix:  36_Shelly: Refresh: removed fixed name of FHEMWEB device
+            Gen.2: on/off-for-timer
+            update interval of GetStatus call
+ - bugfix:  36_Shelly: see Forum msg #1291182
+ - feature: 76_SolarForecast: see Forum:#?msg=1291035
+ - change:  70_PylonLowVoltage: add needed data format to commandref
+ - feature: 98_statistics: Limit number of decimals
+ - feature: 93_DbLog: new attribute colType
+ - feature: 76_SolarForecast: design options for graphicHeaderOwnspec
+ - feature: 76_SolarForecast: new attr ctrlGenPVdeviation
+ - feature: 70_ESCVP21net: add reading stateP for on/off
+ - feature: 76_SolarForecast: allow key 'noshow' more values, KI improves
+ - change:  22_HOMEMODE: change url for IP check
+ - bugfix:  14_Hideki.pm: fixed partial carp error
+ - feature: 74_AutomowerConnect: Commandref update, add Setter for work zone
+            start and stay out zone enabling/disabling.
+            Zone handling is for TESTING purpose
+ - feature: 76_SolarForecast: new consumer attr key 'noshow', minor fixes
+ - feature: 72_FRITZBOX - Log3 handling
+ - feature: 72_FB_CALLMONITOR - Log3 handling
+ - change:  93_DbLog: edit Commandref Forum:#135204
+ - feature: 76_SolarForecast: new Attr graphicHeaderOwnspec, minor fixes
+ - change:  76_SMAInverter: add BAT_P_Charge/Discarge
+ - change:  74_AutomowerConnect: Commandref update
+ - bugfix:  76_SolarForecast: Victron API fix Forum:#1288637
+ - change:  10_KNX: allow exponential numbers for dpt14
+ - feature: 00_KNXIO: add FIFO & rate limit for set/get to KNX-bus
+ - change   58_RPI_1Wire: Added: Support for setting switches, clear command
+ - new:     76_SolarForecast: solar predictions of PV systems/Consumer control
+ - new:     70_PylonLowVoltage: new module for Pylontech low volt batteries
+ - change:  88_HMCCU: Fixed bug in GetDutyCycle
+ - change:  88_HMCCU: Fixed substitute and authentication
+ - change:  93_DbRep: Improvement of markouts in special cases, Forum:#134973
+ - bugfix:  36_ShellyMonitor: Change written reading from relay_0 to state 
+            for non-relais devices
+ - bugfix:  36_ShellyMonitor: Correct handling of Shelly 3EM
+ - bugfix:  72_FRITZBOX: Handling Pipe | Zeichen in FB Daten korrigiert
+            wakeUpCall Leerzeichen im Namen durch %20 repräsentiert
+ - feature: 10_SD_GT.pm: repeats can be configured via attribute
+ - change:  00_SIGNALduino.pm: clone Protocol Object for every definition
+                               changed timer creation and deletion 
+                               use FHEM::Core::Timer::Helper
+ - bugfix:  00_SIGNALduino.pm: make SIGNALduino_IdList more robust
+                              use FHEM::Core::Utils::Math round function
+ - bugfix:  14_SD_WS.pm: Corrected protocol 115 battery bit, 
+                        added batChange bit 
+                         corrected calculation for negative temperatures
+ - feature: 14_SD_WS.pm: add TFA 30.3151 (T/H-transmitter)
+                         TFA 30.3251.10
+                         30.3152 (rain gauge)
+                         30.3153 (anemometer) 
+ - feature: 14_SD_WS.pm: Protocol 115 for Bresser 6-in-1 Comfort Wetter Center
+ - feature: 14_SD_WS.pm: new set command replaceBatteryForSec
+ - feature: 14_SD_WS.pm: BRESSER 7-in-1 Weather Center
+ - bugfix:  14_SD_WS09.pm: wrong calculation of averagewindDirection
+ - bugifix: 14_Hideki.pm:  winddirection fixed (#1099)
+ - change:  14_Hideki.pm:  Update {Match} regex for Hideki Module (#1071)
+ - feature: SD_ProtocolData.pm: Protocol 122 for Temola TM 40 thermometer
+                                Protocol 119 Basic funkbus suppors
+                                Protocol 85 new sensor TFA 30.3251.10
+                                new definition 20.1
+ - feature: SD_Protocols.pm: Updated to version 2.0.7 
+ - change:  10_KNX: multiple changes, new features, see Forum #122582
+ - bugfix:  48_MieleAtHome: fix warning
+ - feature: configDB.pm: show version counter in "configDB saved. (xx)"
+ - feature: 93_DbLog: possible use of alternative tables for SVG Plots 
+                      Forum:134547, fix warnings
+ - change:  98_DOIFtools: delete Internal DEF.
+ - change:  98_DOIFtools: move paw from DEF to .associatedWith.
+ - bugfix:  72_FRITZBOX: Fehler bei ApiCheck für alte FritzOS behoben.
+   feature: FB Name, Model, FritzOS Ermittlung überarbeitet
+ - feature: 50_Signalbot: Trust handling, Chat history
+ - change:  74_AutomowerConnect: Common.pm prevent JSON decoding error if more
+            than one complete JSON string is in DevIo buffer,
+            addPositionPolling is only settable if addPollingMinInterval > 0
+ - feature: 72_FB_CALLMONITOR: das Oertliche repariert.
+ - feature: 72_FRITZBOX: reconnect nach Netzwerk/FB Ausfall.
+            Neues Attribut: reConnect_Interval
+ - feature: 32_withings: added spo2_average to sleep readings
+ - change:  74_AutomowerConnect: Common.pm minor changes
+ - feature: 32_withings: added and aligned some more readings
+ - new:     98_AirUnit: controlling Danfoss AirUnits (a1,a2,w1,w2)
+ - bugfix:  70_BRAVIA: check state before renewing registration
+ - bugfix:  38_netatmo: fixed login problems by updating to new auth method
+ - change:  74_AutomowerConnect: Common.pm try to reconnect if ws is open but
+            not ready, improve leaving path colorization if position polling is
+            on, some changes in automowerconnect.js, Cref update.
+ - new:     98_KNX_scan: implement FHEM-cmd: KNX_scan
+ - change:  00_KNXIO.pm: moved KNX_scan perl function to 10_KNX.pm
+ - change:  10_KNX.pm: moved KNX_scan perl function to 10_KNX.pm 
+ - bugfix:  93_DbRep: once more fix SQL syntax for Postgre Forum:#134170
+ - feature: 47_OBIS: Add unofficial "set <dev> data <sml-hexstring>"
+ - bugfix:  93_DbRep: SQL syntax for Postgre maxValue deleteOther Forum:#134170
+ - bugfix:  93_DbRep: fix check of DbRep_afterproc, DbRep_beforeproc if should 
+                      exec PERL code
+ - bugfix : 74_AutomowerConnect: Common.pm fixed bug in WS filter
  - feature: 74_AutomowerConnect: Common.pm Cref update, add Log after WS filter
          add Collisions to statistics and zones if addPollingMinInterval is set
  - feature: 74_AutomowerConnect: Common.pm, prevent DevIo from directly setting

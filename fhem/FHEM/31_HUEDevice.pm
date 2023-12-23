@@ -1,4 +1,4 @@
-# $Id: 31_HUEDevice.pm 26730 2022-11-21 17:28:03Z justme1968 $
+# $Id: 31_HUEDevice.pm 28222 2023-11-28 15:58:58Z justme1968 $
 # "Hue Personal Wireless Lighting" is a trademark owned by Koninklijke Philips Electronics N.V.,
 # see www.meethue.com for more information.
 # I am in no way affiliated with the Philips organization.
@@ -43,6 +43,8 @@ my %hueModels = (
                                                  gamut => 'C',                      icon => 'hue_filled_white_and_color_e27_b22', },
   LCT024 => {name => 'Hue Play'                 ,type => 'Extended color light'    ,subType => 'extcolordimmer',
                                                  gamut => 'C',                      icon => 'hue_filled_play', },
+  LCX016 => {name => 'Festavia string lights'   ,type => 'Extended color light'    ,subType => 'extcolordimmer',
+                                                 gamut => 'C',                      icon => 'hue2023_string_light', },
   LLC001 => {name => 'Living Colors G2'         ,type => 'Color light'             ,subType => 'colordimmer',
                                                  gamut => 'A',                      icon => 'hue_filled_iris', },
   LLC005 => {name => 'Living Colors Bloom'      ,type => 'Color light'             ,subType => 'colordimmer',

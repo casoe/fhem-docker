@@ -21,7 +21,7 @@
 #     You should have received a copy of the GNU General Public License
 #     along with fhem.  If not, see <http://www.gnu.org/licenses/>.
 #
-# $Id: 10_MYSENSORS_DEVICE.pm 26669 2022-11-06 20:15:51Z Beta-User $
+# $Id: 10_MYSENSORS_DEVICE.pm 27803 2023-07-28 10:01:14Z Beta-User $
 #
 ##############################################
 
@@ -979,8 +979,9 @@ sub onInternalMessage {
 
     if ($type == I_PRE_SLEEP_NOTIFICATION) {
         $hash->{preSleep} = $msg->{payload}//500;
-        refreshInternalMySTimer($hash,"Asleep");
-        refreshInternalMySTimer($hash,"Alive") if $hash->{timeoutAlive};
+        refreshInternalMySTimer($hash,'Asleep');
+        refreshInternalMySTimer($hash,'Alive') if $hash->{timeoutAlive};
+        $hash->{nowSleeping} = 0;
         MYSENSORS::Timer($hash);
         sendRetainedMessages($hash) ;
         return;
