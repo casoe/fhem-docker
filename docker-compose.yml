@@ -44,6 +44,21 @@ services:
             interval: 10s
             timeout: 5s
             retries: 5
+    homebridge:
+        image: oznu/homebridge:ubuntu
+        restart: always
+        network_mode: host
+        volumes:
+          - ./homebridge:/homebridge
+        environment:
+          - PGID=1000
+          - PUID=1000
+          - HOMEBRIDGE_CONFIG_UI=1
+          - HOMEBRIDGE_CONFIG_UI_PORT=8581
+          - TZ=Europe/Berlin
+        depends_on:
+            fhem:
+                 condition: service_healthy
 
 volumes:
     pgdata:

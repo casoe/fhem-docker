@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "homebridge": "1.7.0",
+    "homebridge-shelly": "0.19.1"
+  }
+}
