@@ -7,3 +7,5 @@
 /fhem/restoreDir/*
 /fhem/.ssh/*
 /fhem/.npm/*
+/homebridge/*.log
+/homebridge/backups/
