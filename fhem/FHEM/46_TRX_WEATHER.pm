@@ -1,4 +1,4 @@
-# $Id: 46_TRX_WEATHER.pm 26129 2022-06-06 10:13:53Z rudolfkoenig $
+# $Id: 46_TRX_WEATHER.pm 28295 2023-12-19 19:48:23Z KernSani $
 ##############################################################################
 #
 # 46_TRX_WEATHER.pm
@@ -217,6 +217,7 @@ my %types =
    0x540d => { part => 'TEMPHYDROBARO', method => \&TRX_WEATHER_common_temphydrobaro, },
    # RAIN
    0x550b => { part => 'RAIN', method => \&TRX_WEATHER_common_rain, },
+   0x5509 => { part => 'RAIN', method => \&TRX_WEATHER_common_rain, },   
    # WIND
    0x5610 => { part => 'WIND', method => \&TRX_WEATHER_common_anemometer, },
    # UV
@@ -1015,6 +1016,7 @@ sub TRX_WEATHER_common_rain {
 	0x05 => "WS2300_RAIN", # WS2300
 	0x06 => "TX5_RAIN", # La Crosse TX5
 	0x07 => "WS4500_RAIN", # Alecto WS4500, Auriol H13726, Hama EWS1500, Meteoscan W155/W160,
+  0x09 => "TFA_RAIN",
   );
 
   if (exists $devname{$bytes->[1]}) {

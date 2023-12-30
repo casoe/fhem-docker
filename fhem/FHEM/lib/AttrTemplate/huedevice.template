@@ -1,5 +1,5 @@
 ###########################################
-# $Id: huedevice.template 25466 2022-01-14 20:43:11Z Beta-User $
+# $Id: huedevice.template 28325 2023-12-30 05:14:31Z Beta-User $
 #
 # Comments start with #. Empty lines are ignored.
 # Syntax of one entry: name: line, one optional filter: line, zero or more par: lines,  FHEM-Commands
@@ -40,6 +40,7 @@ par:ICON;ICON as set, defaults to max_heizungsthermostat;{ AttrVal('DEVICE','ico
 attr DEVICE configList /mode (.*)/:{"mode":"$1"}\
 /heatsetpoint (.*)/:perl:{'{"heatsetpoint":' . $VALUE1 * 100 . '}'}\
 /displayflipped (.*)/:{"displayflipped": $1 }\
+/offset (.*)/:{"offset": $1 }\
 lock:{"locked": true }\
 unlock:{"locked": false }
 attr DEVICE widgetOverride mode:auto,heat,off displayflipped:true,false heatsetpoint:16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22

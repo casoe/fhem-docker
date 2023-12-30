@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 01_FHEMWEB.pm 28235 2023-12-02 09:34:43Z rudolfkoenig $
+# $Id: 01_FHEMWEB.pm 28315 2023-12-26 09:47:39Z rudolfkoenig $
 package main;
 
 use strict;
@@ -4990,7 +4990,7 @@ FW_log($$)
         server-key.pem
         </ul>
         Diese Befehle werden beim Setzen des Attributes automatisch
-        ausgef&uuml;rht, falls kein Zertifikat gefunden wurde. Deswegen, falls
+        ausgef&uuml;hrt, falls kein Zertifikat gefunden wurde. Deswegen, falls
         n&ouml;tig, sslCertPrefix vorher setzen.
       <br>
     </li>

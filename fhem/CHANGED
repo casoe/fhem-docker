@@ -1,5 +1,22 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - bugfix:  36_Shelly: handling of attr 'shellyuser' for gen2 devices
+ - bugfix:  70_Klafs: minor bugfix for Reading RemainTime
+ - feature: 10_KNX: additional dpt14 subtypes, Forum #122582 
+ - bugfix:  00_KNXIO: fix problem IO-write queing, Forum #127792
+ - bugfix:  74_AutomowerConnect: Commandref corrections, fix start up warning
+            improve disableForIntervalls handling
+ - bugfix:  36_Shelly: store newkeys in helper after init
+ - feature: 36_Shelly: Add Gen3 Mini devices (fw gen2 compatibility)
+                       Roller devices: use 'set ... pos' equivalent to 'pct'
+                       dimmer-devices: set ... dim-for-timer 
+ - feature: 76_SolarForecast: attr ctrlBatSocManagement for battery management,
+                              currentBatteryDev: new optional key 'cap' and 
+                              some more improvents/fixes
+ - bugfix:  00_KNXIO: fix problem IO-write queing (high load), Forum #127792 
+ - feature: Update to new version, see Forum #127701
+ - feature: 20_X10: added SetExtensions, see Forum #136278
+ - bugfix: 98_CDCOpenData: Fehlerbehandlung SFTP
  - feature: 70_PylonLowVoltage: extend possible number of batteries up to 14
  - bugfix:  93_DbRep: use fhem default vars in attr executeBeforeProc/AfterProc
  - feature: 76_SolarForecast: plant check reviews SolarForecast widget files

@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: Common.pm 28048 2023-10-13 16:44:05Z Ellert $
+# $Id: Common.pm 28310 2023-12-24 14:23:15Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::Devices::AMConnect::Common;
-my $cvsid = '$Id: Common.pm 28048 2023-10-13 16:44:05Z Ellert $';
+my $cvsid = '$Id: Common.pm 28310 2023-12-24 14:23:15Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -457,7 +457,7 @@ sub FW_detailFn {
   my ($FW_wname, $name, $room, $pageHash) = @_; # pageHash is set for summaryFn.
   my $hash = $defs{$name};
   my $type = $hash->{TYPE};
-  return '' if( AttrVal($name, 'disable', 0) || !AttrVal($name, 'showMap', 1) );
+  return '' if( AttrVal($name, 'disable', 0) || !AttrVal($name, 'showMap', 1) || !$::init_done );
 
   my $img = "$FW_ME/$type/$name/map";
   my $zoom=AttrVal( $name,"mapImageZoom", 0.7 );
@@ -633,9 +633,18 @@ sub APIAuth {
   my $type = $hash->{TYPE};
   my $iam = "$type $name APIAuth:";
 
-  if( IsDisabled( $name ) ) {
+  if ( IsDisabled( $name ) ) {
 
-    readingsSingleUpdate( $hash, 'device_state', 'temporarily disabled', 1 ) if ( ReadingsVal( $name, 'device_state', '' ) !~ /disabled/ );
+    if ( IsDisabled( $name ) == 1 and ReadingsVal( $name, 'device_state', '' ) ne 'disabled' ) {
+
+      readingsSingleUpdate( $hash, 'device_state', 'disabled', 1 );
+
+    } elsif ( IsDisabled( $name ) == 2 and ReadingsVal( $name, 'device_state', '' ) ne 'temporarily disabled' ) {
+
+      readingsSingleUpdate( $hash, 'device_state', 'temporarily disabled', 1 );
+
+    }
+
     RemoveInternalTimer( $hash );
     InternalTimer( gettimeofday() + $hash->{helper}{retry_interval_apiauth}, \&APIAuth, $hash, 0 );
     return undef;
@@ -1323,6 +1332,7 @@ sub Attr {
   my $hash = $defs{$name};
   my $type = $hash->{TYPE};
   my $iam = "$type $name Attr:";
+
   ##########
   if( $attrName eq "disable" ) {
     if( $cmd eq "set" and $attrVal eq "1" ) {
@@ -2600,6 +2610,17 @@ sub FmtDateTimeGMT {
 
 sub wsKeepAlive {
   my ($hash) = @_;
+  my $name = $hash->{NAME};
+
+  if ( IsDisabled( $name ) == 2 ) {
+
+      RemoveInternalTimer( $hash );
+      DevIo_CloseDev( $hash ) if ( DevIo_IsOpen( $hash ) );
+      DevIo_setStates( $hash, "closed" );
+      InternalTimer( gettimeofday() + 1, \&APIAuth, $hash, 0 );
+
+  }
+
   RemoveInternalTimer( $hash, \&wsKeepAlive);
   DevIo_Ping($hash);
   InternalTimer(gettimeofday() + $hash->{helper}{interval_ping}, \&wsKeepAlive, $hash, 0);
