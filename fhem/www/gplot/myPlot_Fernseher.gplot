@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2023-12-29 09:49:55
+# Created by FHEM/98_SVG.pm, 2024-01-04 16:21:54
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -14,5 +14,7 @@ set yrange [0:350]
 set y2range [0:350]
 
 #dblog MQTT2_shellyplug_s_896928:power:::
+#lp ConstY:23
 
-plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch in Wattt' ls l0 lw 1 with steps
+plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch in Wattt' ls l0 lw 1 with steps,\
+     "<IN>" using 1:2 axes x1y1 title '23W Abschaltleistung' ls l5 lw 1 with lines

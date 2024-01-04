@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2023-10-03 16:23:05
+# Created by FHEM/98_SVG.pm, 2024-01-04 16:25:35
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -14,5 +14,7 @@ set yrange [0:500]
 set y2range [0:500]
 
 #dblog MQTT2_DVES_ED41C4:power:::
+#lp ConstY:11
 
-plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch in Watt' ls l0 lw 1 with steps
+plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch in Watt' ls l0 lw 1 with steps,\
+     "<IN>" using 1:2 axes x1y1 title '11W Abschaltleistung' ls l7 lw 1 with lines
