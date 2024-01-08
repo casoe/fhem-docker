@@ -1,5 +1,17 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - change:  76_SolarForecast: optimize battery management once more
+ - change:  76_SolarForecast: optimize batterymanagement
+ - change:  93_DbLog: minor change of configCheck 
+ - feature: 76_SolarForecast: externally caused switching of consumers is 
+                              detected
+ - feature: 10_IT: bei AttrList nicht benötigte Einträge unit und group entf
+                   bei einem modify der DEF wird nun die alte DEF gelöscht
+                   Anpassungen für TSCUL
+ - feature: 93_DbLog: make EVENT writable, Forum:#136389
+ - bugfix:  98_CDCOpenData: Fehler in Monatsformat
+ - bugfix:  36_Shelly: devices gen2 in roller mode: metering readings are single
+ - feature: 36_Shelly: new 'set ... reset <counter>' command
  - bugfix:  36_Shelly: handling of attr 'shellyuser' for gen2 devices
  - bugfix:  70_Klafs: minor bugfix for Reading RemainTime
  - feature: 10_KNX: additional dpt14 subtypes, Forum #122582 

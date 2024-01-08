@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_ZWave.pm 27687 2023-06-18 13:55:34Z rudolfkoenig $
+# $Id: 10_ZWave.pm 28352 2024-01-07 10:33:15Z rudolfkoenig $
 # See ZWDongle.pm for inspiration
 package main;
 
@@ -3034,7 +3034,8 @@ ZWave_configParseModel($;$)
   }
 
   $zwave_modelConfig{$cfg} = \%mc;
-  Log 3, "ZWave got config for $cfg from $fn" if($ret);
+  Log 3, "ZWave got config for $cfg from $fn, found ".keys(%hash)." commands"
+    if($ret);
   return $ret;
 }
 
