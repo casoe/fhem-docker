@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2022-10-12 22:04:35
+# Created by FHEM/98_SVG.pm, 2024-01-12 13:17:24
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -13,10 +13,12 @@ set y2label "ms"
 set yrange [0:55]
 set y2range [0:100]
 
-#dblog speedtest:download
-#dblog speedtest:upload
-#dblog speedtest:ping
+#dblog speedtest:download:::
+#dblog speedtest:upload:::
+#dblog speedtest:ping:::
+#lp ConstY:47
 
 plot "<IN>" using 1:2 axes x1y1 title 'download (MBit/s)' ls l0 lw 1 with lines,\
      "<IN>" using 1:2 axes x1y1 title 'upload (MBit/s)' ls l1 lw 1 with lines,\
-     "<IN>" using 1:2 axes x1y2 title 'ping (ms)' ls l2 lw 1 with lines
+     "<IN>" using 1:2 axes x1y2 title 'ping (ms)' ls l2 lw 1 with lines,\
+     "<IN>" using 1:2 axes x1y1 title '47 MBit/s' ls l7 lw 1 with lines
