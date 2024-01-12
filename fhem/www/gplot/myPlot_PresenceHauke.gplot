@@ -1,0 +1,17 @@
+# Created by FHEM/98_SVG.pm, 2024-01-12 13:37:23
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Hauke'
+set ytics 
+set y2tics 
+set grid
+set ylabel ""
+set y2label ""
+set yrange [-0.4:1.4]
+
+#dblog presence_iPhoneHauke:anwesend:::
+
+plot "<IN>" using 1:2 axes x1y1 title 'Anwesenheit' ls l0 lw 1 with steps
