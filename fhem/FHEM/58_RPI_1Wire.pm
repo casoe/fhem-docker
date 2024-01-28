@@ -1,4 +1,4 @@
-#$Id: 58_RPI_1Wire.pm 28322 2023-12-28 15:49:20Z Adimarantis $
+#$Id: 58_RPI_1Wire.pm 28388 2024-01-16 21:41:43Z Adimarantis $
 #Based on GPIO4 by Peter J. Flathmann (peter dot flathmann at web dot de)
 #and various extension to the GPIO4 Module by members of the FHEM forum
 #and RoBue to access 1-Wire-Clones with ID: 28 53 44 54 xx xx xx 
@@ -87,9 +87,10 @@ sub RPI_1Wire_Init {				#
 	my ( $hash, $args, $check ) = @_;
 	Log3 $hash->{NAME}, 2, $hash->{NAME}.": Init: $args $check";
 	if (! -e "$w1_path") {
-		$hash->{STATE} ="No 1-Wire Bus found";
-		Log3 $hash->{NAME}, 3, $hash->{NAME}.": Init: $hash->{STATE}";
-		return $hash->{STATE};
+		my $state="No 1-Wire Bus found";
+		readingsSingleUpdate($hash,"state",$state,0);
+		Log3 $hash->{NAME}, 3, $hash->{NAME}.": Init: $state";
+		return $state;
 	}
 
 	my @a = split("[ \t]+", $args);
@@ -168,7 +169,8 @@ sub RPI_1Wire_Init {				#
 		RPI_1Wire_SetConversion($hash,$conv_time);
 	}
 	RPI_1Wire_GetConfig($hash);
-	$hash->{STATE} = "Initialized";
+	my $state = "Initialized";
+	readingsSingleUpdate($hash,"state",$state,0);
 	Log3 $hash->{NAME}, 3, $hash->{NAME}.": Init done for $device $family $id $type";
 	RPI_1Wire_DeviceUpdate($hash);
 	return;
@@ -307,8 +309,9 @@ sub RPI_1Wire_Switch {
 		print $fh pack("C",$switch);
 		close($fh);
 	} else {
-		$hash->{STATE}="Error writing to $w1_path/$hash->{DEF}/output";
-		return $hash->{STATE};
+		my $state="Error writing to $w1_path/$hash->{DEF}/output";
+		readingsSingleUpdate($hash,"state",$state,0);
+		return $state;
 	}
 	#After setting switch, read back to set readings correctly
 	my $ret=RPI_1Wire_Poll($hash);
@@ -673,8 +676,8 @@ sub RPI_1Wire_FinishFn {
 			$state.="$par:$val ";
 		}
 	}
-	$hash->{STATE}=$state;
-	readingsEndUpdate($hash,1);			
+	readingsEndUpdate($hash,1);
+	readingsSingleUpdate($hash,"state",$state,0);
 }
 
 sub RPI_1Wire_Attr {					#

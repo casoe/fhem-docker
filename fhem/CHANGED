@@ -1,5 +1,45 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - feature: 6.2 released
+
+- 2024-01-28 (6.2)
+ - feature: 76_SolarForecast: Setter writeHistory replaced by operatingMemory
+                              save, backup and recover in-memory operating data
+ - feature: 76_SolarForecast: generate plant backup files
+ - bugfix:  76_SolarForecast: minor fixes
+ - feature: 76_SolarForecast: consumerXX: notbefore, notafter can be {<code>}
+ - feature: 76_SolarForecast: consumerXX: notbefore, notafter format hh[:mm]
+ - feature: 76_SolarForecast: add operationMode: active/inactive
+ - feature: 74_AutomowerConnect: New setter confirmError for Testing
+ - bugfix:  72_FRITZBOX: fehlen von Data::Dumper in einer debuf sub 
+            behoben.
+            FehlerLog bei Erstanmeldung an Fritz!... behoben.
+ - feature: 72_FRITZBOX: set <name> <inActive on|off>
+ - feature: 76_SolarForecast: 'noLearning' Option for pvCorrectionFactor_Auto
+ - bugfix:  72_FRITZBOX: Fehler bei Anmeldung an Fritz!Repeater
+            behoben.
+            Fehler bei auslesen der FritzBox bei selten auftretender
+            Abfolge behoben z.B Fritz!Repeater 450E.
+ - change:  76_SolarForecast: optimize battery management once more
+ - feature: 00_KNXIO: set-cmds: connect, disconnect, restart
+ - feature: 76_SolarForecast: Consumer planning can now react dynamically to 
+                              changing or time-shifting PV generation,
+                              some more minor changes
+ - bugfix:  72_FRITZBOX: fast alle Sub in der Namensgebung vereinheitlich
+            um das Modul wartbarer zu machen.
+            die Fehlerbehandlung vereinheitlicht und hoffentlich besser
+            Strukturiert.
+ - feature: 72_FRITZBOX: bei einem Aufruf luaData kann ein ; durch #x003B
+            maskiert werden.
+            bei get ... luaData optionaler Parameter [json] für die Rückgabe
+            des Ergebnisses als json.
+            neues Attribut: maxSIDrenewErrCnt
+ - bugfix:  10_KNX: fix dpt14 min/max values
+ - change:  36_Shelly: 'set ... pos' instead of 'set ... pct' is undone
+ - feature: 76_SolarForecast: run collection definitely at end/start of an hour
+ - feature: 93_DbRep: new setter multiCmd, change autoForward
+                      bugfix: reducelog problem Forum:#136581
+ - bugfix:  76_SolarForecast: fix get Automatic State
  - change:  76_SolarForecast: optimize battery management once more
  - change:  76_SolarForecast: optimize batterymanagement
  - change:  93_DbLog: minor change of configCheck 
