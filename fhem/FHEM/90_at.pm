@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 90_at.pm 28004 2023-09-28 08:16:56Z rudolfkoenig $
+# $Id: 90_at.pm 28440 2024-01-28 09:37:24Z rudolfkoenig $
 package main;
 
 use strict;
@@ -117,8 +117,10 @@ at_Define($$)
   if($abstime) {
     $nt = $abstime;
 
-  } elsif($rel eq "+") {
-    $nt += ($hr*3600+$min*60+$sec); # Relative time
+  } elsif($rel eq "+") { # Relative time
+    my $diff = $hr*3600+$min*60+$sec;
+    return "Cowardly refusing to start a busy loop" if(!$diff); #136840
+    $nt += $diff;
 
   } else {
     my @lt = localtime($ot);
