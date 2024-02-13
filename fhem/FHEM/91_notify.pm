@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 91_notify.pm 25888 2022-03-27 10:22:58Z rudolfkoenig $
+# $Id: 91_notify.pm 28480 2024-02-05 19:42:10Z rudolfkoenig $
 package main;
 
 use strict;
@@ -148,6 +148,7 @@ notify_Attr(@)
         my ($me, $msg) = @_;
         return if(defined($hash->{CHANGED}));
         $hash->{CHANGED}[0] = $msg;
+        $hash->{NTFY_TRIGGERTIME} = TimeNow();
         notify_Exec($hash, $hash);
         delete($hash->{CHANGED});
       }

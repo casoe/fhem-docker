@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 28437 2024-01-28 09:11:36Z rudolfkoenig $
+# $Id: fhem.pl 28484 2024-02-06 17:17:48Z rudolfkoenig $
 
 
 use strict;
@@ -281,7 +281,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 28437 2024-01-28 09:11:36Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 28484 2024-02-06 17:17:48Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -5882,6 +5882,10 @@ sub
 setKeyValue($$)
 {
   my ($key,$value) = @_;
+  return "setKeyValue: invalid key: $key"
+        if(!defined($key) || $key =~ m/\n/s);
+  return "setKeyValue: invalid value: $value"
+        if($value && $value =~ m/\n/s);
   my $fName = AttrVal("global", "keyFileName", "uniqueID");
   $fName =~ s/\.\.//g;
   $fName = $attr{global}{modpath}."/FHEM/FhemUtils/$fName";

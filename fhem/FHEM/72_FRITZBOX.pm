@@ -1,5 +1,5 @@
 ###############################################################
-# $Id: 72_FRITZBOX.pm 28455 2024-02-01 12:51:34Z jowiemann $
+# $Id: 72_FRITZBOX.pm 28495 2024-02-08 18:02:08Z jowiemann $
 #
 #  72_FRITZBOX.pm
 #
@@ -45,7 +45,7 @@ use warnings;
 use Blocking;
 use HttpUtils;
 
-my $ModulVersion = "07.57.11";
+my $ModulVersion = "07.57.11b";
 my $missingModul = "";
 my $FRITZBOX_TR064pwd;
 my $FRITZBOX_TR064user;
@@ -8026,12 +8026,18 @@ sub FRITZBOX_Get_SmartHome_Devices_List($@) {
  
            if( $unitData->{'type'} eq 'THERMOSTAT' ) {
              $skills = $unitData->{'skills'}[0];
-             # parse preset temperatures
+             # parse preset temperatures ...
              my $presets = $skills->{'presets'};
-
+             # ... and lock status
+             my $interactionControls = $unitData->{'interactionControls'};
              for my $i ( 0 .. 1 ) {
                $ret{Absenktemp} = $presets->[$i]{'temperature'} if( $presets->[$i]{'name'} eq 'LOWER_TEMPERATURE' );
                $ret{Heiztemp} = $presets->[$i]{'temperature'} if( $presets->[$i]{'name'} eq 'UPPER_TEMPERATURE' );
+            
+               if( $interactionControls->[$i]{'isLocked'} ) { 
+                 $ret{locklocal} = "on" if( $interactionControls->[$i]{'devControlName'} eq 'BUTTON' );
+                 $ret{lockuiapp} = "on" if( $interactionControls->[$i]{'devControlName'} eq 'EXTERNAL' );
+               }
              }
 
              $ret{hkr_adaptheat} = ( ( $skills->{'adaptivHeating'}{'isEnabled'} ) ? 1 : 0 );
@@ -8884,7 +8890,12 @@ sub FRITZBOX_Get_Lan_Device_Info($$$) {
           $returnStr .= " UID:"      . $result->{data}->{vars}->{dev}->{UID};
           $returnStr .= " NAME:"     . $result->{data}->{vars}->{dev}->{name}->{displayName};
           if ( ref ($result->{data}->{vars}->{dev}->{netAccess}->{kisi}->{selectedRights}) eq 'HASH' ) {
-             $returnStr .= " ACCESS:"   . $result->{data}->{vars}->{dev}->{netAccess}->{kisi}->{selectedRights}->{msgid} if defined($result->{data}->{vars}->{dev}->{netAccess}->{kisi}->{selectedRights}->{msgid});
+             $returnStr .= " ACCESS:"  . $result->{data}->{vars}->{dev}->{netAccess}->{kisi}->{selectedRights}->{msgid} if defined($result->{data}->{vars}->{dev}->{netAccess}->{kisi}->{selectedRights}->{msgid});
+             $returnStr .= " USEABLE:" . $result->{data}->{vars}->{dev}->{netAccess}->{kisi}->{onlineTime}->{useable};
+             $returnStr .= " UNSPENT:" . $result->{data}->{vars}->{dev}->{netAccess}->{kisi}->{onlineTime}->{unspent};
+             $returnStr .= " PERCENT:" . $result->{data}->{vars}->{dev}->{netAccess}->{kisi}->{onlineTime}->{percent};
+             $returnStr .= " USED:"    . $result->{data}->{vars}->{dev}->{netAccess}->{kisi}->{onlineTime}->{used};
+             $returnStr .= " USEDSTR:" . $result->{data}->{vars}->{dev}->{netAccess}->{kisi}->{onlineTime}->{usedstr};
           }
           $returnStr .= " DEVTYPE:"  . $result->{data}->{vars}->{dev}->{devType};
           $returnStr .= " STATE:"    . $result->{data}->{vars}->{dev}->{wlan}->{state} if defined($result->{data}->{vars}->{dev}->{wlan}->{state}) and $result->{data}->{vars}->{dev}->{devType} eq 'wlan';
@@ -10618,6 +10629,12 @@ sub FRITZBOX_Helper_Url_Regex {
          <br>
          &lt;number&gt; is the ID from landevice<i>n..n</i> or its MAC<br>
          Shows informations about a specific lan device.<br>
+         If there is a child lock, only then is the measurement taken, the following is also output:<br>
+         USEABLE: Allocation in seconds<br>
+         UNSPENT: not used in seconds<br>
+         PERCENT: in percent<br>
+         USED: used in seconds<br>
+         USEDSTR: shows the time used in hh:mm of quota hh:mm<br>
          Needs FRITZ!OS 7.21 or higher.
       </li><br>
 
@@ -11515,7 +11532,13 @@ sub FRITZBOX_Helper_Url_Regex {
          <br>
          &lt;number&gt; ist die ID des landevice<i>n..n</i> oder dessen MAC
          Zeigt Informationen &uuml;ber das Netzwerkger&auml;t an.<br>
-	  Ben&ouml;tigt FRITZ!OS 7.21 oder h&ouml;her.
+         Bei vorhandener Kindersicherung, nur dann wird gemessen, wird zusätzlich folgendes ausgegeben:<br>
+         USEABLE: Zuteilung in Sekunden<br>
+         UNSPENT: nicht genutzt in Sekunden<br>
+         PERCENT: in Prozent<br>
+         USED: genutzt in Sekunden<br>
+         USEDSTR: zeigt die genutzte Zeit in hh:mm vom Kontingent hh:mm<br>
+	 Ben&ouml;tigt FRITZ!OS 7.21 oder h&ouml;her.
       </li><br>
 
       <li><a name="luaData"></a>
