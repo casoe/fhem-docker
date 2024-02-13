@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2024-01-04 16:25:35
+# Created by FHEM/98_SVG.pm, 2024-02-13 14:54:42
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
