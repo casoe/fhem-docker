@@ -1,5 +1,5 @@
 #########################################################################################################################
-# $Id: 70_PylonLowVoltage.pm 28279 2023-12-15 13:30:31Z DS_Starter $
+# $Id: 70_PylonLowVoltage.pm 28538 2024-02-20 21:14:38Z DS_Starter $
 #########################################################################################################################
 #
 # 70_PylonLowVoltage.pm
@@ -15,7 +15,7 @@
 # Copyright notice
 #
 # (c) 2019 Harald Schmitz (70_Pylontech.pm)
-# (c) 2023 Heiko Maaz
+# (c) 2023 - 2024 Heiko Maaz
 #
 # This script is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -122,6 +122,8 @@ BEGIN {
 
 # Versions History intern (Versions history by Heiko Maaz)
 my %vNotesIntern = (
+  "0.2.2"  => "20.02.2024 correct commandref ",
+  "0.2.1"  => "18.02.2024 doOnError: print out faulty response, Forum:https://forum.fhem.de/index.php?msg=1303912 ",
   "0.2.0"  => "15.12.2023 extend possible number of batteries up to 14 ",
   "0.1.11" => "28.10.2023 add needed data format to commandref ",
   "0.1.10" => "18.10.2023 new function pseudoHexToText in _callManufacturerInfo for translate battery name and Manufactorer ",
@@ -688,6 +690,7 @@ sub startUpdate {
                    readings => $readings,
                    sock     => $socket,
                    state    => $errtxt,
+                   res      => '',
                    verbose  => 3
                  }
                 );
@@ -769,6 +772,7 @@ sub _openSocket {
       doOnError ({ hash     => $hash,
                    readings => $readings,
                    sock     => $socket,
+                   res      => '',
                    state    => 'disconnected'
                  }
                 );
@@ -786,6 +790,7 @@ sub _openSocket {
                 or do { doOnError ({ hash     => $hash,
                                      readings => $readings,
                                      state    => 'no connection to RS485 gateway established',
+                                     res      => '',
                                      verbose  => 3
                                    }
                                   );
@@ -844,6 +849,7 @@ sub _callSerialNumber {
       doOnError ({ hash     => $hash,
                    readings => $readings,
                    sock     => $socket,
+                   res      => $res,
                    state    => $rtnerr
                  }
                 );
@@ -879,6 +885,7 @@ sub _callManufacturerInfo {
       doOnError ({ hash     => $hash,
                    readings => $readings,
                    sock     => $socket,
+                   res      => $res,
                    state    => $rtnerr
                  }
                 );
@@ -920,6 +927,7 @@ sub _callProtocolVersion {
       doOnError ({ hash     => $hash,
                    readings => $readings,
                    sock     => $socket,
+                   res      => $res,
                    state    => $rtnerr
                  }
                 );
@@ -954,6 +962,7 @@ sub _callSoftwareVersion {
       doOnError ({ hash     => $hash,
                    readings => $readings,
                    sock     => $socket,
+                   res      => $res,
                    state    => $rtnerr
                  }
                 );
@@ -989,6 +998,7 @@ sub _callSystemParameters {
       doOnError ({ hash     => $hash,
                    readings => $readings,
                    sock     => $socket,
+                   res      => $res,
                    state    => $rtnerr
                  }
                 );
@@ -1034,6 +1044,7 @@ sub _callAlarmInfo {
       doOnError ({ hash     => $hash,
                    readings => $readings,
                    sock     => $socket,
+                   res      => $res,
                    state    => $rtnerr
                  }
                 );
@@ -1078,6 +1089,7 @@ sub _callChargeManagmentInfo {
       doOnError ({ hash     => $hash,
                    readings => $readings,
                    sock     => $socket,
+                   res      => $res,
                    state    => $rtnerr
                  }
                 );
@@ -1126,6 +1138,7 @@ sub _callAnalogValue {
       doOnError ({ hash     => $hash,
                    readings => $readings,
                    sock     => $socket,
+                   res      => $res,
                    state    => $rtnerr
                  }
                 );
@@ -1201,6 +1214,7 @@ sub _callAnalogValue {
       doOnError ({ hash     => $hash,
                    readings => $readings,
                    sock     => $socket,
+                   res      => '',
                    state    => $err
                  }
                 );
@@ -1389,16 +1403,22 @@ sub doOnError {
   my $readings = $paref->{readings};     # Referenz auf das Hash der zu erstellenden Readings
   my $state    = $paref->{state};
   my $socket   = $paref->{sock};
+  my $res      = $paref->{res}     // '';
   my $verbose  = $paref->{verbose} // 4;
 
   ualarm(0);
 
-  my $name           = $hash->{NAME};
+  my $name           = $hash->{NAME};  
   $state             = (split "at ", $state)[0];
   $readings->{state} = $state;
   $verbose           = 3 if($readings->{state} =~ /error/xsi);
 
   Log3 ($name, $verbose, "$name - ".$readings->{state});
+  
+  if ($res) {
+      Log3 ($name, 5, "$name - faulty data is printed out now: ");
+      __resultLog ($hash, $res);
+  }
 
   _closeSocket ($hash);
 
@@ -1553,7 +1573,7 @@ The module currently supports a maximum of 14 batteries (master + 13 slaves) in 
      Device address of the Pylontech battery. Several Pylontech batteries can be connected via a Pylontech-specific
      Link connection. The permissible number can be found in the respective Pylontech documentation. <br>
      The master battery in the network (with open link port 0 or to which the RS485 connection is connected) has the
-     address 2, the next battery then has address 3 and so on.
+     address 1, the next battery then has address 2 and so on.
      If no device address is specified, address 1 is used.
   </li>
   <br>
@@ -1744,7 +1764,7 @@ Das Modul unterstützt zur Zeit maximal 14 Batterien (Master + 13 Slaves) in ein
      Geräteadresse der Pylontech Batterie. Es können mehrere Pylontech Batterien über eine Pylontech-spezifische
      Link-Verbindung verbunden werden. Die zulässige Anzahl ist der jeweiligen Pylontech Dokumentation zu entnehmen. <br>
      Die Master Batterie im Verbund (mit offenem Link Port 0 bzw. an der die RS485-Verbindung angeschlossen ist) hat die
-     Adresse 2, die nächste Batterie hat dann die Adresse 3 und so weiter.
+     Adresse 1, die nächste Batterie hat dann die Adresse 2 und so weiter.
      Ist keine Geräteadresse angegeben, wird die Adresse 1 verwendet.
   </li>
   <br>

@@ -1,5 +1,15 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - change:  76_SolarForecast: check age of Rad1h data, use RR1c instead of R101
+ - feature: 70_PylonLowVoltage: print out faulty response with verbose 5
+ - bugfix:  88_HMCCU: fixed device detection bug
+ - feature: 93_DbRep: sqlCmd executing ckey:latest possible
+ - new:     73_PRESENCE2: cover version von 73_PRESENCE.pm
+ - change:  76_SolarForecast: fillup AI data with sun azimuth / altitude
+ - feature: 76_SolarForecast: new command get dwdCatalog
+ - feature: 72_FRITZBOX: QAM Informationen bei Cable Boxen
+ - bufgix:  72_FRITZBOX: kleinere Fehler bereinigt.
+                         LAN Geräte ohne IP wurden nicht angezeigt.
  - bugfix:  76_SolarForecast: fix load Astro module
  - feature: 76_SolarForecast: integrate sun position from Astro module to AI,
                               some more internal code changes 

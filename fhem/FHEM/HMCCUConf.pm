@@ -2,7 +2,7 @@
 #
 #  HMCCUConf.pm
 #
-#  $Id: HMCCUConf.pm 28502 2024-02-11 16:56:41Z zap $
+#  $Id: HMCCUConf.pm 28531 2024-02-18 16:16:02Z zap $
 #
 #  Version 5.0
 #
@@ -410,6 +410,7 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'pctSlats' => 'V:LEVEL_2:?level V:LEVEL:1.005',
 		'openSlats' => 'V:LEVEL_2:100 V:LEVEL:1.005',
 		'closeSlats' => 'V:LEVEL_2:0 V:LEVEL:1.005',
+		'allLevels' => 'V:LEVEL_2:?slatLevel V:LEVEL:?blindLevel'
 	},
 	'CLIMATECONTROL_REGULATOR' => {
 		'desired-temp' => 'V:SETPOINT:?temperature',
@@ -484,6 +485,7 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'pctSlats' => 'V:LEVEL_SLATS:?level',
 		'openSlats' => 'V:LEVEL_SLATS:100',
 		'closeSlats' => 'V:LEVEL_SLATS:0',
+		'allLevels' => 'V:LEVEL_SLATS:?slatLevel V:LEVEL:?blindLevel'
 	},
 	'KEY' => {
 		'on' => 'V:PRESS_SHORT:1',

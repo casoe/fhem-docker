@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 99_Utils.pm 24128 2021-04-02 16:29:11Z rudolfkoenig $
+# $Id: 99_Utils.pm 28529 2024-02-18 11:42:21Z rudolfkoenig $
 package main;
 
 use strict;
@@ -415,7 +415,7 @@ WriteFile($$)
       Example:
       <ul>
         attr m2d readingList map:.* { WriteFile("www/images/map.png",$EVENT);; {map=>"images/map.png"} }
-        attr m2d devStateIcon { '<img src="fhem/images/map.png" style="max-width:256;;max-height:256;;">' }
+        attr m2d devStateIcon { '&lt;img src="fhem/images/map.png" style="max-width:256;;max-height:256;;"&gt;' }
 
       </ul>
       </li></br>
