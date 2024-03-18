@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: Common.pm 28406 2024-01-23 10:47:27Z Ellert $
+# $Id: Common.pm 28619 2024-03-08 22:33:45Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::Devices::AMConnect::Common;
-my $cvsid = '$Id: Common.pm 28406 2024-01-23 10:47:27Z Ellert $';
+my $cvsid = '$Id: Common.pm 28619 2024-03-08 22:33:45Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -2083,20 +2083,35 @@ sub readMap {
 
   if ( $filename and -e $filename ) {
 
-    open my $fh, '<:raw', $filename or die $!;
-    my $content = '';
+    if ( open my $fh, '<:raw', $filename ) {
 
-    while (1) {
+      my $content = '';
 
-      my $success = read $fh, $content, 1024, length($content);
-      die $! if not defined $success;
-      last if not $success;
+      while (1) {
+
+        my $success = read $fh, $content, 1024, length( $content );
+
+        if ( not defined $success ) {
+
+          close $fh;
+          Log3 $name, 1, "$iam read file \"$filename\" with error $!";
+          return;
+
+        }
+
+          last if not $success;
+
+      }
+
+      close $fh;
+      $hash->{helper}{MAP_CACHE} = $content;
+      Log3 $name, 4, "$iam file \"$filename\" content length: ".length( $content );
+
+    } else {
+
+      Log3 $name, 1, "$iam open file \"$filename\" with error $!";
 
     }
-
-    close $fh;
-    $hash->{helper}{MAP_CACHE} = $content;
-    Log3 $name, 5, "$iam file \"$filename\" content length: ".length($content);
 
   } else {
 

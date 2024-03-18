@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 91_notify.pm 28480 2024-02-05 19:42:10Z rudolfkoenig $
+# $Id: 91_notify.pm 28610 2024-03-07 09:53:25Z rudolfkoenig $
 package main;
 
 use strict;
@@ -599,9 +599,9 @@ END
         command.<br>
         Can be used in scenarios like:
         <ul><code>
-          define Leuchtdauer notify schalter:on
-                set Licht on-for-timer [$SELF:dauer]<br>
-          attr Leuchtdauer setList dauer:60,120,180
+          define lightOn notify switch:on
+                set Light on-for-timer [$SELF:duration]<br>
+          attr lightOn setList duration:60,120,180
         </code></ul>
         </li>
 

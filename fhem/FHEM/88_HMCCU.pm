@@ -2,7 +2,7 @@
 #
 #  88_HMCCU.pm
 #
-#  $Id: 88_HMCCU.pm 28531 2024-02-18 16:16:02Z zap $
+#  $Id: 88_HMCCU.pm 28640 2024-03-12 12:22:12Z zap $
 #
 #  Version 5.0
 #
@@ -57,7 +57,7 @@ my %HMCCU_CUST_CHN_DEFAULTS;
 my %HMCCU_CUST_DEV_DEFAULTS;
 
 # HMCCU version
-my $HMCCU_VERSION = '5.0 2024-02';
+my $HMCCU_VERSION = '5.0 2024-03';
 
 # Timeout for CCU requests (seconds)
 my $HMCCU_TIMEOUT_REQUEST = 4;
@@ -4351,8 +4351,8 @@ sub HMCCU_GetEnumValues ($$$$;$$)
 			# If a list of conversions exists, use values/conversions from HMCCU_CONVERSIONS
 			foreach my $cv (split(',', $argList)) {
 				if (exists($HMCCU_CONVERSIONS->{$role}{$dpt}{$cv})) {
-					$valList{$HMCCU_CONVERSIONS->{$role}{$dpt}{$cv}} = $cv;
-					$valIndex{$cv} = $HMCCU_CONVERSIONS->{$role}{$dpt}{$cv};
+					$valList{$cv} = $HMCCU_CONVERSIONS->{$role}{$dpt}{$cv};
+					$valIndex{$HMCCU_CONVERSIONS->{$role}{$dpt}{$cv}} = $cv;
 				}
 				else {
 					$valList{$cv} = $cv;
@@ -4361,10 +4361,22 @@ sub HMCCU_GetEnumValues ($$$$;$$)
 		}
 		else {
 			# As fallback use values as specified in command definition
-			my $i = 0;
-			foreach my $cv (split(',', $argList)) {
-				$valList{$cv} = $i;
-				$valIndex{$i} = $cv;
+			if (defined($paramDef) && defined($paramDef->{MIN}) && HMCCU_IsIntNum($paramDef->{MIN})) {
+				my $i = $paramDef->{MIN};
+				foreach my $cv (split(',', $argList)) {
+					$valList{$cv} = $i;
+					$valIndex{$i} = $cv;
+					$i++;
+				}
+			}
+			else {
+				my $i = 0;
+				foreach my $cv (split(',', $argList)) {
+					my $j = HMCCU_IsIntNum($cv) ? $cv : $i;
+					$valList{$cv} = $j;
+					$valIndex{$j} = $cv;
+					$i++;
+				}
 			}
 		}
 	}
@@ -6616,6 +6628,9 @@ sub HMCCU_UpdateRoleCommands ($$)
 	my $chnNo //= '';
 	my ($cc, $cd) = HMCCU_ControlDatapoint ($clHash);
 
+	my $devName = $clHash->{NAME};
+	my $devType = $clHash->{TYPE}; 
+
 	# Delete existing role commands
 	delete $clHash->{hmccu}{roleCmds} if (exists($clHash->{hmccu}{roleCmds}));
 
@@ -6634,9 +6649,14 @@ sub HMCCU_UpdateRoleCommands ($$)
 
 			my $cmdChn = $channel;
 			my $cmdType = 'set';
-			if ($cmd =~ /^(set|get) (.+)$/) {
+			my $forceRPC = 0;
+			if ($cmd =~ /^(set|get|rpcset|rpcget) (.+)$/) {
 				$cmdType = $1;
 				$cmd = $2;
+				if ($cmdType =~ /^rpc/) {
+					$forceRPC = 1;
+					$cmdType =~ s/rpc//;
+				}
 			}
 			next URCCMD if (exists($clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}) && defined($clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{channel}) &&
 				$cc ne '' && "$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{channel}" eq "$cc");
@@ -6648,13 +6668,14 @@ sub HMCCU_UpdateRoleCommands ($$)
 				$combDpt = $1;
 				$cmdSyntax =~ s/^(COMBINED_PARAMETER|SUBMIT) //;
 				if (!HMCCU_IsValidParameter ($clHash, "$addr:$cmdChn", 'VALUES', $combDpt, $parAccess)) {
-					HMCCU_Log ($clHash, 4, "HMCCUConf: Invalid parameter $addr:$cmdChn VALUES $combDpt $parAccess in role $role, command $cmd");
+					HMCCU_Log ($clHash, 4, "HMCCUConf: Invalid parameter $addr:$cmdChn VALUES $combDpt $parAccess. Ignoring command $cmd in role $role for $devType device $devName");
 					next URCCMD;
 				}
 			}
 			
 			$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{syntax} = $cmdSyntax;
 			$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{role}   = $role;
+			$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{rpc}    = $forceRPC;
 
 			my $cnt = 0;
 			my $cmdDef = $cmd;
@@ -6675,9 +6696,15 @@ sub HMCCU_UpdateRoleCommands ($$)
 				my ($ps, $dptList, $par, $fnc) = @subCmdList;
 				my $psName = $ps eq 'I' ? 'VALUES' : $pset{$ps};
 				if (!defined($psName)) {
-					HMCCU_Log ($clHash, 4, "HMCCUConf: Invalid or undefined parameter set in role $role, command $cmd $subCmd");
+					HMCCU_Log ($clHash, 4, "HMCCUConf: Invalid or undefined parameter set. Ignoring command $cmd in role $role for $devType device $devName");
 					next URCSUB;
 				}
+				$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{ps} //= $psName;
+				if ($forceRPC && $psName ne $clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{ps}) {
+					HMCCU_Log ($clHash, 2, "HMCCUConf: RPC mode doesn't allow mixed paramsets in one command");
+					next URCSUB;
+				}
+
 				$cmdChn = 'd' if ($ps eq 'D');
 
 				# Allow different datapoint/config parameter names for same command, if name depends on firmware revision of device type
@@ -6700,13 +6727,13 @@ sub HMCCU_UpdateRoleCommands ($$)
 					}
 				}
 				if (!$dptValid) {
-					HMCCU_Log ($clHash, 4, "HMCCUConf: Invalid parameter $addr:$cmdChn $psName $dpt $parAccess in role $role, command $cmd $subCmd");
+					HMCCU_Log ($clHash, 4, "HMCCUConf: Unsupported parameter $addr:$cmdChn $psName $dpt $parAccess. Ignoring sub command $subCmd in role $role for $devType device $devName");
 					next URCSUB;
 				}
 				
 				my $paramDef = HMCCU_GetParamDef ($ioHash, "$addr:$cmdChn", $psName, $dpt);
 				if (!defined($paramDef)) {
-					HMCCU_Log ($ioHash, 4, "HMCCUConf: Can't get definition of datapoint $addr:$cmdChn.$dpt. Ignoring command $cmd in role $role for device $clHash->{NAME}");
+					HMCCU_Log ($ioHash, 4, "HMCCUConf: Can't get definition of datapoint $addr:$cmdChn.$dpt. Ignoring command $cmd in role $role for $devType device $devName");
 					next URCCMD;
 				}
 				$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{subcmd}{$scn}{scn}  = sprintf("%03d", $subCmdNo);
@@ -6725,7 +6752,7 @@ sub HMCCU_UpdateRoleCommands ($$)
 
 						# Build lookup table
 						my $argList = '';
-						my $el = HMCCU_GetEnumValues ($ioHash, $paramDef, undef, $role, '#', $pv);
+						my $el = HMCCU_GetEnumValues ($ioHash, $paramDef, $dpt, $role, '#', $pv);
 						if ($el ne '') {
 							my $min;
 							my $max;
@@ -6734,6 +6761,9 @@ sub HMCCU_UpdateRoleCommands ($$)
 								my ($cNam, $cVal) = split (':', $e);
 								if (defined($cVal)) {
 									push @cNames, $cNam;
+									if (!HMCCU_IsFltNum($cVal)) {
+										HMCCU_Log ($clHash, 2, "cVal $cVal is not numeric. Enum = $el, type = $clHash->{ccutype}, dpt=$dpt, role=$role");
+									}
 									$min = $cVal if (!defined($min) || $cVal<$min);
 									$max = $cVal if (!defined($max) || $cVal>$max);
 									$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{subcmd}{$scn}{look}{$cNam} = $cVal;
@@ -6935,6 +6965,8 @@ sub HMCCU_ExecuteRoleCommand ($@)
 	my %cmdFnc;
 	my ($devAddr, undef) = HMCCU_SplitChnAddr ($clHash->{ccuaddr});
 	my $usage = $clHash->{hmccu}{roleCmds}{$mode}{$command}{usage};
+	my $forceRPC = $clHash->{hmccu}{roleCmds}{$mode}{$command}{rpc};
+	my $psName = $clHash->{hmccu}{roleCmds}{$mode}{$command}{ps} // 'MASTER';
 
 	my $channel = $clHash->{hmccu}{roleCmds}{$mode}{$command}{channel} // '?';
 	if ("$channel" eq '?') {
@@ -7002,7 +7034,7 @@ sub HMCCU_ExecuteRoleCommand ($@)
 		elsif ($cmd->{partype} == 2) {
 			# Normal value
 			$value = shift @$a // $cmd->{args};
-			return HMCCU_SetError ($clHash, "Missing parameter $cmd->{parname}. Usage: $mode $name $usage")
+			return HMCCU_SetError ($clHash, "Missing parameter $cmd->{parname}.\nUsage: $mode $name $usage")
 				if ($value eq '');
 			return HMCCU_SetError ($clHash, "Usage: $mode $name $usage")
 				if ($value eq '?');
@@ -7048,22 +7080,22 @@ sub HMCCU_ExecuteRoleCommand ($@)
 		# 	HMCCU_Trace ($clHash, 2, "scMin=$scMin, scMax=$scMax, scVal=$value");
 		# }
 		
-		if ($cmd->{ps} eq 'VALUES') {	
-			if ($cmd->{type} eq 'BOOL' && HMCCU_IsIntNum($value)) {
-				$value = $value > 0 ? 'true' : 'false';
-			}	
-			if ($combDpt eq '') {
+		if ($combDpt eq '') {
+			if ($cmd->{ps} eq 'VALUES' && !$forceRPC) {	
+				if ($cmd->{type} eq 'BOOL' && HMCCU_IsIntNum($value)) {
+					$value = $value > 0 ? 'true' : 'false';
+				}
 				$dpval{"$cmd->{scn}.$clHash->{ccuif}.$chnAddr.$cmd->{dpt}"} = $value;
 			}
+			elsif ($cmd->{ps} eq 'INTERNAL') {
+				$inval{$cmd->{parname}} = $value;
+			}
 			else {
-				push @combArgs, $value;
+				$cfval{$cmd->{dpt}} = $value;
 			}
 		}
-		elsif ($cmd->{ps} eq 'INTERNAL') {
-			$inval{$cmd->{parname}} = $value;
-		}
 		else {
-			$cfval{$cmd->{dpt}} = $value;
+			push @combArgs, $value;
 		}
 
 		push @par, $value if (defined($value));
@@ -7072,7 +7104,12 @@ sub HMCCU_ExecuteRoleCommand ($@)
 	}
 
 	if (scalar(@combArgs) > 0) {
-		$dpval{"000.$clHash->{ccuif}.$chnAddr.$combDpt"} = sprintf($combStr, @combArgs);
+		if ($forceRPC) {
+			$cfval{$combDpt} = sprintf($combStr, @combArgs);
+		}
+		else {
+			$dpval{"000.$clHash->{ccuif}.$chnAddr.$combDpt"} = sprintf($combStr, @combArgs);
+		}
 	}
 
 	my $ndpval = scalar(keys %dpval);
@@ -7098,7 +7135,7 @@ sub HMCCU_ExecuteRoleCommand ($@)
 		if ($ncfval > 0) {
 			# Config commands
 			foreach my $pv (keys %cfval) { HMCCU_Trace ($clHash, 2, "Parameter $pv=$cfval{$pv}"); }
-			($rc, undef) = HMCCU_SetMultipleParameters ($clHash, $chnAddr, \%cfval, 'MASTER');
+			($rc, undef) = HMCCU_SetMultipleParameters ($clHash, $chnAddr, \%cfval, $psName);
 			return HMCCU_SetError ($clHash, HMCCU_Min(0, $rc));
 		}
 	}

@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 98_SVG.pm 28159 2023-11-14 12:59:18Z rudolfkoenig $
+# $Id: 98_SVG.pm 28617 2024-03-08 15:05:47Z rudolfkoenig $
 package main;
 
 use strict;
@@ -34,7 +34,7 @@ use vars qw($FW_CSRF);
 my $SVG_RET;        # Returned data (SVG)
 sub SVG_calcOffsets($$);
 sub SVG_doround($$$);
-sub SVG_fmtTime($$);
+sub SVG_fmtTime($$;$);
 sub SVG_pO($);
 sub SVG_readgplotfile($$$);
 sub SVG_render($$$$$$$$$$);
@@ -492,7 +492,7 @@ SVG_PEdit($$$$)
     my $sel = ($v && $v eq "x1y1") ? "left" : "right";
     $o .= SVG_sel("axes_${idx}", "left,right,left log,right log", $sel );
     $o .= SVG_sel("type_${idx}",
-                "lines,points,steps,fsteps,histeps,bars,ibars,".
+                "lines,points,steps,fsteps,histeps,bars,ibars,needles,".
                 "horizontalLineFrom,horizontalLineTo,".
                 "cubic,quadratic,quadraticSmooth",
                 $conf{lType}[$idx]);
@@ -1733,7 +1733,7 @@ SVG_render($$$$$$$$$$)
   $off1 = $x;
   $off2 = $y+$h+$th;
   $isDE = (AttrVal("global", "language","EN") eq "DE");
-  my $t = SVG_fmtTime($first_tag, $fromsec);
+  my $t = SVG_fmtTime($first_tag, $fromsec, $conf{timefmt});
   SVG_pO "<text x=\"0\" y=\"$off2\" class=\"ylabel\">$t</text>"
         if(!$conf{xrange});
   $initoffset = $step;
@@ -1782,7 +1782,7 @@ SVG_render($$$$$$$$$$)
       } else {
         $off1 = int($x+($i-$fromsec)*$tmul);
       }
-      $t = SVG_fmtTime($tag, $i);
+      $t = SVG_fmtTime($tag, $i, $conf{timefmt});
       if($off1 < $x+10) { # first text, too close to the date field
         SVG_pO "<text x=\"$off1\" y=\"$off2\" class=\"ylabel\" " .
                   "text-anchor=\"left\">$t</text>";
@@ -2055,8 +2055,8 @@ SVG_render($$$$$$$$$$)
       $ret .=  sprintf(" %d,%d", $lx, $y+$hfill) if($isFill && $lx > -1);
       SVG_pO "<polyline $attributes $lStyle points=\"$ret\"/>";
 
-    } elsif( $lType eq "bars" ) {
-      my $bw = $barwidth*$tmul;
+    } elsif( $lType eq "bars" || $lType eq "needles" ) {
+      my $bw = ($lType eq "bars" ? $barwidth*$tmul : 1);   #137386
       # bars are all of equal width (see far above !), 
       # position rounded to integer multiples of bar width
       foreach my $i (0..int(@{$dxp})-1) {
@@ -2405,9 +2405,15 @@ SVG_calcControlPoints($$$$$$)
 }
 
 sub
-SVG_fmtTime($$)
+SVG_fmtTime($$;$)
 {
-  my ($sepfmt, $sec) = @_;
+  my ($sepfmt, $sec, $timefmt) = @_;
+
+  if($timefmt && $timefmt ne '"%Y-%m-%d_%H:%M:%S"') { #137398
+    $timefmt =~ s/^"|"$//g;
+    return ResolveDateWildcards($timefmt, localtime($sec))
+  }
+
   my @tarr = split("[ :]+", localtime($sec));
   my ($sep, $fmt) = split(" ", $sepfmt, 2);
   my $ret = "";

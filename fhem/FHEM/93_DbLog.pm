@@ -1,5 +1,5 @@
 ##############################################################################################################################
-# $Id: 93_DbLog.pm 28345 2024-01-05 19:46:43Z DS_Starter $
+# $Id: 93_DbLog.pm 28628 2024-03-09 15:08:42Z DS_Starter $
 ##############################################################################################################################
 # 93_DbLog.pm
 # written by Dr. Boris Neubert 2007-12-30
@@ -34,6 +34,8 @@
 #
 #  Leerzeichen entfernen: sed -i 's/[[:space:]]*$//' 93_DbLog.pm
 #
+#  META.json:  https://perldoc.perl.org/CPAN::Meta::Spec
+#
 ##############################################################################################################################
 
 package main;
@@ -56,6 +58,7 @@ no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 # Version History intern by DS_Starter:
 my %DbLog_vNotesIntern = (
+  "5.9.6"   => "09.03.2024 change META.json ",
   "5.9.5"   => "04.01.2024 change DbLog_configcheck to select only column width independent from column characteristic ",
   "5.9.4"   => "03.01.2024 make EVENT writable ",
   "5.9.3"   => "09.10.2023 new attribute colType ",
@@ -8694,13 +8697,13 @@ sub DbLog_setVersionInfo {
 
   if($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {       # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;                                        # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{DbLog}{META}}
-      if($modules{$type}{META}{x_version}) {                                          # {x_version} ( nur gesetzt wenn $Id: 93_DbLog.pm 28345 2024-01-05 19:46:43Z DS_Starter $ im Kopf komplett! vorhanden )
+      if($modules{$type}{META}{x_version}) {                                          # {x_version} ( nur gesetzt wenn $Id: 93_DbLog.pm 28628 2024-03-09 15:08:42Z DS_Starter $ im Kopf komplett! vorhanden )
           $modules{$type}{META}{x_version} =~ s/1\.1\.1/$v/xsg;
       }
       else {
           $modules{$type}{META}{x_version} = $v;
       }
-      return $@ unless (FHEM::Meta::SetInternals($hash));                             # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbLog.pm 28345 2024-01-05 19:46:43Z DS_Starter $ im Kopf komplett! vorhanden )
+      return $@ unless (FHEM::Meta::SetInternals($hash));                             # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbLog.pm 28628 2024-03-09 15:08:42Z DS_Starter $ im Kopf komplett! vorhanden )
       if(__PACKAGE__ eq "FHEM::$type" || __PACKAGE__ eq $type) {
           # es wird mit Packages gearbeitet -> Perl übliche Modulversion setzen
           # mit {<Modul>->VERSION()} im FHEMWEB kann Modulversion abgefragt werden
@@ -12538,27 +12541,27 @@ attr SMA_Energymeter DbLogValueFn
   "prereqs": {
     "runtime": {
       "requires": {
-        "FHEM": 5.00918799,
-        "perl": 5.014,
-        "DBI": 0,
-        "Time::HiRes": 0,
-        "Time::Local": 0,
-        "HttpUtils": 0,
-        "Encode": 0,
-        "SubProcess": 0,
-        "Storable": 0
+        "FHEM": "5.00918799",
+        "perl": "5.014",
+        "DBI": "0",
+        "Time::HiRes": "0",
+        "Time::Local": "0",
+        "HttpUtils": "0",
+        "Encode": "0",
+        "SubProcess": "0",
+        "Storable": "0"
       },
       "recommends": {
-        "FHEM::Meta": 0,
-        "DateTime": 0,
-        "DateTime::Format::Strptime": 0,
-        "FHEM::Utility::CTZ": 0
+        "FHEM::Meta": "0",
+        "DateTime": "0",
+        "DateTime::Format::Strptime": "0",
+        "FHEM::Utility::CTZ": "0"
       },
       "suggests": {
-        "Data::Dumper": 0,
-        "DBD::Pg": 0,
-        "DBD::mysql": 0,
-        "DBD::SQLite": 0
+        "Data::Dumper": "0",
+        "DBD::Pg": "0",
+        "DBD::mysql": "<5",
+        "DBD::SQLite": "0"
       }
     }
   },

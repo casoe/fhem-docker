@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 28484 2024-02-06 17:17:48Z rudolfkoenig $
+# $Id: fhem.pl 28666 2024-03-16 12:11:51Z rudolfkoenig $
 
 
 use strict;
@@ -281,7 +281,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 28484 2024-02-06 17:17:48Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 28666 2024-03-16 12:11:51Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -4627,6 +4627,19 @@ resolveAttrRename($$)
 # Functions used to make fhem-oneliners more readable,
 # but also recommended to be used by modules
 sub
+numberFromString($$;$)
+{
+  my ($val,$default,$round) = @_;
+  return undef if(!defined($val));
+  # 137283 & perl cookbook
+  $val = ($val =~ /(([+-]?)(?=\d|\.\d)\d*(\.\d*)?([Ee]([+-]?\d+))?)/ ? $1 : "");
+  $val =~ s/^([+-]?)0+([1-9])/$1$2/; # Forum #135120, dont want octal numbers
+  return $default if($val eq "");
+  $val = round($val,$round) if(defined $round);
+  return $val;
+}
+
+sub
 InternalVal($$$)
 {
   my ($d,$n,$default) = @_;
@@ -4641,10 +4654,7 @@ sub
 InternalNum($$$;$)
 {
   my ($d,$n,$default,$round) = @_;
-  my $val = InternalVal($d,$n,$default);
-  $val = ($val =~ /(-?\d+(\.\d+)?)/ ? $1 : "");
-  $val = round($val,$round) if($round);
-  return $val;
+  return numberFromString(InternalVal($d,$n,$default),$default,$round);
 }
 
 sub
@@ -4664,13 +4674,7 @@ sub
 OldReadingsNum($$$;$)
 {
   my ($d,$n,$default,$round) = @_;
-  my $val = OldReadingsVal($d,$n,$default);
-  return undef if(!defined($val));
-  $val = ($val =~ /(-?\d+(\.\d+)?)/ ? $1 : "");
-  $val =~ s/^(-?)0+([1-9])/$1$2/; # Forum #135120, dont want octal numbers
-  return $default if($val eq "");
-  $val = round($val,$round) if(defined $round);
-  return $val;
+  return numberFromString(OldReadingsVal($d,$n,$default),$default,$round);
 }
 
 sub
@@ -4712,13 +4716,7 @@ sub
 ReadingsNum($$$;$)
 {
   my ($d,$n,$default,$round) = @_;
-  my $val = ReadingsVal($d,$n,$default);
-  return undef if(!defined($val));
-  $val = ($val =~ /(-?\d+(\.\d+)?)/ ? $1 : "");
-  $val =~ s/^(-?)0+([1-9])/$1$2/; # Forum #135120, dont want octal numbers
-  return $default if($val eq "");
-  $val = round($val,$round) if(defined $round);
-  return $val;
+  return numberFromString(ReadingsVal($d,$n,$default),$default,$round);
 }
 
 sub
@@ -5571,6 +5569,7 @@ json2reading($$;$$$$)
 sub
 Debug($) {
   my $msg= shift;
+  stacktrace() if(AttrNum('global','stacktrace',0) == 1);
   Log 1, "DEBUG>" . $msg;
 }
 
@@ -5922,9 +5921,10 @@ addStructChange($$$)
             (!$defs{$dev} || $defs{$dev}{TEMPORARY} || $defs{$dev}{VOLATILE}));
 
   $lastDefChange++;
-  shift @structChangeHist
-          if(@structChangeHist > AttrVal('global', 'maxChangeLog', 10) - 1);
-  $param = substr($param, 0, 40)."..." if(length($param) > 40);
+  my ($mr,$ml) = split(" ", AttrVal('global', 'maxChangeLog', 10));
+  shift @structChangeHist if(@structChangeHist > $mr - 1);
+  $ml = 40 if(!defined($ml));
+  $param = substr($param, 0, $ml)."..." if(length($param) > $ml);
   push @structChangeHist, "$cmd $param";
 }
 

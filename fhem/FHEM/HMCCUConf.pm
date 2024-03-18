@@ -2,7 +2,7 @@
 #
 #  HMCCUConf.pm
 #
-#  $Id: HMCCUConf.pm 28531 2024-02-18 16:16:02Z zap $
+#  $Id: HMCCUConf.pm 28640 2024-03-12 12:22:12Z zap $
 #
 #  Version 5.0
 #
@@ -254,8 +254,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?LEVEL$:+pct,+level',
 	'BLIND_TRANSMITTER' =>
 		'^(C#\.)?LEVEL$:+pct,+level;^(C#\.)?LEVEL_2$:+pctSlats',
-	'BLIND_VIRTUAL_RECEIVER' =>
-		'^(C#\.)?LEVEL$:+pct,+level',
+#	'BLIND_VIRTUAL_RECEIVER' =>
+#		'^(C#\.)?LEVEL$:+pct,+level',
 	'CAPACITIVE_FILLING_LEVEL_SENSOR' =>
 		'^(C#\.)?FILLING_LEVEL$:+level',
 	'CLIMATECONTROL_REGULATOR' =>
@@ -263,7 +263,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	'CLIMATECONTROL_RT_TRANSCEIVER' =>
 		'^(C#\.)?ACTUAL_TEMPERATURE$:+measured-temp;'.
 		'^(C#\.)?ACTUAL_HUMIDITY$:+humidity;'.
-		'^(C#\.)?SET_TEMPERATURE$:+desired-temp',
+		'^(C#\.)?SET_TEMPERATURE$:+desired-temp;'.
+		'^(C#\.)?BOOST_MODE$:+boost',
 	'CLIMATE_TRANSCEIVER' =>
 		'^(C#\.)?ACTUAL_TEMPERATURE$:+measured-temp;'.
 		'^(C#\.)?ACTUAL_HUMIDITY$:+humidity',
@@ -273,8 +274,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?LEVEL$:+pct,+level',
 	'DIMMER_TRANSMITTER' =>
 		'^(C#\.)?LEVEL$:+pct,+level;(C#\.)?COLOR$:+color',
-	'DIMMER_VIRTUAL_RECEIVER' =>
-		'^(C#\.)?LEVEL$:+pct,+level;(C#\.)?COLOR$:+color',
+#	'DIMMER_VIRTUAL_RECEIVER' =>
+#		'^(C#\.)?LEVEL$:+pct,+level;(C#\.)?COLOR$:+color',
 	'DIMMER_WEEK_PROFILE' =>
 		'^(C#\.)?WEEK_PROGRAM_CHANNEL_LOCKS$:+progMode',
 	'HB_GENERIC_DIST' =>
@@ -283,7 +284,9 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?ACTUAL_TEMPERATURE$:+measured-temp;'.
 		'^(C#\.)?HUMIDITY$:+humidity;'.
 		'^(C#\.)?ACTUAL_HUMIDITY$:+humidity;'.
-		'^(C#\.)?SET_POINT_TEMPERATURE$:+desired-temp',
+		'^(C#\.)?SET_POINT_TEMPERATURE$:+desired-temp;'.
+		'^(C#\.)?BOOST_MODE$:+boost;'.
+		'^(C#\.)?ACTIVE_PROFILE$:+week-program',
 	'JALOUSIE' =>
 		'^(C#\.)?LEVEL$:+pct,+level;(C#\.)?LEVEL_SLATS$:+pctSlats',
 	'KEY' =>
@@ -298,8 +301,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?ILLUMINATION$:+brightness;(C#\.)?PRESENCE_DETECTION_STATE:+presence;(C#\.)?PRESENCE_DETECTION_ACTIVE:+detection',
 	'SHUTTER_TRANSMITTER' =>
 		'^(C#\.)?LEVEL$:+pct,+level',
-	'SHUTTER_VIRTUAL_RECEIVER' =>
-		'^(C#\.)?LEVEL$:+pct,+level',
+#	'SHUTTER_VIRTUAL_RECEIVER' =>
+#		'^(C#\.)?LEVEL$:+pct,+level',
 	'SWITCH_PANIC' =>
 		'^(C#\.)?STATE$:+panic',
 	'SWITCH_SENSOR' =>
@@ -307,7 +310,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	'THERMALCONTROL_TRANSMIT' =>
 		'^(C#\.)?ACTUAL_TEMPERATURE$:+measured-temp;'.
 		'^(C#\.)?ACTUAL_HUMIDITY$:+humidity;'.
-		'^(C#\.)?SET_TEMPERATURE$:+desired-temp',
+		'^(C#\.)?SET_TEMPERATURE$:+desired-temp;'.
+		'^(C#\.)?BOOST_MODE$:+boost',
 	'VIRTUAL_KEY' =>
 		'^(C#\.)?PRESS_(SHORT|LONG)$:+pressed',
 	'WEATHER' =>
@@ -317,7 +321,7 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?TEMPERATURE$:+measured-temp;'.
 		'^(C#\.)?HUMIDITY$:+humidity',
 	'DEFAULT' =>
-		'^([0-9]{1,2}\.)?LEVEL$:+pct,+level;'.
+#		'^([0-9]{1,2}\.)?LEVEL$:+pct,+level;'.
 		'^([0-9]{1,2}\.)?SET_TEMPERATURE$:+desired-temp;'.
 		'^([0-9]{1,2}\.)?(ACTUAL_TEMPERATURE|TEMPERATURE)$:+measured-temp;'.
 		'^([0-9]{1,2}\.)?SET_POINT_TEMPERATURE$:+desired-temp;'.
@@ -350,12 +354,12 @@ $HMCCU_CONFIG_VERSION = '5.0';
 #   Command with one parameter:      Paramset:Datapoints:?Parameter
 #   Optional parameter with default: Paramset:Datapoints:?Parameter=Default-Value
 #   List of values:                  Paramset:Datapoints:#Parameter[=Value[,...]]
-#   Internal value (paramset "I"):   Paramset:Datapoints:*Parameter=Default-Value
+#   Internal value (paramset "I"):   I:Datapoints:*Parameter=Default-Value
 # Paramset:
 #   V=VALUES, M=MASTER (channel), D=MASTER (device), I=INTERNAL, S=VALUE_STRING
 # Datapoints:
 #   List of datapoint or config parameter names separated by ','. Multiple names can
-#   be specified to support multiple firmware revesions with different names.
+#   be specified to support multiple firmware revisions with different names.
 # Parameter characters:
 #   ? = any value is accepted
 #   # = If datapoint is of type ENUM, values are taken from parameter set description.
@@ -396,8 +400,9 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'close' => 'V:LEVEL:0',
 		'up' => 'V:LEVEL:?delta=+20',
 		'down' => 'V:LEVEL:?delta=-20',
-		'oldPos' => 'V:LEVEL:1.005',
-		'stop' => 'V:STOP:1'
+		'oldLevel' => 'V:LEVEL:1.005',
+		'stop' => 'V:STOP:1',
+		'toggle' => 'V:LEVEL:0,100'
 	},
 	'BLIND_VIRTUAL_RECEIVER' => {
 		'pct' => 'V:LEVEL:?level',
@@ -410,7 +415,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'pctSlats' => 'V:LEVEL_2:?level V:LEVEL:1.005',
 		'openSlats' => 'V:LEVEL_2:100 V:LEVEL:1.005',
 		'closeSlats' => 'V:LEVEL_2:0 V:LEVEL:1.005',
-		'allLevels' => 'V:LEVEL_2:?slatLevel V:LEVEL:?blindLevel'
+		'allLevels' => 'V:LEVEL_2:?slatLevel V:LEVEL:?blindLevel',
+		'toggle' => 'V:LEVEL:0,100'
 	},
 	'CLIMATECONTROL_REGULATOR' => {
 		'desired-temp' => 'V:SETPOINT:?temperature',
@@ -423,7 +429,7 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'on' => 'V:MANU_MODE:30.5',
 		'off' => 'V:MANU_MODE:4.5',
 		'auto' => 'V:AUTO_MODE:1',
-		'boost' => 'V:BOOST_MODE:1',
+		'boost' => 'V:BOOST_MODE:#boost=on,off',
 		'week-program:VirtualDevices' => 'D:WEEK_PROGRAM_POINTER:#program',
 		'get week-program:VirtualDevices' => 'D:WEEK_PROGRAM_POINTER:#program:HMCCU_DisplayWeekProgram'
 	},
@@ -467,13 +473,18 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'ventilate' => 'V:DOOR_COMMAND:4'
 	},
 	'HEATING_CLIMATECONTROL_TRANSCEIVER' => {
+		# CONTROL_MODE (write): 0=Auto, 1=Manual, 2=Holiday/Party 3=NoFunction
+		# SET_POINT_MODE (read): 0=Auto, 1=Manual, 2=Holiday/Party
+		# Party: CONTROL_MODE=2, PARTY_TIME_START=Ts, PARTY_TIME_END=Ts, Ts="YYYY_MM_DD HH:MM"
 		'desired-temp' => 'V:SET_POINT_TEMPERATURE:?temperature',
 		'auto' => 'V:CONTROL_MODE:0',
-		'manu' => 'V:CONTROL_MODE:1',
-		'holiday' => 'V:CONTROL_MODE:2',
-		'boost' => 'V:BOOST_MODE:1',
+		'manu' => 'V:CONTROL_MODE:1 V:SET_POINT_TEMPERATURE:?temperature=20',
+		'rpcset holiday' => 'V:SET_POINT_MODE:2 V:SET_POINT_TEMPERATURE:?temperature V:PARTY_TIME_START:?timeStart V:PARTY_TIME_END:?timeEnd',
+		'rpcset party' => 'V:SET_POINT_MODE:2 V:SET_POINT_TEMPERATURE:?temperature V:PARTY_TIME_START:?timeStart V:PARTY_TIME_END:?timeEnd',
+		'boost' => 'V:BOOST_MODE:#boost=on,off',
 		'on' => 'V:CONTROL_MODE:1 V:SET_POINT_TEMPERATURE:30.5',
-		'off' => 'V:CONTROL_MODE:1 V:SET_POINT_TEMPERATURE:4.5'
+		'off' => 'V:CONTROL_MODE:1 V:SET_POINT_TEMPERATURE:4.5',
+		'week-program' => 'V:ACTIVE_PROFILE:#profile=1,2,3'
 	},
 	'JALOUSIE' => {
 		'pct' => 'V:LEVEL:?level',
@@ -482,10 +493,12 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'up' => 'V:LEVEL:?delta=+20',
 		'down' => 'V:LEVEL:?delta=-20',
 		'stop' => 'V:STOP:1',
+		'oldLevel' => 'V:LEVEL:1.005',
 		'pctSlats' => 'V:LEVEL_SLATS:?level',
 		'openSlats' => 'V:LEVEL_SLATS:100',
 		'closeSlats' => 'V:LEVEL_SLATS:0',
-		'allLevels' => 'V:LEVEL_SLATS:?slatLevel V:LEVEL:?blindLevel'
+		'allLevels' => 'V:LEVEL_SLATS:?slatLevel V:LEVEL:?blindLevel',
+		'toggle' => 'V:LEVEL:0,100'
 	},
 	'KEY' => {
 		'on' => 'V:PRESS_SHORT:1',
@@ -529,7 +542,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'close' => 'V:LEVEL:0',
 		'up' => 'V:LEVEL:?delta=+20',
 		'down' => 'V:LEVEL:?delta=-20',
-		'stop' => 'V:STOP:1'
+		'stop' => 'V:STOP:1',
+		'toggle' => 'V:LEVEL:0,100'
 	},
 	'SMOKE_DETECTOR' => {
 		'command' => 'V:SMOKE_DETECTOR_COMMAND:#command'
@@ -552,13 +566,9 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'sensor-on-till' => 'V:ON_TIME:?time V:STATE:1'
 	},
 	'SWITCH_VIRTUAL_RECEIVER' => {
-		'COMBINED_PARAMETER' => {
-			'OT' => 'ON_TIME',
-			'S'  => 'STATE'
-		},
 		'on' => 'V:STATE:1',
 		'off' => 'V:STATE:0',
-		'on-for-timer' => 'COMBINED_PARAMETER V:OT:?duration V:S:1',
+		'on-for-timer' => '1:V:ON_TIME:?time=0.0 2:V:STATE:1',
 		'on-till' => 'V:ON_TIME:?time V:STATE:1',
 		'toggle' => 'V:STATE:0,1'
 	},
@@ -568,7 +578,7 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'on' => 'V:MANU_MODE:30.5',
 		'off' => 'V:MANU_MODE:4.5',
 		'auto' => 'V:AUTO_MODE:1',
-		'boost' => 'V:BOOST_MODE:1',
+		'boost' => 'V:BOOST_MODE:#boost=on,off',
 		'week-program' => 'D:WEEK_PROGRAM_POINTER:#program',
 		'get week-program' => 'D:WEEK_PROGRAM_POINTER:#program:HMCCU_DisplayWeekProgram'
 	},
@@ -700,7 +710,7 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	},
 	'THERMALCONTROL_TRANSMIT' => {
 		'substexcl' => 'desired-temp',
-		'cmdIcon' => 'auto:sani_heating_automatic manu:sani_heating_manual boost:sani_heating_boost on:general_an off:general_aus',
+		'cmdIcon' => 'auto:sani_heating_automatic manu:sani_heating_manual on:general_an off:general_aus',
 		'webCmd' => 'desired-temp:auto:manu:boost:on:off',
 		'widgetOverride' => 'desired-temp:slider,4.5,0.5,30.5,1'
 	},
@@ -712,13 +722,13 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	},
 	'CLIMATECONTROL_RT_TRANSCEIVER' => {
 		'substexcl' => 'desired-temp',
-		'cmdIcon' => 'auto:sani_heating_automatic manu:sani_heating_manual boost:sani_heating_boost on:general_an off:general_aus',
+		'cmdIcon' => 'auto:sani_heating_automatic manu:sani_heating_manual on:general_an off:general_aus',
 		'webCmd' => 'desired-temp:auto:manu:boost:on:off',
 		'widgetOverride' => 'desired-temp:slider,4.5,0.5,30.5,1'
 	},
 	'HEATING_CLIMATECONTROL_TRANSCEIVER' => {
 		'substexcl' => 'desired-temp',
-		'cmdIcon' => 'auto:sani_heating_automatic manu:sani_heating_manual boost:sani_heating_boost on:general_an off:general_aus',
+		'cmdIcon' => 'auto:sani_heating_automatic manu:sani_heating_manual on:general_an off:general_aus',
 		'webCmd' => 'desired-temp:auto:manu:boost:on:off',
 		'widgetOverride' => 'desired-temp:slider,4.5,0.5,30.5,1'
 	},
@@ -857,15 +867,18 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	},
 	'THERMALCONTROL_TRANSMIT' => {
 		'SET_TEMPERATURE' =>       { '4.5' => 'off', '30.5' => 'on' },
-		'WINDOW_OPEN_REPORTING' => { '0' => 'closed', '1' => 'open', 'false' => 'closed', 'true' => 'open' }
+		'WINDOW_OPEN_REPORTING' => { '0' => 'closed', '1' => 'open', 'false' => 'closed', 'true' => 'open' },
+		'BOOST_MODE' =>            { '0' => 'off', '1' => 'on', 'false' => 'off', 'true' => 'on', 'off' => 0, 'on' => 1 }
 	},
 	'CLIMATECONTROL_RT_TRANSCEIVER' => {
-		'SET_TEMPERATURE' => { '4.5' => 'off', '30.5' => 'on' }
+		'SET_TEMPERATURE' => { '4.5' => 'off', '30.5' => 'on' },
+		'BOOST_MODE' =>      { '0' => 'off', '1' => 'on', 'false' => 'off', 'true' => 'on', 'off' => 0, 'on' => 1 }
 	},
 	'HEATING_CLIMATECONTROL_TRANSCEIVER' => {
 		'SET_POINT_TEMPERATURE' => { '4.5' => 'off', '30.5' => 'on' },
-		'SET_POINT_MODE' =>        { '0' => 'auto', '1' => 'manual', '2' => 'boost', '3' => 'off' },
-		'WINDOW_STATE' =>          { '0' => 'closed', '1' => 'open', 'false' => 'closed', 'true' => 'open' }
+		'SET_POINT_MODE' =>        { '0' => 'auto', '1' => 'manual', '2' => 'party/holiday', '3' => 'off' },
+		'WINDOW_STATE' =>          { '0' => 'closed', '1' => 'open', 'false' => 'closed', 'true' => 'open' },
+		'BOOST_MODE' =>            { '0' => 'off', '1' => 'on', 'false' => 'off', 'true' => 'on', 'off' => 0, 'on' => 1 }
 	},
 	'CLIMATECONTROL_REGULATOR' => {
 		'SETPOINT' => { '4.5' => 'off', '30.5' => 'on' }		
