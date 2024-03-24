@@ -2,13 +2,13 @@
 #
 #  HMCCUConf.pm
 #
-#  $Id: HMCCUConf.pm 27999 2023-09-26 16:33:11Z zap $
+#  $Id: HMCCUConf.pm 28673 2024-03-17 10:52:10Z zap $
 #
 #  Version 5.0
 #
 #  Configuration parameters for HomeMatic devices.
 #
-#  (c) 2022 by zap (zap01 <at> t-online <dot> de)
+#  (c) 2024 by zap (zap01 <at> t-online <dot> de)
 #
 #########################################################################
 
@@ -46,7 +46,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 ######################################################################
 # Channel roles with state and control datapoints
 #   F: 1=Channel/HMCCUCHN, 2=Device/HMCCUDEV, 3=Both
-#   S: State datapoint, C: Control datapoint, V: Control values
+#   S: State datapoint, C: Control datapoint,
+#   V: Control values, #=Enum or const:value[,...]
 #   P: Priority (used by HMCCUDEV if more than 1 channel role fits)
 #      1=lowest priority
 ######################################################################
@@ -57,6 +58,9 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	},
 	'ACCESSPOINT_GENERIC_RECEIVER' => {
 		F => 3, S => 'VOLTAGE', C => '', V => '', P => 1
+	},
+	'ACOUSTIC_SIGNAL_TRANSMITTER' => {
+		F => 3, S => 'LEVEL', C => 'LEVEL', V => 'on:100,off:0', P => 2
 	},
 	'ALARM_SWITCH_VIRTUAL_RECEIVER' => {
 		F => 3, S => 'ACOUSTIC_ALARM_ACTIVE', C => 'ACOUSTIC_ALARM_SELECTION', V => '', P => 2
@@ -169,6 +173,9 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	'RAINDETECTOR_HEAT' => {
 		F => 3, S => 'STATE', C => 'STATE', V => 'on:true,off:false', P => 2
 	},
+	'RGBW_COLOR' => {
+		F => 3, S => 'COLOR', C => 'COLOR', V => '', P => 2
+	},
 	'ROTARY_HANDLE_SENSOR' => {
 		F => 3, S => 'STATE', C => '', V => '', P => 2
 	},
@@ -211,6 +218,9 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	'TILT_SENSOR' => {
 		F => 3, S => 'STATE', C => '', V => '', P => 1
 	},
+	'UNIVERSAL_LIGHT_RECEIVER' => {
+		F => 3, S => 'LEVEL', C => 'LEVEL', V => 'on:100,off:0', P => 1
+	},
 	'VIRTUAL_KEY' => {
 		F => 3, S => 'PRESS_SHORT', C => 'PRESS_SHORT', V => 'pressed:true', P => 1
 	},
@@ -244,8 +254,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?LEVEL$:+pct,+level',
 	'BLIND_TRANSMITTER' =>
 		'^(C#\.)?LEVEL$:+pct,+level;^(C#\.)?LEVEL_2$:+pctSlats',
-	'BLIND_VIRTUAL_RECEIVER' =>
-		'^(C#\.)?LEVEL$:+pct,+level',
+#	'BLIND_VIRTUAL_RECEIVER' =>
+#		'^(C#\.)?LEVEL$:+pct,+level',
 	'CAPACITIVE_FILLING_LEVEL_SENSOR' =>
 		'^(C#\.)?FILLING_LEVEL$:+level',
 	'CLIMATECONTROL_REGULATOR' =>
@@ -253,7 +263,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	'CLIMATECONTROL_RT_TRANSCEIVER' =>
 		'^(C#\.)?ACTUAL_TEMPERATURE$:+measured-temp;'.
 		'^(C#\.)?ACTUAL_HUMIDITY$:+humidity;'.
-		'^(C#\.)?SET_TEMPERATURE$:+desired-temp',
+		'^(C#\.)?SET_TEMPERATURE$:+desired-temp;'.
+		'^(C#\.)?BOOST_MODE$:+boost',
 	'CLIMATE_TRANSCEIVER' =>
 		'^(C#\.)?ACTUAL_TEMPERATURE$:+measured-temp;'.
 		'^(C#\.)?ACTUAL_HUMIDITY$:+humidity',
@@ -263,8 +274,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?LEVEL$:+pct,+level',
 	'DIMMER_TRANSMITTER' =>
 		'^(C#\.)?LEVEL$:+pct,+level;(C#\.)?COLOR$:+color',
-	'DIMMER_VIRTUAL_RECEIVER' =>
-		'^(C#\.)?LEVEL$:+pct,+level;(C#\.)?COLOR$:+color',
+#	'DIMMER_VIRTUAL_RECEIVER' =>
+#		'^(C#\.)?LEVEL$:+pct,+level;(C#\.)?COLOR$:+color',
 	'DIMMER_WEEK_PROFILE' =>
 		'^(C#\.)?WEEK_PROGRAM_CHANNEL_LOCKS$:+progMode',
 	'HB_GENERIC_DIST' =>
@@ -273,7 +284,9 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?ACTUAL_TEMPERATURE$:+measured-temp;'.
 		'^(C#\.)?HUMIDITY$:+humidity;'.
 		'^(C#\.)?ACTUAL_HUMIDITY$:+humidity;'.
-		'^(C#\.)?SET_POINT_TEMPERATURE$:+desired-temp',
+		'^(C#\.)?SET_POINT_TEMPERATURE$:+desired-temp;'.
+		'^(C#\.)?BOOST_MODE$:+boost;'.
+		'^(C#\.)?ACTIVE_PROFILE$:+week-program',
 	'JALOUSIE' =>
 		'^(C#\.)?LEVEL$:+pct,+level;(C#\.)?LEVEL_SLATS$:+pctSlats',
 	'KEY' =>
@@ -288,8 +301,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?ILLUMINATION$:+brightness;(C#\.)?PRESENCE_DETECTION_STATE:+presence;(C#\.)?PRESENCE_DETECTION_ACTIVE:+detection',
 	'SHUTTER_TRANSMITTER' =>
 		'^(C#\.)?LEVEL$:+pct,+level',
-	'SHUTTER_VIRTUAL_RECEIVER' =>
-		'^(C#\.)?LEVEL$:+pct,+level',
+#	'SHUTTER_VIRTUAL_RECEIVER' =>
+#		'^(C#\.)?LEVEL$:+pct,+level',
 	'SWITCH_PANIC' =>
 		'^(C#\.)?STATE$:+panic',
 	'SWITCH_SENSOR' =>
@@ -297,7 +310,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	'THERMALCONTROL_TRANSMIT' =>
 		'^(C#\.)?ACTUAL_TEMPERATURE$:+measured-temp;'.
 		'^(C#\.)?ACTUAL_HUMIDITY$:+humidity;'.
-		'^(C#\.)?SET_TEMPERATURE$:+desired-temp',
+		'^(C#\.)?SET_TEMPERATURE$:+desired-temp;'.
+		'^(C#\.)?BOOST_MODE$:+boost',
 	'VIRTUAL_KEY' =>
 		'^(C#\.)?PRESS_(SHORT|LONG)$:+pressed',
 	'WEATHER' =>
@@ -307,7 +321,7 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?TEMPERATURE$:+measured-temp;'.
 		'^(C#\.)?HUMIDITY$:+humidity',
 	'DEFAULT' =>
-		'^([0-9]{1,2}\.)?LEVEL$:+pct,+level;'.
+#		'^([0-9]{1,2}\.)?LEVEL$:+pct,+level;'.
 		'^([0-9]{1,2}\.)?SET_TEMPERATURE$:+desired-temp;'.
 		'^([0-9]{1,2}\.)?(ACTUAL_TEMPERATURE|TEMPERATURE)$:+measured-temp;'.
 		'^([0-9]{1,2}\.)?SET_POINT_TEMPERATURE$:+desired-temp;'.
@@ -315,46 +329,63 @@ $HMCCU_CONFIG_VERSION = '5.0';
 );
 
 #######################################################################################
-# Set commands related to channel role
+# Set/Get commands related to channel role
 #   Role => { Command-Definition, ... }
 # Command-Defintion:
-#   Command[:InterfaceExpr] => [No:]Datapoint-Def[:Function] [...]'
+#   '[Mode ]Command[:InterfaceExpr]' => '[CombDatapoint ][No:]Datapoint-Def[:Function] [...]'
+# Mode:
+#   Either 'set' or 'get'. Default is 'set'.
+# Command:
+#   The command name.
+# InterfaceExpr:
+#   Command is only available, if interface of device is matching the regular
+#   expression.
+# CombDatapoint:
+#   Either 'COMBINED_PARAMETER' or 'SUBMIT'
+#   Datapoint names are combined datapoint shortcuts.
 # No:
-#   Execution order of subcommands. By default subcommands are
-#   executed from left to right.
+#   Execution order of subcommands. By default subcommands are executed from left to
+#   right.
 # Function:
 #   A Perl function name
 # Datapoint-Def:
-#   No parameters:                   Paramset:Datapoints:[Parameter=]FixedValue[,...]
-#   One parameter:                   Paramset:Datapoints:?Parameter
+#   Command with no parameters:      Paramset:Datapoints:[Parameter=]Value
+#   Toggle command:                  Paramset:Datapoints:[Parameter=]Value1,Value2[,...]
+#   Command with one parameter:      Paramset:Datapoints:?Parameter
 #   Optional parameter with default: Paramset:Datapoints:?Parameter=Default-Value
-#   List of values (also toggle):    Paramset:Datapoints:#Parameter[=FixedValue[,...]]
-#   Internal value (paramset "I"):   Paramset:Datapoints:*Parameter=Default-Value
+#   List of values:                  Paramset:Datapoints:#Parameter[=Value[,...]]
+#   Internal value (paramset "I"):   I:Datapoints:*Parameter=Default-Value
 # Paramset:
-#   V=VALUES, M=MASTER (channel), D=MASTER (device), I=INTERNAL
+#   V=VALUES, M=MASTER (channel), D=MASTER (device), I=INTERNAL, S=VALUE_STRING
 # Datapoints:
-#   List of parameter names separated by ','
+#   List of datapoint or config parameter names separated by ','. Multiple names can
+#   be specified to support multiple firmware revisions with different names.
 # Parameter characters:
 #   ? = any value is accepted
-#   # = If datapoint is of type ENUM, values are taken from
-#       parameter set description. Otherwise a list of values must
-#       be specified after '='.
-#   * = internal value $hash->{hmccu}{values}{parameterName}
-#       See also paramset "I"
-# FixedValue: Parameter values are detected in the following order:
-#   1. If command parameter name is identical with controldatapoint,
-#   option values are taken from controldatapoint definition {V}. The
-#   FixedValues are used as lookup key into HMCCU_STATECCONTROL.
-#   The command options are identical to the FixedValues.
-#   2. FixedValues are treated as option values. The option
-#   names are taken from HMCCU_CONVERSIONS by using FixedValues as
-#   lookup key.
-#   3. As a fallback command options and option values are identical.
-# If Default-Value is preceeded by + or -, value is added to or 
-# subtracted from current datapoint value
+#   # = If datapoint is of type ENUM, values are taken from parameter set description.
+#       Otherwise a list of values must be specified after '='.
+#   * = internal value $hash->{hmccu}{values}{parameterName}. See also paramset "I"
+# FixedValue:
+#   Parameter values are detected in the following order:
+#     1. If command parameter name is identical with controldatapoint,
+#        option values are taken from controldatapoint definition {V}. The
+#        FixedValues are used as lookup key into HMCCU_STATECCONTROL.
+#        The command options are identical to the FixedValues.
+#     2. FixedValues are treated as option values. The option
+#        names are taken from HMCCU_CONVERSIONS by using FixedValues as
+#        lookup key.
+#     3. As a fallback command options and option values are identical.
+# Default-Value:
+#   If Default-Value is preceeded by + or -, value is added to or 
+#   subtracted from current datapoint value
 #######################################################################################
 
 %HMCCU_ROLECMDS = (
+	'ACOUSTIC_SIGNAL_TRANSMITTER' => {
+		'level' => 'V:LEVEL:?level',
+		'on' => 'V:LEVEL:100',
+		'off' => 'V:LEVEL:0'
+	},
 	'ALARM_SWITCH_VIRTUAL_RECEIVER' => {
 		'opticalAlarm' => 'V:OPTICAL_ALARM_SELECTION:#alarmMode V:ACOUSTIC_ALARM_SELECTION:0 V:DURATION_UNIT:*unit=0 V:DURATION_VALUE:*duration=10',
 		'acousticAlarm' => 'V:ACOUSTIC_ALARM_SELECTION:#alarmMode V:OPTICAL_ALARM_SELECTION:0 V:DURATION_UNIT:0 V:DURATION_VALUE:10',
@@ -369,20 +400,23 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'close' => 'V:LEVEL:0',
 		'up' => 'V:LEVEL:?delta=+20',
 		'down' => 'V:LEVEL:?delta=-20',
-		'oldPos' => 'V:LEVEL:100.5',
-		'stop' => 'V:STOP:1'
+		'oldLevel' => 'V:LEVEL:1.005',
+		'stop' => 'V:STOP:1',
+		'toggle' => 'V:LEVEL:0,100'
 	},
 	'BLIND_VIRTUAL_RECEIVER' => {
 		'pct' => 'V:LEVEL:?level',
 		'open' => 'V:LEVEL:100',
 		'close' => 'V:LEVEL:0',
-		'oldLevel' => 'V:LEVEL:100.5',
+		'oldLevel' => 'V:LEVEL:1.005',
 		'up' => 'V:LEVEL:?delta=+20',
 		'down' => 'V:LEVEL:?delta=-20',
 		'stop' => 'V:STOP:1',
-		'pctSlats' => 'V:LEVEL_2:?level V:LEVEL:100.5',
-		'openSlats' => 'V:LEVEL_2:100 V:LEVEL:100.5',
-		'closeSlats' => 'V:LEVEL_2:0 V:LEVEL:100.5',
+		'pctSlats' => 'V:LEVEL_2:?level V:LEVEL:1.005',
+		'openSlats' => 'V:LEVEL_2:100 V:LEVEL:1.005',
+		'closeSlats' => 'V:LEVEL_2:0 V:LEVEL:1.005',
+		'allLevels' => 'V:LEVEL_2:?slatLevel V:LEVEL:?blindLevel',
+		'toggle' => 'V:LEVEL:0,100'
 	},
 	'CLIMATECONTROL_REGULATOR' => {
 		'desired-temp' => 'V:SETPOINT:?temperature',
@@ -395,9 +429,9 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'on' => 'V:MANU_MODE:30.5',
 		'off' => 'V:MANU_MODE:4.5',
 		'auto' => 'V:AUTO_MODE:1',
-		'boost' => 'V:BOOST_MODE:1',
-		'week-program:VirtualDevices' => 'D:WEEK_PROGRAM_POINTER:#program',
-		'get week-program:VirtualDevices' => 'D:WEEK_PROGRAM_POINTER:#program:HMCCU_DisplayWeekProgram'
+		'boost' => 'V:BOOST_MODE:#boost=on,off',
+		'week-program' => 'D:WEEK_PROGRAM_POINTER:#program',
+		'get week-program' => 'D:WEEK_PROGRAM_POINTER:#program:HMCCU_DisplayWeekProgram'
 	},
 	'DIMMER' => {
 		'pct' => '3:V:LEVEL:?level 1:V:ON_TIME:?time=0.0 2:V:RAMP_TIME:?ramp=0.5',
@@ -408,19 +442,21 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'on-till' => 'V:ON_TIME:?time V:LEVEL:100',
 		'up' => 'V:LEVEL:?delta=+10',
 		'down' => 'V:LEVEL:?delta=-10',
-		'stop' => 'V:RAMP_STOP:1'
+		'stop' => 'V:RAMP_STOP:1',
+		'toggle' => 'V:LEVEL:0,100'
 	},
 	'DIMMER_VIRTUAL_RECEIVER' => {
 		'pct' => '5:V:LEVEL:?level 1:V:DURATION_UNIT:0 2:V:ON_TIME,DURATION_VALUE:?time=0.0 3:V:RAMP_TIME_UNIT:0 4:V:RAMP_TIME,RAMP_TIME_VALUE:?ramp=0.5',
 		'level' => 'V:LEVEL:?level',
 		'on' => 'V:LEVEL:100',
 		'off' => 'V:LEVEL:0',
-		'oldLevel' => 'V:LEVEL:100.5',
+		'oldLevel' => 'V:LEVEL:1.005',
 		'on-for-timer' => '1:V:DURATION_UNIT:0 2:V:ON_TIME,DURATION_VALUE:?duration 3:V:LEVEL:100',
 		'on-till' => '1:V:DURATION_UNIT:0 2:V:ON_TIME,DURATION_VALUE:?time 3:V:LEVEL:100',
 		'up' => 'V:LEVEL:?delta=+10',
 		'down' => 'V:LEVEL:?delta=-10',
-		'color' => 'V:COLOR:#color'
+		'color' => 'V:COLOR:#color',
+		'toggle' => 'V:LEVEL:0,100'
 	},
 	'DIMMER_WEEK_PROFILE' => {
 		'progMode' => 'V:WEEK_PROGRAM_TARGET_CHANNEL_LOCK:#progMode'
@@ -437,13 +473,20 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'ventilate' => 'V:DOOR_COMMAND:4'
 	},
 	'HEATING_CLIMATECONTROL_TRANSCEIVER' => {
+		# CONTROL_MODE (write): 0=Auto, 1=Manual, 2=Holiday/Party 3=NoFunction
+		# SET_POINT_MODE (read): 0=Auto, 1=Manual, 2=Holiday/Party
+		# Party: CONTROL_MODE=2, PARTY_TIME_START=Ts, PARTY_TIME_END=Ts, Ts="YYYY_MM_DD HH:MM"
 		'desired-temp' => 'V:SET_POINT_TEMPERATURE:?temperature',
 		'auto' => 'V:CONTROL_MODE:0',
-		'manu' => 'V:CONTROL_MODE:1',
-		'holiday' => 'V:CONTROL_MODE:2',
-		'boost' => 'V:BOOST_MODE:1',
+		'manu' => 'V:CONTROL_MODE:1 V:SET_POINT_TEMPERATURE:?temperature=20',
+		'rpcset holiday' => 'V:SET_POINT_MODE:2 V:SET_POINT_TEMPERATURE:?temperature V:PARTY_TIME_START:?timeStart V:PARTY_TIME_END:?timeEnd',
+		'rpcset party' => 'V:SET_POINT_MODE:2 V:SET_POINT_TEMPERATURE:?temperature V:PARTY_TIME_START:?timeStart V:PARTY_TIME_END:?timeEnd',
+		'boost' => 'V:BOOST_MODE:#boost=on,off',
 		'on' => 'V:CONTROL_MODE:1 V:SET_POINT_TEMPERATURE:30.5',
-		'off' => 'V:CONTROL_MODE:1 V:SET_POINT_TEMPERATURE:4.5'
+		'off' => 'V:CONTROL_MODE:1 V:SET_POINT_TEMPERATURE:4.5',
+		'week-program' => 'V:ACTIVE_PROFILE:#profile=1,2,3',
+		# For getting parameters from MASTER paramset the parameter is not used. But it must be a valid parameter of the role
+		'get week-program' => 'M:P1_ENDTIME_MONDAY_1:#profile=1,2,3:HMCCU_DisplayWeekProgram'
 	},
 	'JALOUSIE' => {
 		'pct' => 'V:LEVEL:?level',
@@ -452,9 +495,12 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'up' => 'V:LEVEL:?delta=+20',
 		'down' => 'V:LEVEL:?delta=-20',
 		'stop' => 'V:STOP:1',
+		'oldLevel' => 'V:LEVEL:1.005',
 		'pctSlats' => 'V:LEVEL_SLATS:?level',
 		'openSlats' => 'V:LEVEL_SLATS:100',
 		'closeSlats' => 'V:LEVEL_SLATS:0',
+		'allLevels' => 'V:LEVEL_SLATS:?slatLevel V:LEVEL:?blindLevel',
+		'toggle' => 'V:LEVEL:0,100'
 	},
 	'KEY' => {
 		'on' => 'V:PRESS_SHORT:1',
@@ -484,14 +530,22 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'on-for-timer' => 'V:ON_TIME:?duration V:STATE:1',
 		'on-till' => 'V:ON_TIME:?time V:STATE:1'
 	},
+	'RGBW_COLOR' => {
+		'color' => 'V:COLOR:?color V:ACT_HSV_COLOR_VALUE:?hsvColor',
+		'brightness' => 'V:ACT_BRIGHTNESS:?brightness'
+	},
+	'SHUTTER_TRANSMITTER' => {
+		'calibrate' => 'V:SELF_CALIBRATION:#Mode'
+	},
 	'SHUTTER_VIRTUAL_RECEIVER' => {
 		'pct' => 'V:LEVEL:?level',
 		'open' => 'V:LEVEL:100',
-		'oldLevel' => 'V:LEVEL:100.5',
+		'oldLevel' => 'V:LEVEL:1.005',
 		'close' => 'V:LEVEL:0',
 		'up' => 'V:LEVEL:?delta=+20',
 		'down' => 'V:LEVEL:?delta=-20',
-		'stop' => 'V:STOP:1'
+		'stop' => 'V:STOP:1',
+		'toggle' => 'V:LEVEL:0,100'
 	},
 	'SMOKE_DETECTOR' => {
 		'command' => 'V:SMOKE_DETECTOR_COMMAND:#command'
@@ -500,7 +554,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'on' => 'V:STATE:1',
 		'off' => 'V:STATE:0',
 		'on-for-timer' => 'V:ON_TIME:?duration V:STATE:1',
-		'on-till' => 'V:ON_TIME:?time V:STATE:1'
+		'on-till' => 'V:ON_TIME:?time V:STATE:1',
+		'toggle' => 'V:STATE:0,1'
 	},
 	'SWITCH_PANIC' => {
 		'panic' => 'V:STATE:#panic=on,off',
@@ -515,8 +570,9 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	'SWITCH_VIRTUAL_RECEIVER' => {
 		'on' => 'V:STATE:1',
 		'off' => 'V:STATE:0',
-		'on-for-timer' => 'V:ON_TIME:?duration V:STATE:1',
-		'on-till' => 'V:ON_TIME:?time V:STATE:1'
+		'on-for-timer' => '1:V:ON_TIME:?time=0.0 2:V:STATE:1',
+		'on-till' => 'V:ON_TIME:?time V:STATE:1',
+		'toggle' => 'V:STATE:0,1'
 	},
 	'THERMALCONTROL_TRANSMIT' => {
 		'desired-temp' => 'V:SET_TEMPERATURE:?temperature',
@@ -524,9 +580,27 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'on' => 'V:MANU_MODE:30.5',
 		'off' => 'V:MANU_MODE:4.5',
 		'auto' => 'V:AUTO_MODE:1',
-		'boost' => 'V:BOOST_MODE:1',
+		'boost' => 'V:BOOST_MODE:#boost=on,off',
 		'week-program' => 'D:WEEK_PROGRAM_POINTER:#program',
 		'get week-program' => 'D:WEEK_PROGRAM_POINTER:#program:HMCCU_DisplayWeekProgram'
+	},
+	'UNIVERSAL_LIGHT_RECEIVER' => {
+		'COMBINED_PARAMETER' => {
+			'L' => 'LEVEL',
+			'OT'  => 'ON_TIME',
+			'H' => 'HUE',
+			'SAT' => 'SATURATION'
+		},
+		'pct' => '5:V:LEVEL:?level 1:V:DURATION_UNIT:0 2:V:DURATION_VALUE:?time=0.0 3:V:RAMP_TIME_UNIT:0 4:V:RAMP_TIME_VALUE:?ramp=0.5',
+		'level' => 'V:LEVEL:?level',
+		'on' => 'V:LEVEL:100',
+		'off' => 'V:LEVEL:0',
+		'on-for-timer' => '1:V:DURATION_UNIT:0 2:V:DURATION_VALUE:?duration 3:V:LEVEL:100',
+		'on-till' => '1:V:DURATION_UNIT:0 2:V:DURATION_VALUE:?time 3:V:LEVEL:100',
+		'up' => 'V:LEVEL:?delta=+10',
+		'down' => 'V:LEVEL:?delta=-10',
+		'toggle' => 'V:LEVEL:0,100',
+		'color' => 'COMBINED_PARAMETER V:L:?level V:H:?hue V:SAT:?saturation'
 	},
 	'VIRTUAL_KEY' => {
 		'on' => 'V:PRESS_SHORT:1',
@@ -638,19 +712,25 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	},
 	'THERMALCONTROL_TRANSMIT' => {
 		'substexcl' => 'desired-temp',
-		'cmdIcon' => 'auto:sani_heating_automatic manu:sani_heating_manual boost:sani_heating_boost on:general_an off:general_aus',
+		'cmdIcon' => 'auto:sani_heating_automatic manu:sani_heating_manual on:general_an off:general_aus',
 		'webCmd' => 'desired-temp:auto:manu:boost:on:off',
 		'widgetOverride' => 'desired-temp:slider,4.5,0.5,30.5,1'
 	},
+	'UNIVERSAL_LIGHT_RECEIVER' => {
+		'cmdIcon' => 'on:general_an off:general_aus',
+		'substexcl' => 'pct|level',
+		'webCmd' => 'level:on:off',
+		'widgetOverride' => 'level:slider,0,10,100'
+	},
 	'CLIMATECONTROL_RT_TRANSCEIVER' => {
 		'substexcl' => 'desired-temp',
-		'cmdIcon' => 'auto:sani_heating_automatic manu:sani_heating_manual boost:sani_heating_boost on:general_an off:general_aus',
+		'cmdIcon' => 'auto:sani_heating_automatic manu:sani_heating_manual on:general_an off:general_aus',
 		'webCmd' => 'desired-temp:auto:manu:boost:on:off',
 		'widgetOverride' => 'desired-temp:slider,4.5,0.5,30.5,1'
 	},
 	'HEATING_CLIMATECONTROL_TRANSCEIVER' => {
 		'substexcl' => 'desired-temp',
-		'cmdIcon' => 'auto:sani_heating_automatic manu:sani_heating_manual boost:sani_heating_boost on:general_an off:general_aus',
+		'cmdIcon' => 'auto:sani_heating_automatic manu:sani_heating_manual on:general_an off:general_aus',
 		'webCmd' => 'desired-temp:auto:manu:boost:on:off',
 		'widgetOverride' => 'desired-temp:slider,4.5,0.5,30.5,1'
 	},
@@ -789,18 +869,24 @@ $HMCCU_CONFIG_VERSION = '5.0';
 	},
 	'THERMALCONTROL_TRANSMIT' => {
 		'SET_TEMPERATURE' =>       { '4.5' => 'off', '30.5' => 'on' },
-		'WINDOW_OPEN_REPORTING' => { '0' => 'closed', '1' => 'open', 'false' => 'closed', 'true' => 'open' }
+		'WINDOW_OPEN_REPORTING' => { '0' => 'closed', '1' => 'open', 'false' => 'closed', 'true' => 'open' },
+		'BOOST_MODE' =>            { '0' => 'off', '1' => 'on', 'false' => 'off', 'true' => 'on', 'off' => 0, 'on' => 1 }
 	},
 	'CLIMATECONTROL_RT_TRANSCEIVER' => {
-		'SET_TEMPERATURE' => { '4.5' => 'off', '30.5' => 'on' }
+		'SET_TEMPERATURE' => { '4.5' => 'off', '30.5' => 'on' },
+		'BOOST_MODE' =>      { '0' => 'off', '1' => 'on', 'false' => 'off', 'true' => 'on', 'off' => 0, 'on' => 1 }
 	},
 	'HEATING_CLIMATECONTROL_TRANSCEIVER' => {
 		'SET_POINT_TEMPERATURE' => { '4.5' => 'off', '30.5' => 'on' },
-		'SET_POINT_MODE' =>        { '0' => 'auto', '1' => 'manual', '2' => 'boost', '3' => 'off' },
-		'WINDOW_STATE' =>          { '0' => 'closed', '1' => 'open', 'false' => 'closed', 'true' => 'open' }
+		'SET_POINT_MODE' =>        { '0' => 'auto', '1' => 'manual', '2' => 'party/holiday', '3' => 'off' },
+		'WINDOW_STATE' =>          { '0' => 'closed', '1' => 'open', 'false' => 'closed', 'true' => 'open' },
+		'BOOST_MODE' =>            { '0' => 'off', '1' => 'on', 'false' => 'off', 'true' => 'on', 'off' => 0, 'on' => 1 }
 	},
 	'CLIMATECONTROL_REGULATOR' => {
 		'SETPOINT' => { '4.5' => 'off', '30.5' => 'on' }		
+	},
+	'UNIVERSAL_LIGHT_RECEIVER' => {
+		'LEVEL' => { '0' => 'off', '100' => 'on', 'off' => '0', 'on' => '100' }
 	},
 	'WATER_DETECTION_TRANSMITTER' => {
 		'ALARMSTATE' => { '0' => 'noAlarm', '1' => 'alarm', 'false' => 'noAlarm', 'true' => 'alarm' }
@@ -2280,6 +2366,60 @@ if(lResult == 0) {
 }
 		)
 	},
+	"GetMetaData" => {
+		description => "Read metadata of device or channel",
+		syntax      => "name",
+		parameters  => 1,
+		code        => qq(
+string name = "\$name";
+string ignore = "AUTOCONF,DEVDESC,MASTERDESC,LINKCOUNT,PARAMSETS";
+string dataId;
+object hmObj = dom.GetObject(name);
+if (hmObj) {
+  if (hmObj.IsTypeOf(OT_CHANNEL) || hmObj.IsTypeOf(OT_DEVICE)) {
+    string dataIdList = hmObj.EnumMetaData();
+    string address = hmObj.Address();
+    foreach (dataId, dataIdList.Split(' ')) {
+      if (!ignore.Contains(dataId)) {
+        string metaVal = hmObj.MetaData(dataId);
+        WriteLine(address # '=' # dataId # '=' # metaVal);
+      }
+    }
+    if (hmObj.IsTypeOf(OT_DEVICE)) {
+      string chnid;
+      foreach (chnid, hmObj.Channels()) {
+        object chnObj = dom.GetObject(chnid);
+        if (chnObj) {
+          string address = chnObj.Address();
+          string dataIdList = chnObj.EnumMetaData();
+          foreach (dataId, dataIdList.Split(' ')) {
+            if (!ignore.Contains(dataId)) {
+              string metaVal = chnObj.MetaData(dataId);
+              WriteLine(address # '=' # dataId # '=' # metaVal);
+            }
+          }
+        }
+      }
+    }
+  }
+  else {
+    WriteLine(name # " is no device or channel");
+  }
+}
+else {
+	WriteLine("Device or channel " # name # " not found");
+}
+		)
+	},
+	"AddMetaData" => {
+		description => "Add metadata to channel",
+		syntax      => "name key value",
+		parameters  => 3,
+		code        => qq(
+object chnObj = channels.Get("\$name");
+chnObj.AddMetaData("\$key", "\$value");
+		)
+	},
 	"GetServiceMessages" => {
 		description => "Read list of CCU service messages",
 		syntax      => "",
@@ -2300,7 +2440,7 @@ if(oTmpArray) {
         object odev = dom.GetObject((och.Device()));
         var ival = trigDP.Value();
         time sftime = oTmp.AlOccurrenceTime(); ! erste Meldezeit
-        time sltime = oTmp.LastTriggerTime();!letze Meldezeit
+        time sltime = oTmp.LastTriggerTime();  ! letzte Meldezeit
         var sdesc = trigDP.HssType();
         var sserial = odev.Address();
         var sname = odev.Name();

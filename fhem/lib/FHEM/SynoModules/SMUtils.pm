@@ -1,9 +1,9 @@
 ########################################################################################################################
-# $Id: SMUtils.pm 28257 2023-12-05 17:34:46Z DS_Starter $
+# $Id: SMUtils.pm 28667 2024-03-16 14:03:19Z DS_Starter $
 #########################################################################################################################
 #       SMUtils.pm
 #
-#       (c) 2020-2023 by Heiko Maaz
+#       (c) 2020-2024 by Heiko Maaz
 #       e-mail: Heiko dot Maaz at t-online dot de
 #
 #       This Module provides routines for FHEM modules developed for Synology use cases.
@@ -26,6 +26,7 @@
 #########################################################################################################################
 
 # Version History
+# 1.27.2  16.03.2024  change checkModVer text output
 # 1.27.1  04.12.2023  change checkModVer
 # 1.27.0  03.12.2023  new function checkModVer
 # 1.26.0  08.04.2023  add postid to _addSendqueueExtended
@@ -58,7 +59,7 @@ use FHEM::SynoModules::ErrCodes qw(:all);                                 # Erro
 use GPUtils qw( GP_Import GP_Export ); 
 use Carp qw(croak carp);
 
-use version 0.77; our $VERSION = version->declare('1.27.1');
+use version 0.77; our $VERSION = version->declare('1.27.2');
 
 use Exporter ('import');
 our @EXPORT_OK = qw(
@@ -426,14 +427,14 @@ sub moduleVersion {
   if ($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {          # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;                                           # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{<TYPE>}{META}}
       
-      if ($modules{$type}{META}{x_version}) {                                             # {x_version} nur gesetzt wenn $Id: SMUtils.pm 28257 2023-12-05 17:34:46Z DS_Starter $ im Kopf komplett! vorhanden
+      if ($modules{$type}{META}{x_version}) {                                             # {x_version} nur gesetzt wenn $Id: SMUtils.pm 28667 2024-03-16 14:03:19Z DS_Starter $ im Kopf komplett! vorhanden
           $modules{$type}{META}{x_version} =~ s/1\.1\.1/$v/gx;
       } 
       else {
           $modules{$type}{META}{x_version} = $v; 
       }
       
-      FHEM::Meta::SetInternals($hash);                                                   # FVERSION wird gesetzt ( nur gesetzt wenn $Id: SMUtils.pm 28257 2023-12-05 17:34:46Z DS_Starter $ im Kopf komplett! vorhanden )
+      FHEM::Meta::SetInternals($hash);                                                   # FVERSION wird gesetzt ( nur gesetzt wenn $Id: SMUtils.pm 28667 2024-03-16 14:03:19Z DS_Starter $ im Kopf komplett! vorhanden )
   } 
   else {                                                                                 # herkömmliche Modulstruktur
       $hash->{VERSION} = $v;                                                             # Internal VERSION setzen
@@ -2075,7 +2076,7 @@ sub checkModVer {
       }
 
       if (!$fileOk) {
-          $msg = "A new $fName version is available on SVN (creation time: $r[1], size: $r[2] Bytes).";
+          $msg = "Another official $fName version is available on SVN (creation time: $r[1], size: $r[2] Bytes).";
           $rec = "You should update FHEM to get the recent $fName version from Repository.";
           return (0, 1, $msg, $rec, $fName, $r[2]);
       }

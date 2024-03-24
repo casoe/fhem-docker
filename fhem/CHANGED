@@ -1,5 +1,134 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it.
+ - bugfix:  73_PRESENCE2: Fehlerbereinigungen
+                          Hochlaufen bei Neustart von Fhem korrigiert
+                          Lokale Bluetooth Erkennung korrigiert
+ - feature: 73_PRESENCE2: Neues Attribut bluetoothHciDevice, hcitoolParam
+ - change:  70_PylonLowVoltage: edit commandref
+ - feature: 93_DbLog: support of MariaDB driver and more, see Forum:#137480
+ - feature: 93_DbRep: sqlCmdBlocking can use sql Keywords §timestamp_end§ etc.
+ - change:  93_DbRep: prevent some attr eval as long as init_done is not set
+ - feature: 76_SolarForecast: currentMeterDev: opt. keys conprice, feedprice
+ - change:  93_DbRep: executeBefore/AfterProc output: set verbose level to 3
+ - change:  76_SolarForecast: minor code changes ones more
+ - bufgix:  72_FRITZBOX: Fehlerbehandlung verbessert
+ - change:  72_FRITZBOX: commandRef ergänzt
+ - change:  76_SolarForecast: minor code changes
+ - feature: 93_DbRep: prepare client - server communication compression support
+ - feature: 76_SMAInverter: add GridConection reading (SI only)
+ - bugfix:  88_HMCCU: Fixed syntax errors in HMCCUConf.pm
+ - change:  93_DbLog: META.json data corrected
+ - change:  93_DbRep: Ready for support of MariaDB Perl driver
+ - change:  98_Installer: change Maintainer, change app version check
+ - change:  93_DbRep: attribute allowDeletion deleted, multiCmd: use of
+                      executeBeforeProc, executeAfterProc possible,
+                      prepare support of MariaDB,
+                      NOTE: if allowDeletion is set in your devices, messages
+                      like '...The attribute 'allowDeletion' is obsolete and 
+                      will be deleted soon...'. This is _NOT_ an error. 
+                      Please save config when FHEM restart is finished.
+ - feature: 76_SolarForecast: plantConfigCheck: check DWD Attr forecastRefresh,
+                              check weather/Rad1h data according MOSMIX variant
+ - bugfix:  73_PRESENCE2: Fehlerbereinigungen Attribut intervalPresent
+ - bugfix:  73_PRESENCE2: Fehlerbereinigungen logging
+ - change:  73_DoorBird:      META.json data completed in accordance to Spec
+ - bugfix:  93_DbRep: execute next nextMultiCmd even if time check got failed
+ - bugfix:  73_DoorBird:      META.json data corrected
+ - feature: 76_SolarForecast: save/restore relevant readings AND attributes
+                              with plantConfig, visual LED display whether the 
+                              weather data is current (age < 2h)
+ - bugfix:  73_PRESENCE2: Fehlerbereinigungen
+ - bugfix:  98_CDCOpenData: Fehler bei verbose 5 und golbal logdir
+ - bufgix:  72_FRITZBOX:  Fehler bei verbose 5 und golbal logdir
+ - changed: 73_DoorBird:      New Encryption following DoorBird API & logo
+ - feature: 76_SolarForecast: take into account the position of the sun in
+                              addition to cloud cover when determining the 
+                              correction factor
+ - change:  76_SolarForecast: check age of Rad1h data, use RR1c instead of R101
+ - feature: 70_PylonLowVoltage: print out faulty response with verbose 5
+ - bugfix:  88_HMCCU: fixed device detection bug
+ - feature: 93_DbRep: sqlCmd executing ckey:latest possible
+ - new:     73_PRESENCE2: cover version von 73_PRESENCE.pm
+ - change:  76_SolarForecast: fillup AI data with sun azimuth / altitude
+ - feature: 76_SolarForecast: new command get dwdCatalog
+ - feature: 72_FRITZBOX: QAM Informationen bei Cable Boxen
+ - bufgix:  72_FRITZBOX: kleinere Fehler bereinigt.
+                         LAN Geräte ohne IP wurden nicht angezeigt.
+ - bugfix:  76_SolarForecast: fix load Astro module
+ - feature: 76_SolarForecast: integrate sun position from Astro module to AI,
+                              some more internal code changes 
+ - feature: 72_FRITZBOX: get <name> lanDeviceInfo <number>
+            erweiterte Informationen für Geräte mit Kindersicherung
+ - feature: 76_SolarForecast: Links to the website of the API used
+ - bugfix:  72_FRITZBOX: kleiner Fehler bei set <name> smartHome tempOffset
+ - bugfix:  76_SolarForecast: fix plant check ctrlWeatherDevX
+ - feature: 76_SolarForecast: add attr ctrlWeatherDev2, ctrlWeatherDev3
+ - bugfix:  76_SMAInverter: Voltage L1-L2-L3 bug
+ - change:  76_SolarForecast: first step of multi weather device merger
+ - change:  76_SolarForecast: language support consumer info
+ - feature: 72_FRITZBOX: set <name> <smartHome>
+            get <name> <luaData> <smartHome>
+ - feature: 73_PRESENCE: set <name> inactive wird persistiert
+ - feature: 76_SolarForecast: replace setter currentWeatherDev by attribute 
+                              ctrlWeatherDev1, data maintenance
+ - feature: 6.3 released
+
+- 2024-01-28 (6.2)
+ - feature: 76_SolarForecast: Setter writeHistory replaced by operatingMemory
+                              save, backup and recover in-memory operating data
+ - feature: 76_SolarForecast: generate plant backup files
+ - bugfix:  76_SolarForecast: minor fixes
+ - feature: 76_SolarForecast: consumerXX: notbefore, notafter can be {<code>}
+ - feature: 76_SolarForecast: consumerXX: notbefore, notafter format hh[:mm]
+ - feature: 76_SolarForecast: add operationMode: active/inactive
+ - feature: 74_AutomowerConnect: New setter confirmError for Testing
+ - bugfix:  72_FRITZBOX: fehlen von Data::Dumper in einer debuf sub 
+            behoben.
+            FehlerLog bei Erstanmeldung an Fritz!... behoben.
+ - feature: 72_FRITZBOX: set <name> <inActive on|off>
+ - feature: 76_SolarForecast: 'noLearning' Option for pvCorrectionFactor_Auto
+ - bugfix:  72_FRITZBOX: Fehler bei Anmeldung an Fritz!Repeater
+            behoben.
+            Fehler bei auslesen der FritzBox bei selten auftretender
+            Abfolge behoben z.B Fritz!Repeater 450E.
+ - change:  76_SolarForecast: optimize battery management once more
+ - feature: 00_KNXIO: set-cmds: connect, disconnect, restart
+ - feature: 76_SolarForecast: Consumer planning can now react dynamically to 
+                              changing or time-shifting PV generation,
+                              some more minor changes
+ - bugfix:  72_FRITZBOX: fast alle Sub in der Namensgebung vereinheitlich
+            um das Modul wartbarer zu machen.
+            die Fehlerbehandlung vereinheitlicht und hoffentlich besser
+            Strukturiert.
+ - feature: 72_FRITZBOX: bei einem Aufruf luaData kann ein ; durch #x003B
+            maskiert werden.
+            bei get ... luaData optionaler Parameter [json] für die Rückgabe
+            des Ergebnisses als json.
+            neues Attribut: maxSIDrenewErrCnt
+ - bugfix:  10_KNX: fix dpt14 min/max values
+ - change:  36_Shelly: 'set ... pos' instead of 'set ... pct' is undone
+ - feature: 76_SolarForecast: run collection definitely at end/start of an hour
+ - feature: 93_DbRep: new setter multiCmd, change autoForward
+                      bugfix: reducelog problem Forum:#136581
+ - bugfix:  76_SolarForecast: fix get Automatic State
+ - change:  76_SolarForecast: optimize battery management once more
+ - change:  76_SolarForecast: optimize batterymanagement
+ - change:  93_DbLog: minor change of configCheck 
+ - feature: 76_SolarForecast: externally caused switching of consumers is 
+                              detected
+ - feature: 10_IT: bei AttrList nicht benötigte Einträge unit und group entf
+                   bei einem modify der DEF wird nun die alte DEF gelöscht
+                   Anpassungen für TSCUL
+ - feature: 93_DbLog: make EVENT writable, Forum:#136389
+ - bugfix:  98_CDCOpenData: Fehler in Monatsformat
+ - bugfix:  36_Shelly: devices gen2 in roller mode: metering readings are single
+ - feature: 36_Shelly: new 'set ... reset <counter>' command
+ - bugfix:  36_Shelly: handling of attr 'shellyuser' for gen2 devices
+ - bugfix:  70_Klafs: minor bugfix for Reading RemainTime
+ - feature: 10_KNX: additional dpt14 subtypes, Forum #122582 
+ - bugfix:  00_KNXIO: fix problem IO-write queing, Forum #127792
+ - bugfix:  74_AutomowerConnect: Commandref corrections, fix start up warning
+            improve disableForIntervalls handling
  - bugfix:  36_Shelly: store newkeys in helper after init
  - feature: 36_Shelly: Add Gen3 Mini devices (fw gen2 compatibility)
                        Roller devices: use 'set ... pos' equivalent to 'pct'

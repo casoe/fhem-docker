@@ -1,5 +1,5 @@
 #############################################
-# $Id: 98_DOIF.pm 27740 2023-07-10 09:31:11Z Damian $
+# $Id: 98_DOIF.pm 28546 2024-02-23 20:11:05Z Damian $
 #
 # This file is part of fhem.
 #
@@ -1636,6 +1636,10 @@ sub DOIF_setValue_collect
     } else {
       my @rv=splice (@{$va},0,$diff_slots);
       my @rt=splice (@{$ta},0,$diff_slots);
+      if ($diff_slots > 1 and !defined ${$va}[$dim-$diff_slots] and defined ${$collect}{last} and ${$va}[$dim-$diff_slots-1] != ${$collect}{last}) {
+        ${$va}[$dim-$diff_slots]=${$collect}{last};
+        ${$ta}[$dim-$diff_slots]=(int(${$ta}[$dim-$diff_slots-1]/$seconds_per_slot)+1)*$seconds_per_slot;
+      }
       for (my $i=@rv-1;$i>=0;$i--) {
         if (defined ($rv[$i])) {
           ${$collect}{last_value}=$rv[$i];
@@ -1643,6 +1647,7 @@ sub DOIF_setValue_collect
         }
       }
     }
+    ${$collect}{last}=undef;
   }
   
   if (!defined ${$va}[$dim-1] or !defined ${$collect}{last_v} or (abs($r-${$collect}{last_v}) >  abs(${$va}[$dim-1]-${$collect}{last_v}))) {
@@ -1657,8 +1662,9 @@ sub DOIF_setValue_collect
     }
     ${$ta}[$dim-1]=$seconds;
     ${$collect}{last_slot}=$slot_nr;
+  } elsif ($r ne "N/A" and ${$va}[$dim-1] != $r) {
+    ${$collect}{last}=$r;
   }
-  
   
   if (defined $statistic or defined $change) {
     DOIF_statistic_col ($collect)
@@ -3491,18 +3497,18 @@ DOIF_Notify($$)
   return "" if (ReadingsVal($pn,"mode","") eq "disabled");
   
   $ret=0;
-  if (defined $hash->{Regex}{"event_Readings"}) {
-    foreach $device ("$dev->{NAME}","") {
-      if (defined $hash->{Regex}{"event_Readings"}{$device}) {
-        #readingsBeginUpdate($hash);
-        foreach my $reading (keys %{$hash->{Regex}{"event_Readings"}{$device}}) {
-          my $readingregex=CheckRegexpDoIf($hash,"event_Readings",$dev->{NAME},$reading,$eventa,$eventas);
-          setDOIF_Reading($hash,$reading,$readingregex,"event_Readings",$eventa, $eventas,$dev->{NAME}) if (defined($readingregex));
-        }
-        #readingsEndUpdate($hash,1);
-      }
-    }
-  }
+#  if (defined $hash->{Regex}{"event_Readings"}) {
+#    foreach $device ("$dev->{NAME}","") {
+#      if (defined $hash->{Regex}{"event_Readings"}{$device}) {
+#        foreach my $reading (keys %{$hash->{Regex}{"event_Readings"}{$device}}) {
+#          my $readingregex=CheckRegexpDoIf($hash,"event_Readings",$dev->{NAME},$reading,$eventa,$eventas);
+#    	   if (defined($readingregex)) {
+#             setDOIF_Reading($hash,$reading,$readingregex,"event_Readings",$eventa, $eventas,$dev->{NAME});
+#		   }
+#        }
+#      }
+#    }
+#  }
   
   if (defined $hash->{Regex}{"accu"}{"$dev->{NAME}"}) {
     my $device=$dev->{NAME};
@@ -3581,25 +3587,7 @@ DOIF_Notify($$)
   
   delete $hash->{helper}{cur_cmd_nr};
   
-  if (defined $hash->{Regex}{"DOIF_Readings"}) {
-    foreach $device ("$dev->{NAME}","") {
-      if (defined $hash->{Regex}{"DOIF_Readings"}{$device}) {
-        #readingsBeginUpdate($hash);
-        foreach my $reading (keys %{$hash->{Regex}{"DOIF_Readings"}{$device}}) {
-          my $readingregex=CheckRegexpDoIf($hash,"DOIF_Readings",$dev->{NAME},$reading,$eventa,$eventas);
-          setDOIF_Reading($hash,$reading,$readingregex,"DOIF_Readings",$eventa, $eventas,$dev->{NAME}) if (defined($readingregex));
-        }
-        #readingsEndUpdate($hash, 1);
-      }
-    }
-    if (defined ($hash->{helper}{DOIF_eventas})) { #$SELF events
-      foreach my $reading (keys %{$hash->{Regex}{"DOIF_Readings"}{$hash->{NAME}}}) {
-        my $readingregex=CheckRegexpDoIf($hash,"DOIF_Readings",$hash->{NAME},$reading,$hash->{helper}{DOIF_eventa},$hash->{helper}{DOIF_eventas});
-        setDOIF_Reading($hash,$reading,$readingregex,"DOIF_Readings",$eventa, $eventas,$dev->{NAME}) if (defined($readingregex));
-      }
-    }
-  }
-  
+   
   foreach my $table ("uiTable","uiState") {
     if (defined $hash->{Regex}{$table}) {
       foreach $device ("$dev->{NAME}","") {
@@ -3610,7 +3598,7 @@ DOIF_Notify($$)
           }
         }
       }
-      if (defined ($hash->{helper}{DOIF_eventas})) { #$SELF events
+      if (defined ($hash->{helper}{DOIF_eventas})) {# $SELF events
         foreach my $doifId (keys %{$hash->{Regex}{$table}{$hash->{NAME}}}) {
           my $readingregex=CheckRegexpDoIf($hash,$table,$hash->{NAME},$doifId,$hash->{helper}{DOIF_eventa},$hash->{helper}{DOIF_eventas});
           DOIF_UpdateCell($hash,$doifId,$hash->{NAME},$readingregex) if (defined($readingregex));
@@ -3619,26 +3607,26 @@ DOIF_Notify($$)
     }
   }
   
-  if (defined $hash->{Regex}{"event_Readings"}) {
-    foreach $device ("$dev->{NAME}","") {
-      if (defined $hash->{Regex}{"event_Readings"}{$device}) {
-        #readingsBeginUpdate($hash);
-        foreach my $reading (keys %{$hash->{Regex}{"event_Readings"}{$device}}) {
-          my $readingregex=CheckRegexpDoIf($hash,"event_Readings",$dev->{NAME},$reading,$eventa,$eventas);
-          setDOIF_Reading($hash,$reading,$readingregex,"event_Readings",$eventa, $eventas,$dev->{NAME}) if (defined($readingregex));
+  foreach my $readings ("DOIF_Readings","event_Readings") {
+    if (defined $hash->{Regex}{$readings}) {
+      foreach $device ("$dev->{NAME}","") {
+        if (defined $hash->{Regex}{$readings}{$device}) {
+          foreach my $reading (keys %{$hash->{Regex}{$readings}{$device}}) {
+            my $readingregex=CheckRegexpDoIf($hash,$readings,$dev->{NAME},$reading,$eventa,$eventas);
+            setDOIF_Reading($hash,$reading,$readingregex,$readings,$eventa, $eventas,$dev->{NAME}) if (defined($readingregex));
+          }
         }
-        #readingsEndUpdate($hash,1);
       }
-    }
-    if (defined ($hash->{helper}{DOIF_eventas})) { #$SELF events
-      foreach my $reading (keys %{$hash->{Regex}{"event_Readings"}{$hash->{NAME}}}) {
-        my $readingregex=CheckRegexpDoIf($hash,"event_Readings",$hash->{NAME},$reading,$hash->{helper}{DOIF_eventa},$hash->{helper}{DOIF_eventas});
-        setDOIF_Reading($hash,$reading,$readingregex,"event_Readings",$eventa, $eventas,$dev->{NAME}) if (defined($readingregex));
+      if (defined ($hash->{helper}{DOIF_eventas})) {# $SELF events
+        foreach my $reading (keys %{$hash->{Regex}{$readings}{$hash->{NAME}}}) {
+          my $readingregex=CheckRegexpDoIf($hash,$readings,$hash->{NAME},$reading,$hash->{helper}{DOIF_eventa},$hash->{helper}{DOIF_eventas});
+          setDOIF_Reading($hash,$reading,$readingregex,$readings,$eventa, $eventas,$dev->{NAME}) if (defined($readingregex));
+        }
       }
     }
   }
 
-  if (defined $hash->{helper}{DOIF_Readings_events}) {
+  if (defined $hash->{helper}{DOIF_Readings_events}) {# only for DOIF_Readings
     if ($dev->{NAME} ne $hash->{NAME}) {
       @{$hash->{CHANGED}}=@{$hash->{helper}{DOIF_Readings_events}};
       @{$hash->{CHANGEDWITHSTATE}}=@{$hash->{helper}{DOIF_Readings_eventsState}};

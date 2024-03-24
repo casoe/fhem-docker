@@ -1,4 +1,4 @@
-# $Id: 98_JsonMod.pm 27933 2023-09-04 13:29:42Z herrmannj $
+# $Id: 98_JsonMod.pm 28481 2024-02-05 22:14:33Z herrmannj $
 ###############################################################################
 #
 #     This file is part of fhem.
@@ -73,7 +73,7 @@ sub JsonMod_Define {
 	my ($hash, $def) = @_;
 	my ($name, $type, $source) = split /\s/, $def, 3;
 
-	my $cvsid = '$Id: 98_JsonMod.pm 27933 2023-09-04 13:29:42Z herrmannj $';
+	my $cvsid = '$Id: 98_JsonMod.pm 28481 2024-02-05 22:14:33Z herrmannj $';
 	$cvsid =~ s/^.*pm\s//;
 	$cvsid =~ s/Z\s\S+\s\$$/ UTC/;
 	$hash->{'SVN'} = $cvsid;
@@ -253,7 +253,7 @@ sub JsonMod_WritePvtConfig {
 	};
 	$hash->{'SECRETS'} = join ", ", keys (%{$hash->{'CONFIG'}->{'SECRET'}});
 	my $key = $hash->{'FUUID'};
-	my $val = MIME::Base64::encode(JsonMod::JSON::StreamWriter->new()->parse($data));
+	my $val = MIME::Base64::encode(JsonMod::JSON::StreamWriter->new()->parse($data), '');
 	my $error = setKeyValue($key, $val);
 	return;
 };

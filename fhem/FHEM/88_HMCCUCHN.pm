@@ -2,11 +2,11 @@
 #
 #  88_HMCCUCHN.pm
 #
-#  $Id: 88_HMCCUCHN.pm 27999 2023-09-26 16:33:11Z zap $
+#  $Id: 88_HMCCUCHN.pm 28673 2024-03-17 10:52:10Z zap $
 #
 #  Version 5.0
 #
-#  (c) 2022 zap (zap01 <at> t-online <dot> de)
+#  (c) 2024 zap (zap01 <at> t-online <dot> de)
 #
 ######################################################################
 #  Client device for Homematic channels.
@@ -30,7 +30,7 @@ sub HMCCUCHN_Set ($@);
 sub HMCCUCHN_Get ($@);
 sub HMCCUCHN_Attr ($@);
 
-my $HMCCUCHN_VERSION = '5.0 232691829';
+my $HMCCUCHN_VERSION = '5.0 2024-03';
 
 ######################################################################
 # Initialize module
@@ -51,13 +51,13 @@ sub HMCCUCHN_Initialize ($)
 	$hash->{parseParams} = 1;
 
 	$hash->{AttrList} = 'IODev ccucalculate '.
-		'ccuflags:multiple-strict,hideStdReadings,replaceStdReadings,noBoundsChecking,ackState,logCommand,noAutoSubstitute,noReadings,trace,simulate,showMasterReadings,showLinkReadings,showDeviceReadings,showServiceReadings '.
+		'ccuflags:multiple-strict,hideStdReadings,replaceStdReadings,noBoundsChecking,ackState,logCommand,noAutoSubstitute,noReadings,trace,simulate,showMasterReadings,showLinkReadings,showDeviceReadings '.
 		'ccureadingfilter:textField-long statedatapoint controldatapoint '.
 		'ccureadingformat:name,namelc,address,addresslc,datapoint,datapointlc '.
 		'ccureadingname:textField-long ccuSetOnChange ccuReadingPrefix '.
 		'ccuscaleval ccuverify:0,1,2 ccuget:State,Value devStateFlags '.
 		'disable:0,1 hmstatevals:textField-long statevals substitute:textField-long '.
-		'substexcl stripnumber peer:textField-long traceFilter '. $readingFnAttributes;
+		'substexcl stripnumber traceFilter '. $readingFnAttributes;
 }
 
 ######################################################################
@@ -212,7 +212,7 @@ sub HMCCUCHN_InitDevice ($$)
 			$rc = -2;
 		}
 
-		HMCCU_GetUpdate ($devHash, $da);
+		HMCCU_ExecuteGetExtValuesCommand ($devHash, $da);
 	}
 
 	return $rc;
@@ -279,6 +279,9 @@ sub HMCCUCHN_Attr ($@)
 			my @t = split(':', $attrval);
 			return "$clType [$name] Missing flag and or value expression in attribute $attrname" if (scalar(@t) != 3);
 		}
+		elsif ($attrname eq 'peer') {
+			return "$clType [$name] Attribute 'peer' is no longer supported. Please use DOIF or NOTIFY";
+		}
 	}
 	elsif ($cmd eq 'del') {
 		if ($attrname =~ /^(state|control)datapoint$/) {
@@ -327,13 +330,13 @@ sub HMCCUCHN_Set ($@)
 	# Command readingFilter depends on readable datapoints
 	my ($add, $chn) = split(":", $hash->{ccuaddr});
 	my @dpRList = ();
-	my $dpRCount = HMCCU_GetValidDatapoints ($hash, $hash->{ccutype}, $chn, 5, \@dpRList);
+	my $dpRCount = HMCCU_GetValidParameters ($hash, $chn, 'VALUES', 5, \@dpRList);
 	$syntax .= ' readingFilter:multiple-strict,'.join(',', @dpRList) if ($dpRCount > 0);
 
 	# Commands only available in read/write mode
 	if ($hash->{readonly} ne 'yes') {
 		$syntax .= ' config';
-		my $dpWCount = HMCCU_GetValidDatapoints ($hash, $hash->{ccutype}, $chn, 2);
+		my $dpWCount = HMCCU_GetValidParameters ($hash, $chn, 'VALUES', 2);
 		$syntax .= ' datapoint' if ($dpWCount > 0);
 		my $addCmds = $hash->{hmccu}{cmdlist}{set} // '';
 		$syntax .= " $addCmds" if ($addCmds ne '');
@@ -348,9 +351,6 @@ sub HMCCUCHN_Set ($@)
 	}
 	elsif ($lcopt eq 'datapoint') {
 		return HMCCU_ExecuteSetDatapointCommand ($hash, $a, $h);
-	}
-	elsif ($lcopt eq 'toggle') {
-		return HMCCU_ExecuteToggleCommand ($hash);
 	}
 	elsif (exists($hash->{hmccu}{roleCmds}{set}{$opt})) {
 		return HMCCU_ExecuteRoleCommand ($ioHash, $hash, 'set', $opt, $a, $h);
@@ -384,6 +384,9 @@ sub HMCCUCHN_Set ($@)
 		HMCCU_RefreshReadings ($hash) if ($rc);
 		return HMCCU_SetError ($hash, $retMsg);
 	}
+	elsif ($lcopt eq 'echo') {
+		return HMCCU_RefToString ($h);
+	}
 	else {
 		return "Unknown argument $opt choose one of $syntax";
 	}
@@ -415,12 +418,12 @@ sub HMCCUCHN_Get ($@)
 	my $ccuflags = AttrVal ($name, 'ccuflags', 'null');
 
 	# Build set command syntax
-	my $syntax = 'update config paramsetDesc:noArg deviceInfo:noArg values extValues';
+	my $syntax = 'update config paramsetDesc:noArg deviceInfo:noArg values extValues metaData';
 	
 	# Command datapoint depends on readable datapoints
 	my ($add, $chn) = split(":", $hash->{ccuaddr});
 	my @dpRList;
-	my $dpRCount = HMCCU_GetValidDatapoints ($hash, $ccutype, $chn, 1, \@dpRList);   
+	my $dpRCount = HMCCU_GetValidParameters ($hash, $chn, 'VALUES', 1, \@dpRList);   
 	$syntax .= ' datapoint:'.join(",", @dpRList) if ($dpRCount > 0);
 	
 	# Additional device specific commands
@@ -432,13 +435,7 @@ sub HMCCUCHN_Get ($@)
 		if ($opt ne '?' && $ccuflags =~ /logCommand/ || HMCCU_IsFlag ($ioName, 'logCommand')); 
 
 	if ($lcopt eq 'datapoint') {
-		my $objname = shift @$a // return HMCCU_SetError ($hash, "Usage: get $name datapoint {datapoint}");		
-		return HMCCU_SetError ($hash, -8, $objname)
-			if (!HMCCU_IsValidParameter ($hash, $ccuaddr, 'VALUES', $objname, 1));
-
-		$objname = "$ccuif.$ccuaddr.$objname";
-		my ($rc, $result) = HMCCU_GetDatapoint ($hash, $objname, 0);
-		return $rc < 0 ? HMCCU_SetError ($hash, $rc, $result) : $result;
+		return HMCCU_ExecuteGetDatapointCommand ($hash, $a);
 	}
 	elsif ($lcopt eq 'deviceinfo') {
 		my $extended = shift @$a;
@@ -455,12 +452,17 @@ sub HMCCUCHN_Get ($@)
 	}
 	elsif ($lcopt eq 'extvalues') {
 		my $filter = shift @$a;
-		my $rc = HMCCU_GetUpdate ($hash, $ccuaddr, $filter);
+		my $rc = HMCCU_ExecuteGetExtValuesCommand ($hash, $ccuaddr, $filter);
 		return $rc < 0 ? HMCCU_SetError ($hash, $rc) : 'OK';
 	}
 	elsif ($lcopt eq 'paramsetdesc') {
 		my $result = HMCCU_ParamsetDescToStr ($ioHash, $hash);
 		return defined($result) ? $result : HMCCU_SetError ($hash, "Can't get device model");
+	}
+	elsif ($lcopt eq 'metadata') {
+		my $filter = shift @$a;
+		my ($rc, $result) = HMCCU_ExecuteGetMetaDataCommand ($ioHash, $hash, $filter);
+		return $rc < 0 ? HMCCU_SetError ($hash, $rc, $result) : $result;
 	}
 	elsif (exists($hash->{hmccu}{roleCmds}{get}{$opt})) {
 		return HMCCU_ExecuteRoleCommand ($ioHash, $hash, 'get', $opt, $a, $h);
@@ -526,6 +528,15 @@ sub HMCCUCHN_Get ($@)
       <li><b>set &lt;name&gt; armState {DISARMED|EXTSENS_ARMED|ALLSENS_ARMED|ALARM_BLOCKED}</b><br/>
 	     [alarm siren] Set arm state.
 	  </li><br/>
+	  <li><b>set &lt;name&gt; auto</b><br/>
+         [thermostat] Turn auto mode on.
+	  </li><br/>
+	  <li><b>set &lt;name&gt; boost {on|off}</b><br/>
+         [thermostat] Turn boost mode on or off
+	  </li><br/>
+	  <li><b>set &lt;name&gt; calibrate {START|STOP}</b><br/>
+		 [blind] Run calibration.
+	  </li><br/>
       <li><b>set &lt;name&gt; clear [&lt;reading-exp&gt;|reset]</b><br/>
          Delete readings matching specified reading name expression. Default expression is '.*'.
          Readings 'state' and 'control' are not deleted. With option 'reset' all readings
@@ -563,12 +574,19 @@ sub HMCCUCHN_Get ($@)
       	Set value of control datapoint. This command is available only on command line
       	for compatibility reasons. It should not be used any more.
       </li><br/>
-      <li><b>set &lt;name&gt; datapoint &lt;datapoint&gt; &lt;value&gt; | &lt;datapoint&gt=&lt;value&gt; [...]</b><br/>
+      <li><b>set &lt;name&gt; datapoint [&lt;no&gt;:][&lt;channel&gt;.]&lt;datapoint&gt; &lt;{value|'oldval'}&gt; | [&lt;no&gt;:][&lt;channel&gt;.]&lt;datapoint&gt=&lt;value&gt; [...]</b><br/>
         Set datapoint values of a CCU channel. If value contains blank characters it must be
-        enclosed in double quotes. This command is only available, if channel contains a writeable datapoint.<br/><br/>
+        enclosed in double quotes. This command is only available, if channel contains a writeable datapoint.<br/>
+		By using parameter <i>no</i> one can specify the order in which datapoints are set (see 3rd example below).<br/>
+		When using syntax <i>datapoint</i>=<i>value</i> with multiple datapoints always specify a <i>no</i> to ensure 
+		that datapoints are set in the desired order.<br/>
+		The special <i>value</i> 'oldval' will set the datapoint to its previous value. This can be used to realize a toggle function
+		for each datapoint. Note: the previous value of a datapoint is not available at the first 'set datapoint' command after
+		FHEM start.<br/><br/>
         Examples:<br/>
         <code>set temp_control datapoint SET_TEMPERATURE 21</code><br/>
-        <code>set temp_control datapoint AUTO_MODE 1 SET_TEMPERATURE=21</code>
+        <code>set temp_control datapoint AUTO_MODE 1 SET_TEMPERATURE=21</code><br/>
+		<code>set temp_control datapoint 2:AUTO_MODE=0 1:SET_TEMPERATURE=21</code>
       </li><br/>
       <li><b>set &lt;name&gt; defaults ['reset'|'forceReset'|'old'|'<u>update</u>']</b><br/>
    		Set default attributes for CCU device type. Default attributes are only available for
@@ -586,15 +604,17 @@ sub HMCCUCHN_Get ($@)
       	[dimmer, blind] Decrement value of datapoint LEVEL. This command is only available
       	if channel contains a datapoint LEVEL. Default for <i>value</i> is 20.
       </li><br/>
+	  <li><b>set &lt;name&gt; manu [&lt;temperature&gt;]</b><br/>
+	    [thermostat] Set manual mode. Default temperature is 20.
+	  </li><br/>
 	  <li><b>set &lt;name&gt; off</b><br/>
-	  	Turn device off.
+	  	[switch,thermostat,dimmer] Turn device off.
 	  </li><br/>
 	  <li><b>set &lt;name&gt; oldLevel</b><br/>
-	    [dimmer, blind] Set level to previous value. The command is only available if channel
-		contains a datapoint LEVEL with a maximum value of 1.01.
+	    [dimmer, blind, jalousie, shutter] Set level to previous value.
 	  </li><br/>
 	  <li><b>set &lt;name&gt; on</b><br/>
-	  	Turn device on.
+	  	[switch,thermostat,dimmer] Turn device on.
 	  </li><br/>
       <li><b>set &lt;name&gt; on-for-timer &lt;ontime&gt;</b><br/>
          [switch] Switch device on for specified number of seconds. This command is only available if
@@ -610,6 +630,9 @@ sub HMCCUCHN_Get ($@)
       </li><br/>
 	  <li><b>set &lt;name&gt; open</b><br/>
 		[blind,door] Set level of a shutter or blind to 100%.
+	  </li><br/>
+	  <li><b>set &lt;name&gt; party &lt;temperature&gt; &lt;start-time&gt; &lt;end-time&gt;</b><br/>
+         [thermostat] Turn party mode on. Timestamps must be in format "YYYY_MM_DD HH:MM".
 	  </li><br/>
       <li><b>set &lt;name&gt; pct &lt;value&gt; [&lt;ontime&gt; [&lt;ramptime&gt;]]</b><br/>
          [dimmer,blind] Set datapoint LEVEL of a channel to the specified <i>value</i>. Optionally a <i>ontime</i>
@@ -639,14 +662,7 @@ sub HMCCUCHN_Get ($@)
       	channel contains a datapoint STOP.
       </li><br/>
       <li><b>set &lt;name&gt; toggle</b><br/>
-		Toggle state datapoint between values defined by attribute 'statevals' or by channel role. This command is
-		only available if state values can be detected or are defined by using attribute
-		'statevals'. Toggling supports more than two state values.<br/><br/>
-		Example: Toggle blind actor between states 'open', 'half' and 'close'<br/>
-		<code>
-		attr myswitch statevals open:100,half:50,close:0<br/>
-		set myswitch toggle
-		</code>
+		[switch,dimmer,blind] Toggle state between values on/off or open/close.
       </li><br/>
       <li><b>set &lt;name&gt; up [&lt;value&gt;]</b><br/>
       	[blind,dimmer] Increment value of datapoint LEVEL. This command is only available
@@ -680,7 +696,6 @@ sub HMCCUCHN_Get ($@)
 			<li>showMasterReadings: Store configuration readings of parameter set 'MASTER' of current channel.</li>
 			<li>showDeviceReadings: Store configuration readings of device and value readings of channel 0.</li>
 			<li>showLinkReadings: Store readings of links.</li>
-			<li>showServiceReadings: Store readings of parameter set 'SERVICE'</li>
 		</ul>
 		If non of the flags is set, only readings belonging to parameter set VALUES (datapoints)
 		are stored.
@@ -712,6 +727,11 @@ sub HMCCUCHN_Get ($@)
 		to the device.
 		If <i>filter-expr</i> is specified, only datapoints matching the expression are stored as readings.
 	  </li><br/>
+	  <li><b>get &lt;name&gt; metaData [&lt;filter-expr&gt;]</b><br/>
+	  	Read meta data for device or channel. If <i>filter-expr</i> is specified only meta data IDs matching
+		the specified regular expression are stored as readings.<br/>
+		Example: get myDev metaData energy.*
+	  </li><br/>
       <li><b>get &lt;name&gt; paramsetDesc</b><br/>
 		Display description of parameter sets of channel and device. The output of this command
 		is helpful to gather information about new / not yet supported devices. Please add this
@@ -727,7 +747,7 @@ sub HMCCUCHN_Get ($@)
 		update system variables bound to the device. These variables can be read by using command 'get extValues'.
 		If <i>filter-expr</i> is specified, only parameters matching the expression are stored as readings.
       </li><br/>
-      <li><b>get &lt;name&gt; weekProgram [&lt;program-number&gt;|<u>all</u>]</b><br/>
+      <li><b>get &lt;name&gt; week-program [&lt;program-number&gt;|<u>all</u>]</b><br/>
       	Display week programs. This command is only available if a device supports week programs.
       </li>
    </ul>
@@ -742,9 +762,7 @@ sub HMCCUCHN_Get ($@)
       <a name="calculate"></a>
       <li><b>ccucalculate &lt;value-type&gt;:&lt;reading&gt;[:&lt;dp-list&gt;[;...]</b><br/>
       	Calculate special values like dewpoint based on datapoints specified in
-      	<i>dp-list</i>. The result is stored in <i>reading</i>. For datapoints in <i>dp-list</i>
-      	also variable notation is supported (for more information on variables see documentation of
-      	attribute 'peer').<br/>
+      	<i>dp-list</i>. The result is stored in <i>reading</i>.<br/>
       	The following <i>value-types</i> are supported:<br/>
       	dewpoint = calculate dewpoint, <i>dp-list</i> = &lt;temperature&gt;,&lt;humidity&gt;<br/>
       	abshumidity = calculate absolute humidity, <i>dp-list</i> = &lt;temperature&gt;,&lt;humidity&gt;<br/>
@@ -771,7 +789,6 @@ sub HMCCUCHN_Get ($@)
       	showDeviceReadings: Show readings of device and channel 0.<br/>
       	showLinkReadings: Show link readings.<br/>
       	showMasterReadings: Show configuration readings.<br/>
-		showServiceReadings: Show service readings (HmIP only)<br/>
       	trace: Write log file information for operations related to this device.
       </li><br/>
       <a name="ccuget"></a>
@@ -850,7 +867,6 @@ sub HMCCUCHN_Get ($@)
 			MASTER (configuration parameters): 'R-'<br/>
 			LINK (links parameters): 'L-'<br/>
 			PEER (peering parameters): 'P-'<br/>
-			SERVICE (service parameters): S-<br/>
 		To hide prefix do not specify <i>prefix</i>.
       </li><br/>
       <a name="ccuscaleval"></a>
@@ -928,40 +944,7 @@ sub HMCCUCHN_Get ($@)
          Optionally the name of the HomeMatic state reading can be specified at the beginning of
          the attribute in format =&lt;reading&gt;;. The default reading name is 'hmstate'.
       </li><br/>
-      <a name="peer"></a>
-		<li><b>peer &lt;datapoints&gt;:&lt;condition&gt;:
-			{ccu:&lt;object&gt;=&lt;value&gt;|hmccu:&lt;object&gt;=&lt;value&gt;|
-			fhem:&lt;command&gt;}</b><br/>
-      	Logically peer datapoints of a HMCCUCHN or HMCCUDEV device with another device or any
-      	FHEM command.<br/>
-      	Parameter <i>datapoints</i> is a comma separated list of datapoints in format
-      	<i>channelno.datapoint</i> which can trigger the action.<br/>
-      	Parameter <i>condition</i> is a valid Perl expression which can contain
-      	<i>channelno.datapoint</i> names as variables. Variables must start with a '$' or a '%'.
-      	If a variable is preceded by a '$' the variable is substituted by the converted datapoint
-      	value (i.e. "on" instead of "true"). If variable is preceded by a '%' the raw value
-      	(i.e. "true") is used. If '$' or '%' is doubled the previous values will be used.<br/>
-      	If the result of this operation is true, the action specified after the second colon
-      	is executed. Three types of actions are supported:<br/>
-      	<b>hmccu</b>: Parameter <i>object</i> refers to a FHEM device/datapoint in format
-      	&lt;device&gt;:&lt;channelno&gt;.&lt;datapoint&gt;<br/>
-      	<b>ccu</b>: Parameter <i>object</i> refers to a CCU channel/datapoint in format
-      	&lt;channel&gt;.&lt;datapoint&gt;. <i>channel</i> can be a channel name or address.<br/>
-      	<b>fhem</b>: The specified <i>command</i> will be executed<br/>
-      	If action contains the string $value it is substituted by the current value of the 
-      	datapoint which triggered the action. The attribute supports multiple peering rules
-      	separated by semicolons and optionally by newline characters.<br/><br/>
-      	Examples:<br/>
-      	# Set FHEM device mydummy to value if formatted value of 1.STATE is 'on'<br/>
-      	<code>attr mydev peer 1.STATE:'$1.STATE' eq 'on':fhem:set mydummy $value</code><br/>
-      	# Set 2.LEVEL of device myBlind to 100 if raw value of 1.STATE is 1<br/>
-      	<code>attr mydev peer 1.STATE:'%1.STATE' eq '1':hmccu:myBlind:2.LEVEL=100</code><br/>
-      	# Set 1.STATE of device LEQ1234567 to true if 1.LEVEL < 100<br/>
-      	<code>attr mydev peer 1.LEVEL:$1.LEVEL < 100:ccu:LEQ1234567:1.STATE=true</code><br/>
-      	# Set 1.STATE of device LEQ1234567 to true if current level is different from old level<br/>
-      	<code>attr mydev peer 1.LEVEL:$1.LEVEL != $$1.LEVEL:ccu:LEQ1234567:1.STATE=true</code><br/>
-		</li><br/>
-		<a name="statedatapoint"></a>
+	  <a name="statedatapoint"></a>
       <li><b>statedatapoint &lt;datapoint&gt;</b><br/>
          Set datapoint used for displaying device state. This attribute must be set, if 
          state datapoint cannot be detected automatically.

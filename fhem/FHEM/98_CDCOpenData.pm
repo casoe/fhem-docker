@@ -1,5 +1,5 @@
 ###############################################################
-# $Id: 98_CDCOpenData.pm 28292 2023-12-18 08:26:06Z jowiemann $
+# $Id: 98_CDCOpenData.pm 28574 2024-03-01 09:46:17Z jowiemann $
 #
 #  98_CDCOpenData.pm
 #
@@ -54,7 +54,7 @@ use warnings;
 use Blocking;
 use HttpUtils;
 
-my $ModulVersion = "01.12b";
+my $ModulVersion = "01.12d";
 my $missingModul = "";
 
 sub CDCOpenData_Log($$$);
@@ -128,16 +128,14 @@ sub CDCOpenData_DebugLog($$$$;$) {
   $loglevel  .= ":" if ($loglevel);
   $loglevel ||= "";
 
-  my $dirdef = AttrVal('global', 'logdir', $attr{global}{modpath}.'/log/');
-
   my ($seconds, $microseconds) = gettimeofday();
   my @t = localtime($seconds);
-  my $nfile = $dirdef . ResolveDateWildcards($filename, @t);
+  my $nfile = ResolveDateWildcards("%L/" . $filename, @t);
   my $fh;
 
   unless ($timestamp) {
 
-    $tim = sprintf("%04d.%02d.%02d %02d:%02d:%02d", $t[5] * 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0]);
+    $tim = sprintf("%04d.%02d.%02d %02d:%02d:%02d", $t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0]);
 
     if ($attr{global}{mseclog}) {
       $tim .= sprintf(".%03d", $microseconds / 1000);
@@ -174,28 +172,44 @@ sub CDCOpenData_dbgLogInit($@) {
      $hash->{DEBUGLOG}             = "OFF";
      $hash->{helper}{debugLog}     = $name . "_debugLog";
      $hash->{helper}{logDebug}     = AttrVal($name, "verbose", 0) == 5;
+     if ($hash->{helper}{logDebug}) {
+       my ($seconds, $microseconds) = gettimeofday();
+       my @t = localtime($seconds);
+       my $nfile = ResolveDateWildcards($hash->{helper}{debugLog} . '-%Y-%m.dlog', @t);
+
+       $hash->{DEBUGLOG} = '<html>'
+                         . '<a href="/fhem/FileLog_logWrapper&amp;dev='
+                         . $hash->{helper}{debugLog}
+                         . '&amp;type=text&amp;file='
+                         . $nfile
+                         . '">DEBUG Log kann hier eingesehen werden</a>'
+                         . '</html>';
+     }
    }
 
    return if $aVal && $aVal == -1; 
 
-   my $dirdef     = AttrVal('global', 'logdir', $attr{global}{modpath}.'/log/');
+   my $dirdef     = Logdir() . "/";
    my $dbgLogFile = $dirdef . $hash->{helper}{debugLog} . '-%Y-%m.dlog';
 
-   if ($cmd eq "set" || $cmd eq "init") {
+   if ($cmd eq "set" ) {
      
      if($aVal == 5) {
-       my $dMod  = 'defmod ' . $hash->{helper}{debugLog} . ' FileLog ' . $dbgLogFile . ' FakeLog readonly';
+     
+       unless (defined $defs{$hash->{helper}{debugLog}}) {
+         my $dMod  = 'defmod ' . $hash->{helper}{debugLog} . ' FileLog ' . $dbgLogFile . ' FakeLog readonly';
 
-       fhem($dMod, 1);
-
-       if (my $dRoom = AttrVal($name, "room", undef)) {
-         $dMod = 'attr -silent ' . $hash->{helper}{debugLog} . ' room ' . $dRoom;
          fhem($dMod, 1);
-       }
 
-       if (my $dGroup = AttrVal($name, "group", undef)) {
-         $dMod = 'attr -silent ' . $hash->{helper}{debugLog} . ' group ' . $dGroup;
-         fhem($dMod, 1);
+         if (my $dRoom = AttrVal($name, "room", undef)) {
+           $dMod = 'attr -silent ' . $hash->{helper}{debugLog} . ' room ' . $dRoom;
+           fhem($dMod, 1);
+         }
+
+         if (my $dGroup = AttrVal($name, "group", undef)) {
+           $dMod = 'attr -silent ' . $hash->{helper}{debugLog} . ' group ' . $dGroup;
+           fhem($dMod, 1);
+         }
        }
 
        CDCOpenData_Log $name, 3, "redirection debugLog: $dbgLogFile started";
@@ -250,6 +264,24 @@ sub CDCOpenData_dbgLogInit($@) {
 
 } # end CDCOpenData_dbgLogInit
 
+#######################################################################
+sub CDCOpenData_Notify($$)
+{
+  my ($own_hash, $dev_hash) = @_;
+  my $ownName = $own_hash->{NAME}; # own name / hash
+ 
+  return "" if(IsDisabled($ownName)); # Return without any further action if the module is disabled
+ 
+  my $devName = $dev_hash->{NAME}; # Device that created the events
+  my $events = deviceEvents($dev_hash, 1);
+
+  if($devName eq "global" && grep(m/^INITIALIZED|REREADCFG$/, @{$events}))
+  {
+     # initialize DEGUB LOg function
+     CDCOpenData_dbgLogInit($own_hash, "init", "verbose", AttrVal($ownName, "verbose", -1));
+     # end initialize DEGUB LOg function
+  }
+}
 
 #######################################################################
 sub CDCOpenData_Initialize($)
@@ -260,6 +292,7 @@ sub CDCOpenData_Initialize($)
   $hash->{UndefFn}  = "CDCOpenData_Undefine";
   $hash->{DeleteFn} = "CDCOpenData_Delete";
   $hash->{RenameFn} = "CDCOpenData_Rename";
+  $hash->{NotifyFn} = "CDCOpenData_Notify";
 
   $hash->{SetFn}    = "CDCOpenData_Set";
   $hash->{GetFn}    = "CDCOpenData_Get";
@@ -640,7 +673,7 @@ sub CDCOpenData_Attr($@)
    }
 
    if ($aName eq "ownRadarFileLog") {
-     my $dirdef   = AttrVal('global', 'logdir', $attr{global}{modpath}.'/log/');
+     my $dirdef   = Logdir() . "/";
      my $rLogFile = $dirdef . $hash->{helper}{rainLog} . '.log';
 
      if ($cmd eq "set") {
@@ -1059,7 +1092,7 @@ sub CDCOpenData_Readout_Run_Data($@)
      for (my $i = 1; $i <= $holdCnt; $i++) {
        my $holdTime = $i * 86400;
        my ($Sekunden, $Minuten, $Stunden, $Monatstag, $Monat, $Jahr, $Wochentag, $Jahrestag, $Sommerzeit) = localtime(time - (time % 86400) - $holdTime);
-       $time = ($Jahr + 1900) . "-" . ($Monat + 1) . "-" . substr("00" . $Monatstag, -2);
+       $time = ($Jahr + 1900) . "-" . sprintf("%02d",$Monat + 1) . "-" . substr("00" . $Monatstag, -2);
        CDCOpenData_Log $name, 3, "start CDCOpenData_Readout_Run_getRain with $name, $fromGet, $time";
        $returnStrD .= CDCOpenData_Readout_Run_getRain($name, $time, $latlong, $fromGet, $i) . "|";
        return $name . "|" . encode_base64($returnStrR,"") if $returnStrD =~ /Error\|/;
@@ -1611,6 +1644,7 @@ sub CDCOpenData_Readout_Run_getRain($@)
        CDCOpenData_Log $name, 4, "ftp $tmpDir$remotename not found";
        if ($fromGet) {
          $returnStr = "ERROR: $tmpDir$remotename not found";
+         $returnStr .= "|" . join('|', @roReadings ) if int @roReadings;
          return $returnStr;
        } else {
          CDCOpenData_Log $name, 4, "$tmpDir$remotename not found";
@@ -1624,7 +1658,11 @@ sub CDCOpenData_Readout_Run_getRain($@)
      if (my $status = gunzip $retr_fh => $tmpDir . $localname, AutoClose => 1) {
        CDCOpenData_Log $name, 4,  "getRain - Loaded new local file $tmpDir$localname: $status";
      } else {
+       $ftp->quit;
        CDCOpenData_Log $name, 3, "getRain - $GunzipError";
+       $returnStr = "Error|$tmpDir$remotename -> error while unpacking file";
+       $returnStr .= "|" . join('|', @roReadings ) if int @roReadings;
+       return $returnStr;
      }
 
      # close ftp session:
@@ -1759,7 +1797,7 @@ sub CDCOpenData_Readout_Process($$)
    my $offset  = 0;
    my $dayRainCnt = 0;
    my $ownRadarFLog = AttrVal($name, "ownRadarFileLog", 0);
-   my $dirdef   = AttrVal('global', 'logdir', $attr{global}{modpath}.'/log/');
+   my $dirdef   = Logdir() . "/";
    my $rLogFile = $dirdef . $hash->{helper}{rainLog} . '.log';
 
    my $textRadarLog = "";
@@ -2555,6 +2593,7 @@ sub CDCOpenData_myCalcColor {
    <b>Readings</b>
    <br>
    <ul>
+      The value -1 indicates an incorrect value on the part of the DWD.<br>
       <li>name | loc<i>0..n</i>_day_rain:timestamp - Rainfall of the location <i>name | n</i></li>
       <li>name | loc<i>0..n</i>_since_midnight:timestamp - Rainfall of the location <i>name | n</i></li>
       <li>name | loc<i>0..n</i>_rain_radar:timestamp - Rainfall of the location <i>name | n</i></li>
@@ -2732,6 +2771,7 @@ sub CDCOpenData_myCalcColor {
    <b>Readings</b>
    <br>
    <ul>
+      Der Wert -1 kennzeichnet einen fehlerhaften Wert seitens des DWD<br>
       <li>name | loc<i>0..n</i>_day_rain/nn - Regenmenge der Lokation <i>name | n</i></li>
       <li>name | loc<i>0..n</i>_since_midnight - Regenmenge der Lokation <i>name | n</i></li>
       <li>name | loc<i>0..n</i>_rain_radar/nn - Regenmenge der Lokation <i>name | n</i></li>

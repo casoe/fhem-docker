@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 91_notify.pm 25888 2022-03-27 10:22:58Z rudolfkoenig $
+# $Id: 91_notify.pm 28610 2024-03-07 09:53:25Z rudolfkoenig $
 package main;
 
 use strict;
@@ -148,6 +148,7 @@ notify_Attr(@)
         my ($me, $msg) = @_;
         return if(defined($hash->{CHANGED}));
         $hash->{CHANGED}[0] = $msg;
+        $hash->{NTFY_TRIGGERTIME} = TimeNow();
         notify_Exec($hash, $hash);
         delete($hash->{CHANGED});
       }
@@ -598,9 +599,9 @@ END
         command.<br>
         Can be used in scenarios like:
         <ul><code>
-          define Leuchtdauer notify schalter:on
-                set Licht on-for-timer [$SELF:dauer]<br>
-          attr Leuchtdauer setList dauer:60,120,180
+          define lightOn notify switch:on
+                set Light on-for-timer [$SELF:duration]<br>
+          attr lightOn setList duration:60,120,180
         </code></ul>
         </li>
 

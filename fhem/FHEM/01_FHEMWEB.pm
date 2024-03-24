@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 01_FHEMWEB.pm 28235 2023-12-02 09:34:43Z rudolfkoenig $
+# $Id: 01_FHEMWEB.pm 28687 2024-03-20 17:14:30Z rudolfkoenig $
 package main;
 
 use strict;
@@ -917,6 +917,11 @@ FW_answerCall($)
   } else {
     my $redirectTo = AttrVal($FW_wname, "redirectTo","");
     if($redirectTo) {
+      if($redirectTo =~ m/^eventFor:(.*)/ && $arg =~ m/$1/) {
+        DoTrigger($FW_wname, $arg);
+        FW_finishRead($FW_chash, 0, "");
+        return -1;
+      }
       Log3 $FW_wname, 1,"$FW_wname: redirecting $arg to $FW_ME/$redirectTo$arg";
       return FW_answerCall("$FW_ME/$redirectTo$arg") 
     }
@@ -1829,7 +1834,9 @@ FW_roomOverview($)
     foreach(my $idx = 0; $idx < @list1; $idx++) {
       next if(!$list1[$idx]);
       my $sel = ($list1[$idx] eq $FW_room ? " selected=\"selected\""  : "");
-      FW_pO "<option value='$list2[$idx]'$sel>$list1[$idx]</option>";
+      my $v = $list2[$idx];
+      $v .= $FW_CSRF if($v =~ m/cmd=/);
+      FW_pO "<option value='$v'$sel>$list1[$idx]</option>";
     }
     FW_pO "</select></td>";
     FW_pO "</tr>";
@@ -4329,6 +4336,15 @@ FW_log($$)
         </li>
         <br>
 
+    <a id="FHEMWEB-attr-redirectTo"></a>
+    <li>redirectTo<br>
+        If set, and FHEMWEB cannot handle a request, redirect the client to
+        $FW_ME/$redirectTo$arg. If not set, redirect to $FW_ME. If set to
+        eventFor:<regexp>, and $arg matches the regexp, then an event for the
+        FHEMWEB instance with $arg will be generated.
+        </li>
+        <br>
+
     <a id="FHEMWEB-attr-refresh"></a>
     <li>refresh<br>
         If set, a http-equiv="refresh" entry will be genererated with the given
@@ -4990,7 +5006,7 @@ FW_log($$)
         server-key.pem
         </ul>
         Diese Befehle werden beim Setzen des Attributes automatisch
-        ausgef&uuml;rht, falls kein Zertifikat gefunden wurde. Deswegen, falls
+        ausgef&uuml;hrt, falls kein Zertifikat gefunden wurde. Deswegen, falls
         n&ouml;tig, sslCertPrefix vorher setzen.
       <br>
     </li>
@@ -5188,6 +5204,16 @@ FW_log($$)
         setzen des Attributs auf 0, z.Bsp. um den Syntax der Kommunikation mit
         FHEMWEB zu untersuchen.
         </li><br>
+
+    <a id="FHEMWEB-attr-redirectTo"></a>
+    <li>redirectTo<br>
+        Falls gesetzt, und FHEMWEB eine Anfrage nicht bedienen kann, wird die
+        Seite nach $FW_ME/$redirectTo$arg umgeleitet. Falls nicht gesetzt, dann
+        nach $FW_ME. Falls der Wert den Form eventFor:<regexp> hat, und $arg
+        auf <regexp> passt, dann wird ein Event mit der FHEMWEB Instanz und
+        $arg generiert.
+        </li>
+        <br>
 
     <a id="FHEMWEB-attr-refresh"></a>
     <li>refresh<br>

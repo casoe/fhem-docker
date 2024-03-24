@@ -1,5 +1,5 @@
 ## no critic (Modules::RequireVersionVar,Policy::CodeLayout::RequireTidyCode) ##
-# $Id: 00_KNXIO.pm 28304 2023-12-21 20:02:09Z erwin $
+# $Id: 00_KNXIO.pm 28602 2024-03-05 19:24:35Z erwin $
 # base module for KNX-communication
 # idea: merge some functions of TUL- & KNXTUL-module into one and add more connectivity 
 # function: M - multicast support (like in KNXTUL) - connect to knxd or KNX-router
@@ -67,11 +67,18 @@
 #            replace GP_export function
 #            PBP cleanup -1
 #            change regex's (unnecessary i)
-# xx/12/2023 modify KNXIO_Ready fn
-#            fix problem in _write2
+# 22/12/2023 modify KNXIO_Ready fn
+#            fix high load problem in _write2
 #            add recovery on open Timeout - mode H
 #            modify dipatch2/ processFIFO
 #            new Attr KNXIOdebug - special debugging on Loglvl 1
+# 26/12/2023 optimize write queue handling - high load
+#            new: write flooding detection
+# 20/01/2024 cmdref: KNXIOdebug attribute
+#            feature add set cmds: connect, disconnect, restart
+#            modify INITIALIZED logic
+# 05/02/2024 modify write queing (mode H)
+#            add a few debug msgs
 
 
 package KNXIO; ## no critic 'package'
@@ -130,7 +137,8 @@ my $PAT_IP   = '[\d]{1,3}(\.[\d]{1,3}){3}';
 my $PAT_PORT = '[\d]{4,5}';
 my $KNXID    = 'C';
 my $reconnectTO = 10; # Waittime after disconnect
-my $SVNID    = '$Id: 00_KNXIO.pm 28304 2023-12-21 20:02:09Z erwin $'; ## no critic (Policy::ValuesAndExpressions::RequireInterpolationOfMetachars)
+my $setcmds  = q{restart:noArg connect:noArg disconnect:noArg};
+my $SVNID    = '$Id: 00_KNXIO.pm 28602 2024-03-05 19:24:35Z erwin $'; ## no critic (Policy::ValuesAndExpressions::RequireInterpolationOfMetachars)
 
 #####################################
 sub main::KNXIO_Initialize {
@@ -147,8 +155,9 @@ sub Initialize {
 	$hash->{RenameFn}   = \&KNXIO_Rename;
 	$hash->{UndefFn}    = \&KNXIO_Undef;
 	$hash->{ShutdownFn} = \&KNXIO_Shutdown;
+	$hash->{SetFn}      = \&KNXIO_Set;
 
-	$hash->{AttrList}   = 'disable:1 verbose:1,2,3,4,5 enableKNXscan:0,1,2 KNXIOdebug:1,2,3,4,5 ' . $readingFnAttributes;
+	$hash->{AttrList}   = 'disable:1 verbose:1,2,3,4,5 enableKNXscan:0,1,2 KNXIOdebug:1,2,3,4,5,6,7,8,9 ' . $readingFnAttributes;
 	$hash->{Clients}    = 'KNX';
 	$hash->{MatchList}  = { '1:KNX' => '^C.*' };
 
@@ -230,8 +239,6 @@ sub KNXIO_Define {
 	# define helpers
 	$hash->{KNXIOhelper}->{FIFO}      = []; # read fifo array
 	$hash->{KNXIOhelper}->{FIFOW}     = []; # write fifo array
-#	$hash->{KNXIOhelper}->{FIFOTIMER} = 0;
-#	$hash->{KNXIOhelper}->{FIFOMSG}   = q{};
 
 	# Devio-parameters
 	$hash->{nextOpenDelay} = $reconnectTO;
@@ -452,8 +459,8 @@ sub KNXIO_ReadH {
 				KNXIO_Log ($name, 3, qq{Tunneling Ack received CCID= $ccid txseq= $txseqcntr Status= } . KNXIO_errCodes($errcode));
 #what next ?
 			}
-			$hash->{KNXIOhelper}->{SEQUENCECNTR_W}++;
-			$hash->{KNXIOhelper}->{SEQUENCECNTR_W} = 0 if ($hash->{KNXIOhelper}->{SEQUENCECNTR_W} > 255);
+			$hash->{KNXIOhelper}->{SEQUENCECNTR_W} = ($txseqcntr + 1) % 256;
+			KNXIO_Debug ($name, 1, q{Tunnel ack received } . sprintf('%02x', $txseqcntr));
 			return RemoveInternalTimer($hash,\&KNXIO_TunnelRequestTO); # all ok, stop timer
 		}
 		when (0x0202) { # Search response
@@ -555,24 +562,6 @@ sub KNXIO_Write {
 		my $str = $3 // '00'; # undef on read requ
 		my $src = KNXIO_hex2addr($hash->{PhyAddr});
 
-=begin comment
-		#convert hex-string to array with dezimal values
-		my @data =  map {hex()} $str =~ /(..)/xgms; # PBP 9/2021
-		$data[0] = 0 if (scalar(@data) == 0); # in case of read !!
-		my $datasize = scalar(@data);
-
-		if ($datasize == 1) {
-			$data[0] = ($data[0] & 0x3F) | $acpi;
-		}
-		else {
-			$data[0] = $acpi;
-		}
-
-		KNXIO_Log ($name, 5, q{data=} . sprintf('%02x' x scalar(@data), @data) . 
-		          sprintf(' size=%02x acpi=%02x', $datasize, $acpi) .
-		          q{ src=} . KNXIO_addr2hex($src,2) . q{ dst=} . KNXIO_addr2hex($dst,3));
-=end comment
-=cut
 		my $data = 0;
 		if (length($str) > 2) {
 			$data = pack ('CH*',$acpi,substr($str,2)); # multi byte write/reply
@@ -604,7 +593,7 @@ sub KNXIO_Write {
 		}
 
 		## rate limit
-		push(@{$hash->{KNXIOhelper}->{FIFOW}},qq{$mode $completemsg});
+		push(@{$hash->{KNXIOhelper}->{FIFOW}}, $completemsg);
 		return KNXIO_Write2($hash);
 	}
 	KNXIO_Log ($name, 2, qq{Could not send message $msg});
@@ -615,40 +604,68 @@ sub KNXIO_Write {
 sub KNXIO_Write2 {
 	my $hash = shift;
 
-	my $name = $hash->{NAME};
-	my $timenow = gettimeofday();
-	my $nextwrite = $hash->{KNXIOhelper}->{nextWrite} // $timenow;
 	my $count = scalar(@{$hash->{KNXIOhelper}->{FIFOW}});
 	RemoveInternalTimer($hash, \&KNXIO_Write2);
 	return if($count == 0);
 
+	my $name = $hash->{NAME};
+	my $timenow = gettimeofday();
+	my $nextwrite = $hash->{KNXIOhelper}->{nextWrite} // $timenow;
+	my $adddelay = 0.07;
+
 	if ($nextwrite > $timenow) {
-		my $adddelay = $count * 0.07;
-		KNXIO_Log ($name, 4, qq{frequent IO-write - Nr.msg= $count});
-		KNXIO_Log ($name, 1, qq{DEBUG1>>frequent IO-write - Nr.msg= $count}) if (AttrVal($name,'KNXIOdebug',0) == 1);
+		KNXIO_Log ($name, 3, qq{frequent IO-write - msg-count= $count}) if ($count % 10 == 0);
+		KNXIO_Debug ($name, 1, qq{frequent IO-write - msg-count= $count});
 		InternalTimer($nextwrite + $adddelay, \&KNXIO_Write2,$hash);
+		InternalTimer($timenow + 30.0, \&KNXIO_Flooding,$hash) if ($count == 1);
 		return;
 	}
-	$hash->{KNXIOhelper}->{nextWrite} = $timenow + 0.07; # add delay
-	my ($mode,$completemsg) = split(/\s/xms,shift(@{$hash->{KNXIOhelper}->{FIFOW}}),2);
+
+	$hash->{KNXIOhelper}->{nextWrite} = $timenow + $adddelay;
+	my $msg = shift(@{$hash->{KNXIOhelper}->{FIFOW}});
 
 	my $ret = 0;
+	my $mode = $hash->{model};
+	if ($mode eq 'H') {
+		# replace sequence counterW
+		substr($msg,8,1) = pack('C',$hash->{KNXIOhelper}->{SEQUENCECNTR_W}); ##no critic (BuiltinFunctions::ProhibitLvalueSubstr)
+#		$msg = substr($msg,0,8) . pack('C',$hash->{KNXIOhelper}->{SEQUENCECNTR_W}) . substr($msg,9); # w.o. LvalueSubstr PBP !
+
+		# Timeout function - expect TunnelAck within 1 sec! - but if fhem has a delay....
+		$hash->{KNXIOhelper}->{LASTSENTMSG} = unpack('H*',$msg); # save msg for resend in case of TO
+		InternalTimer($timenow + 1.5, \&KNXIO_TunnelRequestTO, $hash);
+	}
 	if ($mode eq 'M') {
-		$ret = ::TcpServer_MCastSend($hash,$completemsg);
+		$ret = ::TcpServer_MCastSend($hash,$msg);
 	}
 	else {
-		$ret = ::DevIo_SimpleWrite($hash,$completemsg,0);
-		if ($mode eq 'H') {
-			# Timeout function - expect TunnelAck within 1 sec! - but if fhem has a delay....
-			$hash->{KNXIOhelper}->{LASTSENTMSG} = unpack('H*',$completemsg); # save msg for resend in case of TO
-			InternalTimer($timenow + 1.5, \&KNXIO_TunnelRequestTO, $hash);
-		}
+		$ret = ::DevIo_SimpleWrite($hash,$msg,0);
 	}
 
 	$count--;
-	InternalTimer($timenow + 0.07, \&KNXIO_Write2,$hash) if ($count > 0);
-	KNXIO_Log ($name, 5, qq{Mode= $mode buf=} . unpack('H*',$completemsg) . qq{ rc= $ret});
-	KNXIO_Log ($name, 1, qq{DEBUG1>>IO-write processed- Nr.msg remain= $count}) if (AttrVal($name,'KNXIOdebug',0) == 1);
+	if ($count > 0) {
+		InternalTimer($timenow + $adddelay, \&KNXIO_Write2,$hash);
+	}
+	else {
+		RemoveInternalTimer($hash, \&KNXIO_Flooding);
+	}
+	KNXIO_Log ($name, 5, qq{Mode= $mode buf=} . unpack('H*',$msg) . qq{ rc= $ret});
+	my $idx = ($mode eq 'H')?16:12; # offset for dst-addr
+	KNXIO_Debug ($name, 1, q{IO-write processed- gad= } . KNXIO_addr2hex(unpack('n',substr($msg,$idx,2)),3) . q{ msg= } .
+	                       unpack('H*',substr($msg,$idx+4)) . qq{ msg-remain= $count});
+	return;
+}
+
+## called by _write2 via timer when number of write cmds exceed limits 
+sub KNXIO_Flooding {
+	my $hash = shift;
+
+	my $name = $hash->{NAME};
+	my $count = scalar(@{$hash->{KNXIOhelper}->{FIFOW}});
+	KNXIO_Log ($name, 1, q{number of write cmds exceed limits of KNX-Bus});
+# consequence ?
+#	KNXIO_Log ($name, 1, q{number of write cmds exceed limits of KNX-Bus: } . qq{$count messages deleted});
+#	$hash->{KNXIOhelper}->{FIFOW} = []; # ?
 	return;
 }
 
@@ -693,6 +710,32 @@ sub KNXIO_Shutdown {
 	my $hash = shift;
 
 	return KNXIO_closeDev($hash);
+}
+
+###################################
+## connect, disconnect, restart
+sub KNXIO_Set {
+	my $hash = shift;
+	my $name = shift;
+	my $cmd  = shift;
+
+	return q{no cmd specified for set cmd} if (!defined($cmd));
+	my $adddelay = 1.0;
+
+	given ($cmd) {
+		when (q{?}) { return qq{unknown argument $cmd choose one of $setcmds}; }
+		when (q{disconnect}) { return KNXIO_closeDev($hash); }
+		when (q{connect}) {
+			return qq{$name is connected, no action taken} if (ReadingsVal($name,'state','disconnected') eq 'connected');
+		}
+		when (q{restart}) {
+			KNXIO_closeDev($hash);
+			$adddelay = 5.0;
+		}
+		default { return qq{invalid set cmd $cmd}; }
+	}
+	InternalTimer(gettimeofday() + $adddelay, \&KNXIO_openDev, $hash);
+	return;
 }
 
 ###################################
@@ -769,6 +812,7 @@ sub KNXIO_openDev {
 	KNXIO_Log ($name, 5, qq{$mode , $host , $port , reopen= $reopen});
 
 	my $ret = undef; # result
+	delete $hash->{stacktrace}; # clean start
 
 	given ($mode) {
 		### multicast support via TcpServerUtils ...
@@ -902,7 +946,7 @@ sub KNXIO_handleConn {
 	else { # fhem start
 		KNXIO_Log ($name, 3, q{initial-connect});
 		readingsSingleUpdate($hash, 'state', 'connected', 0); # no event
-		$hash->{KNXIOhelper}->{startdone} = 1;
+#		$hash->{KNXIOhelper}->{startdone} = 1;
 		InternalTimer(gettimeofday() + 30, \&KNXIO_initcomplete, $hash);
 	}
 	return;
@@ -918,6 +962,7 @@ sub KNXIO_initcomplete {
 	my $name = $hash->{NAME};
 	if (ReadingsVal($name,'state','disconnected') eq 'connected') {
 		main::KNX_scan('TYPE=KNX:FILTER=IODev=' . $name) if (AttrNum($name,'enableKNXscan',0) >= 1); # on 1st connect only
+		$hash->{KNXIOhelper}->{startdone} = 1;
 		DoTrigger($name,'INITIALIZED');
 	}
 	elsif (AttrVal($name,'disable','disabled') ne 'disabled') {
@@ -969,17 +1014,13 @@ sub KNXIO_dispatch2 {
 	my $hash = shift;
 	my $buf  = shift;
 
-#	my $buf = $hash->{KNXIOhelper}->{FIFOMSG};
 	my $name = $hash->{NAME};
-#	$hash->{KNXIOhelper}->{FIFOTIMER} = 0;
 
 	$hash->{'msg_count'}++;
 	$hash->{'msg_time'} = TimeNow();
 
 	Dispatch($hash, $buf);
 
-#	$hash->{KNXIOhelper}->{FIFOTIMER} = 0;
-#	RemoveInternalTimer($hash,\&KNXIO_dispatch2);
 	KNXIO_processFIFO($hash);
 	return;
 }
@@ -990,13 +1031,6 @@ sub KNXIO_processFIFO {
 	my $name = $hash->{NAME};
 
 	RemoveInternalTimer($hash,\&KNXIO_processFIFO);
-
-#	if ($hash->{KNXIOhelper}->{FIFOTIMER} != 0) { # dispatch still running, do a wait loop
-#		KNXIO_Log ($name, 5, q{dispatch not complete, waiting});
-#		InternalTimer(gettimeofday() + 0.1, \&KNXIO_processFIFO, $hash);
-#		$hash->{KNXIOhelper}->{FIFOTIMER} = 0;
-#		return;
-#	}
 
 	my @que = @{$hash->{KNXIOhelper}->{FIFO}};
 	my $queentries = scalar(@que);
@@ -1009,17 +1043,12 @@ sub KNXIO_processFIFO {
 	}
 
 	if ($queentries > 0) { # process timer is not running & fifo not empty
-#		$hash->{KNXIOhelper}->{FIFOMSG} = shift (@que);
 		my $msg = shift (@que);
 		@{$hash->{KNXIOhelper}->{FIFO}} = @que;
-#		$hash->{KNXIOhelper}->{FIFOTIMER} = 1;
-#		KNXIO_Log ($name, 4, qq{buf=$hash->{KNXIOhelper}->{FIFOMSG} Nr_msgs=$queentries});
-#		InternalTimer(gettimeofday() + 0.05, \&KNXIO_dispatch2, $hash); # allow time for duplicate msgs to be read
 		KNXIO_Log ($name, 4, qq{dispatching buf=$msg Nr_msgs=$queentries});
 		KNXIO_dispatch2($hash, $msg);
 		if ($queentries > 1) {
 			InternalTimer(gettimeofday() + 0.05, \&KNXIO_processFIFO, $hash); # allow time for new/duplicate msgs to be read
-#			$hash->{KNXIOhelper}->{FIFOTIMER} = 1;
 		}
 		return;
 	}
@@ -1070,8 +1099,9 @@ sub KNXIO_closeDev {
 		$hash->{TCPDev}->close() if($hash->{FD});
 	}
 
+	delete $hash->{stacktrace}; # clean
 	delete $hash->{nextOpenDelay};
-	delete $hash->{'msg_cnt'};
+	delete $hash->{'msg_count'};
 	delete $hash->{'msg_time'};
 
 #NO!	delete $hash->{'.CCID'};
@@ -1184,7 +1214,7 @@ sub KNXIO_decodeCEMI {
 	my @acpicodes = qw(read preply write invalid);
 	my $rwp = $acpicodes[$acpi];
 	if (! defined($rwp) || ($rwp eq 'invalid')) { # not a groupvalue-read/write/reply
-		KNXIO_Log ($name, 3, 'no valid acpi-code (read/reply/write) received - discard packet');
+		KNXIO_Log ($name, 3, 'no valid acpi-code (read/reply/write) received - discard packet - programming?');
 		KNXIO_Log ($name, 4, qq{discarded packet: src=$srcd dst=$dstd destaddrType=$dest_addrType prio=$prio hop_count=} .
 		          qq{$hop_count length=} . scalar(@data) . q{ data=} . sprintf('%02x' x scalar(@data),@data));
 		return;
@@ -1307,7 +1337,7 @@ sub KNXIO_Log {
 	my $logtxt = shift;
 
 	my $name = ( ref($dev) eq 'HASH' ) ? $dev->{NAME} : $dev;
-	my $dloglvl = AttrVal($name,'verbose',undef) // AttrVal('global','verbose',3);
+	my $dloglvl = AttrNum($name,'verbose',undef) // AttrNum('global','verbose',3);
 	return if ($loglvl > $dloglvl); # shortcut performance
 
 	my $sub  = (caller(1))[3] // 'main';
@@ -1315,6 +1345,22 @@ sub KNXIO_Log {
 	$sub =~ s/^.+[:]+//xms;
 
 	Log3 ($name, $loglvl, qq{$name [$sub $line]: $logtxt});
+	return;
+}
+
+### Logging in debug mode
+### attr KNXIOdebug triggered
+### calling param: same as Log3: hash/name/undef, loglevel, logtext but loglvl is debug lvl
+### return undef
+sub KNXIO_Debug {
+	my $dev    = shift // 'global';
+	my $loglvl = shift // 0;
+	my $logtxt = shift;
+
+	my $name = ( ref($dev) eq 'HASH' ) ? $dev->{NAME} : $dev;
+	return if ($loglvl != AttrNum($name,'KNXIOdebug',99));
+
+	Log3 ($name, 0, qq{$name DEBUG$loglvl>> $logtxt});
 	return;
 }
 
@@ -1376,7 +1422,7 @@ __END__
 <code>define &lt;name&gt; KNXIO S &lt;UNIX socket-path&gt; &lt;phy-adress&gt;</code>
 <code>define &lt;name&gt; KNXIO X</code></pre>
 
-<b>Connection Types (mode)</b> (first parameter)&colon;
+<b>Connection Type (mode)</b> (first parameter)&colon;
 <ul>
 <li><b>H</b> Host Mode - connect to a KNX-router with UDP point-point protocol.<br/>
   This is the mode also used by ETS when you specify <b>KNXNET/IP</b> as protocol. You do not need a KNXD installation. 
@@ -1384,24 +1430,26 @@ __END__
   If you have delays in FHEM processing close to 1 sec, the protocol may disconnect. It should recover automatically, 
   however KNX-messages could have been lost! 
   <br>The benefit of this protocol&colon; every sent and received msg has to be acknowledged within 1 second by the 
-  communication partner, msg delivery is verified!</li>
+  communication partner, msg delivery is verified!
+</li>
 <li><b>M</b> Multicast mode - connect to KNXD's or KNX-router's multicast-tree.<br/>
   This is the mode also used by ETS when you specify <b>KNXNET/IP Routing</b> as protocol. 
   If you have a KNX-router that supports multicast, you do not need a KNXD installation. 
   Default address&colon;port is 224.0.23.12&colon;3671<br/>
   Pls. ensure that you have only <b>one</b> GW/KNXD in your LAN that feed the multicast tree!<br/>
-  <del>This mode requires the <code>IO&colon;&colon;Socket&colon;&colon;Multicast</code> perl-module to be installed 
-  on yr. system. 
-  On Debian systems this can be achieved by <code>apt-get install libio-socket-multicast-perl</code>.</del></li>
+</li>
 <li><b>T</b> TCP mode - uses a TCP-connection to KNXD (default port&colon; 6720).<br/>
   This mode is the successor of the TUL-modul, but does not support direct Serial/USB connection to a TPUart-USB Stick.
   If you want to use a TPUart-USB Stick or any other serial KNX-GW, 
-  connect the USB-Stick to KNXD and use modes M,S or T to connect to KNXD.</li>
+  connect the USB-Stick to KNXD and use modes M,S or T to connect to KNXD.
+</li>
 <li><b>S</b> Socket mode - communicate via KNXD's UNIX-socket on localhost. default Socket-path&colon; 
   <code>/var/run/knx</code><br/> 
   Path might be different, depending on knxd-version or -config specification! 
-  This mode is tested ok with KNXD version 0.14.30. It does NOT work with ver. 0.10.0!</li>
-<li><b>X</b> Special mode - for details see KNXIO-wiki!</li>
+  This mode is tested ok with KNXD version 0.14.30. It does NOT work with ver. 0.10.0!
+</li>
+<li><b>X</b> Special mode - for details see KNXIO-wiki!
+</li>
 </ul>
 <br/>
 <b>ip-address&colon;port</b> or <b>hostname&colon;port</b>
@@ -1431,9 +1479,15 @@ Suggested parameters for KNXD (Version &gt;= 0.14.30), with systemd&colon;
 </code></pre> 
 </li>
 
-<li><a id="KNXIO-set"></a><strong>Set</strong> - No Set cmd implemented.
-  If you want to restart communication, use Attr disable.<br/><br/></li>
-<li><a id="KNXIO-get"></a><strong>Get</strong> - No Get cmd impemented<br/><br/></li>
+<li><a id="KNXIO-set"></a><strong>Set</strong><br/>
+<ul>
+<li><a id="KNXIO-set-disconnect"></a><b>disconnect</b> - Stop any communication with KNX-bus.<br/>
+  Difference to <code>attr &lt;device&gt; disable 1</code>: set cmds are volatile, attributes are saved in config!</li> 
+<li><a id="KNXIO-set-connect"></a><a id="KNXIO-set-restart"></a>
+  <b>connect</b> or <b>restart</b> - Start or Stop-&gt;5 seconds delay-&gt;Start KNX-bus communication.<br/></li>
+</ul><br/></li>
+
+<li><a id="KNXIO-get"></a><strong>Get</strong> - No Get command implemented<br/><br/></li>
 
 <li><a id="KNXIO-attr"></a><strong>Attributes</strong><br/>
 <ul>
@@ -1448,8 +1502,12 @@ Suggested parameters for KNXD (Version &gt;= 0.14.30), with systemd&colon;
 <pre><code>   0 - never         (default if Attr not defined)
    1 - on fhem start (after &lt;device&gt;&colon;INITIALIZED event)
    2 - on fhem start and on every &lt;device&gt;&colon;connected event</code></pre></li>  
+<li><a id="KNXIO-attr-KNXIOdebug"></a><b>KNXIOdebug</b> -
+  Log specific events/conditions independent of verbose Level. - use only on developer advice. 
+  Parameters are numeric (1-9), usage may change with every new version!<br/></li>
 </ul>
-</li>
+<br/></li>
+
 <li><a id="KNXIO-events"></a><strong>Events</strong><br/>
 <ul>
 <li><b>&lt;device&gt;&colon;INITIALIZED</b> -
@@ -1466,7 +1524,7 @@ Suggested parameters for KNXD (Version &gt;= 0.14.30), with systemd&colon;
 <li><b>&lt;device&gt;&colon;connected</b> -
   triggered if connection to KNX-GW/KNXD is established.</li>
 <li><b>&lt;device&gt;&colon;disconnected</b> -
-  triggered if connection to KNX-GW/KNXD failed. Recovery is attempted.</li>
+  triggered if connection to KNX-GW/KNXD failed.</li>
 </ul>
 </li>
 </ul>

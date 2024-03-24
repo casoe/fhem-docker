@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: 74_AutomowerConnect.pm 28048 2023-10-13 16:44:05Z Ellert $
+# $Id: 74_AutomowerConnect.pm 28406 2024-01-23 10:47:27Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::AutomowerConnect;
-our $cvsid = '$Id: 74_AutomowerConnect.pm 28048 2023-10-13 16:44:05Z Ellert $';
+our $cvsid = '$Id: 74_AutomowerConnect.pm 28406 2024-01-23 10:47:27Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -167,10 +167,14 @@ __END__
       <code>set &lt;name&gt; Start &lt;number of minutes&gt;</code><br>
       Starts immediately for &lt;number of minutes&gt;</li>
 
+    <li><a id='AutomowerConnect-set-confirmError'>confirmError</a><br>
+      <code>set &lt;name&gt; confirmError</code><br>
+      Testing: Confirm current error on the mower. Will only work if current error is considered confirmable by the mower. Available for models 405X, 415X, 435X AWD and 535 AWD. Also available on all Ceora, EPOS and NERA models.</li>
+
     <li><a id='AutomowerConnect-set-StartInWorkArea'>StartInWorkArea</a><br>
       <code>set &lt;name&gt; StartInWorkArea &lt;workAreaId|name&gt; [&lt;number of minutes&gt;]</code><br>
       Testing: Starts immediately in &lt;workAreaId|name&gt; for &lt;number of minutes&gt;<br>
-       Zone name must not include space.</li>
+       Work area name must not include space.</li>
 
     <li><a id='AutomowerConnect-set-chargingStationPositionToAttribute'>chargingStationPositionToAttribute</a><br>
       <code>set &lt;name&gt; chargingStationPositionToAttribute</code><br>
@@ -345,6 +349,7 @@ __END__
 
     <li><a id='AutomowerConnect-attr-mapZones'>mapZones</a><br>
       <code>attr &lt;name&gt; mapZones &lt;valid perl condition to separate Zones&gt;</code><br>
+      These Zones are provided by the Modul and are not related to Husqvarnas work areas.<br>
       Provide the zones with conditions as JSON-String:<br>
       The waypoints are accessable by the variables $longitude und $latitude.<br>
       Zones have have to be separated by conditions in alphabetical order of their names.<br>
@@ -498,8 +503,8 @@ __END__
   <u><b>Anforderungen</b></u>
   <br><br>
   <ul>
-    <li>Für den Zugriff auf die API muss eine Application angelegt werden, im <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a>angelegt und mit der Automower Connect API verbunden werden.</li>
-    <li>Währenddessen wird ein Application Key (client_id) und ein Application Secret (client secret) bereitgestellt. Diese sind für dieses Modul zu nutzen.</li>
+    <li>Für den Zugriff auf die API muss eine Application im <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a> angelegt und mit der Automower Connect API verbunden werden.</li>
+    <li>Währenddessen wird ein Application Key (client_id) und ein Application Secret (client secret) bereitgestellt. Diese Angaben sind im Zusammenhang mit der Definition eines Gerätes erforderlich.</li>
     <li>Das Modul nutzt Client Credentials als Granttype zur Authorisierung.</li>
   <br>
   </ul>
@@ -511,7 +516,7 @@ __END__
     Beispiel:<br>
     <code>define myMower AutomowerConnect 123456789012345678901234567890123456</code> Erstes Gerät: die Defaultmähernummer ist 0.<br>
     Es muss ein <b>client_secret</b> gesetzt werden. Es ist das Application Secret vom <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a>.<br>
-    <code>set myMower &lt;client secret&gt;</code><br>
+    <code>set myMower client_secret &lt;client secret&gt;</code><br>
     <br>
   </ul>
   <br>
@@ -537,7 +542,7 @@ __END__
 
     <li><a id='AutomowerConnect-set-ResumeSchedule'>ResumeSchedule</a><br>
       <code>set &lt;name&gt; ResumeSchedule</code><br>
-      Startet im geplanten Interval den Mäher sofort, sonst zum nächsten geplanten Zeitpunkt</li>
+      Startet im geplanten Intervall den Mäher sofort, sonst zum nächsten geplanten Zeitpunkt</li>
 
     <li><a id='AutomowerConnect-set-Start'>Start</a><br>
       <code>set &lt;name&gt; Start &lt;number of minutes&gt;</code><br>
@@ -546,7 +551,7 @@ __END__
     <li><a id='AutomowerConnect-set-StartInWorkArea'>StartInWorkArea</a><br>
       <code>set &lt;name&gt; StartInWorkArea &lt;workAreaId|zone name&gt; [&lt;number of minutes&gt;]</code><br>
       Testing: Startet sofort in &lt;workAreaId|name&gt; für &lt;number of minutes&gt;<br>
-      Der Name der Zone darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
+      Der Name der WorkArea darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
 
     <li><a id='AutomowerConnect-set-chargingStationPositionToAttribute'>chargingStationPositionToAttribute</a><br>
       <code>set &lt;name&gt; chargingStationPositionToAttribute</code><br>
@@ -568,6 +573,10 @@ __END__
       <code>set &lt;name&gt; stayOutZone_disable &lt;Id|zone name&gt;</code><br>
       Testing: Disabled stayOutZone für die Id oder den Namen der Zone, er darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
 
+    <li><a id='AutomowerConnect-set-confirmError'>confirmError</a><br>
+      <code>set &lt;name&gt; confirmError</code><br>
+      Testing: Bestätigt den letzten Fehler im Mäher, wenn der Mäher es zulässt. Verfügbar für 405X, 415X, 435X AWD and 535 AWD und alle Ceora, EPOS and NERA.</li>
+
      <li><a id='AutomowerConnect-set-getNewAccessToken'>getNewAccessToken</a><br>
       <code>set &lt;name&gt; getNewAccessToken</code><br>
       Nur zur Fehlerbehebung.</li>
@@ -582,7 +591,7 @@ __END__
 
      <li><a id='AutomowerConnect-set-mowerScheduleToAttribute'>mowerScheduleToAttribute</a><br>
       <code>set &lt;name&gt; mowerScheduleToAttribute</code><br>
-      Schreibt den Mähplan  ins Attribut <code>moverSchedule</code>.</li>
+      Schreibt den Mähplan ins Attribut <code>mowerSchedule</code>.</li>
 
      <li><a id='AutomowerConnect-set-sendScheduleFromAttributeToMower'>sendScheduleFromAttributeToMower</a><br>
       <code>set &lt;name&gt; sendScheduleFromAttributeToMower</code><br>
@@ -616,7 +625,7 @@ __END__
 
     <li><a id='AutomowerConnect-get-MowerData'>MowerData</a><br>
       <code>get &lt;name&gt; MowerData</code><br>
-      Listet alle Daten des Mähers einschließlich Hashpfad auf ausgenommen das Positonsarray. Der Hashpfad kann zur Erzeugung von userReadings genutzt werden, getriggert wird durch e.g. <i>device_state: connected</i> oder <i>mower_wsEvent: &lt;status-event|positions-event|settings-event&gt;</i>.<br>
+      Listet alle Daten des Mähers einschließlich Hashpfad auf, ausgenommen das Positonsarray. Der Hashpfad kann zur Erzeugung von userReadings genutzt werden, getriggert wird durch e.g. <i>device_state: connected</i> oder <i>mower_wsEvent: &lt;status-event|positions-event|settings-event&gt;</i>.<br>
       Beispiel: erzeugen des Reading <code>serialnumber</code> mit dem Hashpfad <code>$hash->{helper}{mower}{attributes}{system}{serialNumber}</code><br><br>
       <code>attr &lt;name&gt; userReadings serialnumber:connected {$defs{$name}->{helper}{mower}{attributes}{system}{serialNumber}}</code></li>
 
@@ -668,13 +677,13 @@ __END__
 
     <li><a id='AutomowerConnect-attr-mapImageCoordinatesToRegister'>mapImageCoordinatesToRegister</a><br>
       <code>attr &lt;name&gt; mapImageCoordinatesToRegister &lt;upper left longitude&gt;&lt;space&gt;&lt;upper left latitude&gt;&lt;line feed&gt;&lt;lower right longitude&gt;&lt;space&gt;&lt;lower right latitude&gt;</code><br>
-      Obere linke und untere rechte Ecke der Fläche auf der Erde, die durch das Bild dargestellt wird um das Bild auf der Fläche zu registrieren (oder einzupassen).<br>
+      Obere linke und untere rechte Ecke der Fläche auf der Erde, die durch das Bild dargestellt wird, um das Bild auf der Fläche zu registrieren (oder einzupassen).<br>
       Format: Zeilenweise Paare von Longitude- u. Latitudewerten getrennt durch 1 Leerzeichen. Die Zeilen werden aufgeteilt durch (<code>/\s|\R$/</code>).<br>
       Angabe der WGS84 (GPS) Koordinaten muss als Dezimalgrad erfolgen.</li>
 
     <li><a id='AutomowerConnect-attr-mapImageCoordinatesUTM'>mapImageCoordinatesUTM</a><br>
       <code>attr &lt;name&gt; mapImageCoordinatesUTM &lt;upper left longitude&gt;&lt;space&gt;&lt;upper left latitude&gt;&lt;line feed&gt;&lt;lower right longitude&gt;&lt;space&gt;&lt;lower right latitude&gt;</code><br>
-      Obere linke und untere rechte Ecke der Fläche auf der Erde, die durch das Bild dargestellt wird um das Bild auf der Fläche zu registrieren (oder einzupassen).<br>
+      Obere linke und untere rechte Ecke der Fläche auf der Erde, die durch das Bild dargestellt wird, um das Bild auf der Fläche zu registrieren (oder einzupassen).<br>
       Format: Zeilenweise Paare von Longitude- u. Latitudewerten getrennt durch 1 Leerzeichen. Die Zeilen werden aufgeteilt durch (<code>/\s|\R$/</code>).<br>
       Die Angabe der UTM Koordinaten muss als Dezimalzahl in Meter erfolgen.<br>
       Das Attribut muss nach dem Attribut mapImageCoordinatesToRegister gesetzt werden.<br>
@@ -724,6 +733,7 @@ __END__
 
     <li><a id='AutomowerConnect-attr-mapZones'>mapZones</a><br>
       <code>attr &lt;name&gt; mapZones &lt;JSON string with zone names in alpabetical order and valid perl condition to seperate the zones&gt;</code><br>
+      Die Zonen werden vom Modul bereit gestellt, sie stehen in keinem Zusammenhang mit Husquvarnas Work Areas<br>
       Die Wegpunkte stehen über die Perlvariablen $longitude und $latitude zur Verfügung.<br>
       Die Zonennamen und Bedingungen müssen als JSON-String angegeben werden.<br>
       Die Zonennamen müssen in alphabetischer Reihenfolge durch Bedingungen abgegrenzt werden.<br>

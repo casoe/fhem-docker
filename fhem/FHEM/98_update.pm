@@ -1,5 +1,5 @@
 ################################################################
-# $Id: 98_update.pm 28211 2023-11-26 10:08:09Z rudolfkoenig $
+# $Id: 98_update.pm 28697 2024-03-22 10:14:54Z rudolfkoenig $
 
 package main;
 use strict;
@@ -73,13 +73,15 @@ CommandUpdate($$)
   my $ret = eval { "Hello" =~ m/$arg/ };
   return "first argument must be a valid regexp, all, force, check or checktime"
         if($arg =~ m/^[-\?\*]/ || $ret);
-  $arg = lc($arg) if($arg =~ m/^(check|checktime|all|force)$/i);
 
+  $arg = lc($arg) if($arg =~ m/^(check|checktime|all|force)$/i);
   $updateInBackground = AttrVal("global","updateInBackground",1);
-  $updateInBackground = 0 if($arg ne "all");                                   
-  $updArg = $arg;
+  $updateInBackground = 0 if($arg =~ m/^(check|checktime)$/);
+
   return "An update is already running" if($upd_running);
   $upd_running = 1;
+
+  $updArg = $arg;
   if($updateInBackground) {
     CallFn($cl->{NAME}, "ActivateInformFn", $cl, "log") if($cl);
     sub updDone(@) { $upd_running=0 }
