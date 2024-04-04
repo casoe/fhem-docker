@@ -2,7 +2,7 @@
 #
 #  HMCCUConf.pm
 #
-#  $Id: HMCCUConf.pm 28640 2024-03-12 12:22:12Z zap $
+#  $Id: HMCCUConf.pm 28721 2024-03-29 15:15:33Z zap $
 #
 #  Version 5.0
 #
@@ -254,8 +254,6 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?LEVEL$:+pct,+level',
 	'BLIND_TRANSMITTER' =>
 		'^(C#\.)?LEVEL$:+pct,+level;^(C#\.)?LEVEL_2$:+pctSlats',
-#	'BLIND_VIRTUAL_RECEIVER' =>
-#		'^(C#\.)?LEVEL$:+pct,+level',
 	'CAPACITIVE_FILLING_LEVEL_SENSOR' =>
 		'^(C#\.)?FILLING_LEVEL$:+level',
 	'CLIMATECONTROL_REGULATOR' =>
@@ -274,8 +272,6 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?LEVEL$:+pct,+level',
 	'DIMMER_TRANSMITTER' =>
 		'^(C#\.)?LEVEL$:+pct,+level;(C#\.)?COLOR$:+color',
-#	'DIMMER_VIRTUAL_RECEIVER' =>
-#		'^(C#\.)?LEVEL$:+pct,+level;(C#\.)?COLOR$:+color',
 	'DIMMER_WEEK_PROFILE' =>
 		'^(C#\.)?WEEK_PROGRAM_CHANNEL_LOCKS$:+progMode',
 	'HB_GENERIC_DIST' =>
@@ -301,8 +297,6 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?ILLUMINATION$:+brightness;(C#\.)?PRESENCE_DETECTION_STATE:+presence;(C#\.)?PRESENCE_DETECTION_ACTIVE:+detection',
 	'SHUTTER_TRANSMITTER' =>
 		'^(C#\.)?LEVEL$:+pct,+level',
-#	'SHUTTER_VIRTUAL_RECEIVER' =>
-#		'^(C#\.)?LEVEL$:+pct,+level',
 	'SWITCH_PANIC' =>
 		'^(C#\.)?STATE$:+panic',
 	'SWITCH_SENSOR' =>
@@ -321,11 +315,11 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'^(C#\.)?TEMPERATURE$:+measured-temp;'.
 		'^(C#\.)?HUMIDITY$:+humidity',
 	'DEFAULT' =>
-#		'^([0-9]{1,2}\.)?LEVEL$:+pct,+level;'.
 		'^([0-9]{1,2}\.)?SET_TEMPERATURE$:+desired-temp;'.
 		'^([0-9]{1,2}\.)?(ACTUAL_TEMPERATURE|TEMPERATURE)$:+measured-temp;'.
 		'^([0-9]{1,2}\.)?SET_POINT_TEMPERATURE$:+desired-temp;'.
-		'^([0-9]{1,2}\.)?ACTUAL_HUMIDITY$:+humidity'
+		'^([0-9]{1,2}\.)?ACTUAL_HUMIDITY$:+humidity;'.
+		'^(P#)?WEEK_PROGRAM_POINTER$:+week-program'
 );
 
 #######################################################################################
@@ -430,8 +424,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'off' => 'V:MANU_MODE:4.5',
 		'auto' => 'V:AUTO_MODE:1',
 		'boost' => 'V:BOOST_MODE:#boost=on,off',
-		'week-program:VirtualDevices' => 'D:WEEK_PROGRAM_POINTER:#program',
-		'get week-program:VirtualDevices' => 'D:WEEK_PROGRAM_POINTER:#program:HMCCU_DisplayWeekProgram'
+		'week-program' => 'D:WEEK_PROGRAM_POINTER:#program',
+		'get week-program' => 'D:WEEK_PROGRAM_POINTER:#program:HMCCU_DisplayWeekProgram'
 	},
 	'DIMMER' => {
 		'pct' => '3:V:LEVEL:?level 1:V:ON_TIME:?time=0.0 2:V:RAMP_TIME:?ramp=0.5',
@@ -484,7 +478,8 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		'boost' => 'V:BOOST_MODE:#boost=on,off',
 		'on' => 'V:CONTROL_MODE:1 V:SET_POINT_TEMPERATURE:30.5',
 		'off' => 'V:CONTROL_MODE:1 V:SET_POINT_TEMPERATURE:4.5',
-		'week-program' => 'V:ACTIVE_PROFILE:#profile=1,2,3'
+		'week-program' => 'V:ACTIVE_PROFILE:#profile=ACTIVE_PROFILE',
+		'get week-program' => 'M:*:#profile=ACTIVE_PROFILE:HMCCU_DisplayWeekProgram'
 	},
 	'JALOUSIE' => {
 		'pct' => 'V:LEVEL:?level',
@@ -2134,21 +2129,21 @@ string chnid;
 string sifid;
 string prgid;
 foreach(devid, root.Devices().EnumUsedIDs()) {
-   object odev=dom.GetObject(devid);
-   if(odev) {
-      var intid=odev.Interface();
-      object oiface=dom.GetObject(intid);
-      if(oiface) {
-         string intna=oiface.Name();
-         integer cc=0;
-         foreach (chnid, odev.Channels()) {
-            object ochn=dom.GetObject(chnid);
-            WriteLine("C;" # ochn.Address() # ";" # ochn.Name() # ";" # ochn.ChnDirection());
-            cc=cc+1;
-         }
-         WriteLine("D;" # intna # ";" # odev.Address() # ";" # odev.Name() # ";" # odev.HssType() # ";" # cc);
+  object odev=dom.GetObject(devid);
+  if(odev) {
+    var intid=odev.Interface();
+    object oiface=dom.GetObject(intid);
+    if(oiface) {
+      string intna=oiface.Name();
+      integer cc=0;
+      foreach (chnid, odev.Channels()) {
+        object ochn=dom.GetObject(chnid);
+        WriteLine("C;" # ochn.Address() # ";" # ochn.Name() # ";" # ochn.ChnDirection());
+        cc=cc+1;
       }
-   }
+      WriteLine("D;" # intna # ";" # odev.Address() # ";" # odev.Name() # ";" # odev.HssType() # ";" # cc);
+    }
+  }
 }
 foreach(sifid, root.Interfaces().EnumIDs()) {
   object oIf=dom.GetObject(sifid);
@@ -2361,6 +2356,91 @@ integer lResult;
 lResult = system.Exec(lCommand,&lGetOut,&lGetErr);
 if(lResult == 0) {
   WriteLine(lGetOut);
+}
+		)
+	},
+	"GetMetaData" => {
+		description => "Read metadata of device or channel",
+		syntax      => "name",
+		parameters  => 1,
+		code        => qq(
+string name = "\$name";
+string ignore = "AUTOCONF,DEVDESC,MASTERDESC,LINKCOUNT,PARAMSETS";
+string dataId;
+object hmObj = dom.GetObject(name);
+if (hmObj) {
+  if (hmObj.IsTypeOf(OT_CHANNEL) || hmObj.IsTypeOf(OT_DEVICE)) {
+    string dataIdList = hmObj.EnumMetaData();
+    string address = hmObj.Address();
+    foreach (dataId, dataIdList.Split(' ')) {
+      if (!ignore.Contains(dataId)) {
+        string metaVal = hmObj.MetaData(dataId);
+        WriteLine(address # '=' # dataId # '=' # metaVal);
+      }
+    }
+    if (hmObj.IsTypeOf(OT_DEVICE)) {
+      string chnid;
+      foreach (chnid, hmObj.Channels()) {
+        object chnObj = dom.GetObject(chnid);
+        if (chnObj) {
+          string address = chnObj.Address();
+          string dataIdList = chnObj.EnumMetaData();
+          foreach (dataId, dataIdList.Split(' ')) {
+            if (!ignore.Contains(dataId)) {
+              string metaVal = chnObj.MetaData(dataId);
+              WriteLine(address # '=' # dataId # '=' # metaVal);
+            }
+          }
+        }
+      }
+    }
+  }
+  else {
+    WriteLine(name # " is no device or channel");
+  }
+}
+else {
+	WriteLine("Device or channel " # name # " not found");
+}
+		)
+	},
+	"SetMetaData" => {
+		description => "Set metadata value in device or channel",
+		syntax      => "name key value",
+		parameters  => 3,
+		code        => qq(
+string name = "\$name";
+object hmObj = dom.GetObject(name);
+if (hmObj) {
+  if (hmObj.IsTypeOf(OT_CHANNEL) || hmObj.IsTypeOf(OT_DEVICE)) {
+	hmObj.SetMetaData("\$key", "\$value");
+  }
+  else {
+    WriteLine(name # " is no device or channel");
+  }
+}
+else {
+	WriteLine("Device or channel " # name # " not found");
+}
+		)
+	},
+	"DelMetaData" => {
+		description => "Remove metadata from device or channel",
+		syntax      => "name key",
+		parameters  => 2,
+		code        => qq(
+string name = "\$name";
+object hmObj = dom.GetObject(name);
+if (hmObj) {
+  if (hmObj.IsTypeOf(OT_CHANNEL) || hmObj.IsTypeOf(OT_DEVICE)) {
+	hmObj.RemoveMetaData("\$key");
+  }
+  else {
+    WriteLine(name # " is no device or channel");
+  }
+}
+else {
+	WriteLine("Device or channel " # name # " not found");
 }
 		)
 	},

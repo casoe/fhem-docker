@@ -1,5 +1,5 @@
 #########################################################################
-# $Id: 98_HTTPMOD.pm 28646 2024-03-12 18:38:28Z StefanStrobel $
+# $Id: 98_HTTPMOD.pm 28692 2024-03-21 19:44:13Z StefanStrobel $
 # fhem Modul für Geräte mit Web-Oberfläche / Webservices
 #   
 #     This file is part of fhem.
@@ -65,7 +65,7 @@ use SetExtensions   qw(:all);
 use HttpUtils;
 use FHEM::HTTPMOD::Utils  qw(:all);
 use POSIX;
-use Data::Dumper;
+#use Data::Dumper; # only for debugging
 
 use Exporter ('import');
 our @EXPORT_OK = qw();

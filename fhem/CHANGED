@@ -1,5 +1,20 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
-# Do not insert empty lines here, update check depends on it.
+# Do not insert empty lines here, update check depends on it
+ - bugfix:  50_SSChatbot: 'disabled' is not working when receiving data
+ - bugfix:  76_SolarForecast: ctrlWeatherDev1 Drop-Down if no DWD Device exists
+ - feature: 76_SolarForecast: integrate OpenMeteoDWDEnsemble-API
+ - change:  70_PylonLowVoltage: avoid possible Illegal division by zero
+ - feature: 76_SolarForecast: integrate the Open-Meteo API
+ - change:  50_Signalbot: Improved registration procedure for Voice
+ - feature: 93_DbRep: multicmd: add attr seqDoubletsVariance
+ - feature: 93_DbRep: multicmd: add nextHop Keyword
+ - bugfix:  73_PRESENCE2: Fehlerbereinigungen
+                          Hochlaufen bei Neustart von Fhem korrigiert
+                          Lokale Bluetooth Erkennung korrigiert
+ - feature: 73_PRESENCE2: Neues Attribut bluetoothHciDevice, hcitoolParam
+ - change:  70_PylonLowVoltage: edit commandref
+ - feature: 93_DbLog: support of MariaDB driver and more, see Forum:#137480
+ - feature: 93_DbRep: sqlCmdBlocking can use sql Keywords §timestamp_end§ etc.
  - change:  93_DbRep: prevent some attr eval as long as init_done is not set
  - feature: 76_SolarForecast: currentMeterDev: opt. keys conprice, feedprice
  - change:  93_DbRep: executeBefore/AfterProc output: set verbose level to 3

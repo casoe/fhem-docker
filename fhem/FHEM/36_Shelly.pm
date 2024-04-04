@@ -4,7 +4,7 @@
 #
 #  FHEM module to communicate with Shelly switch/roller actor devices
 #  Prof. Dr. Peter A. Henning, 2022    (v. 4.02f, 3.9.2022)
-#  $Id: 36_Shelly.pm 28413 2024-01-24 20:15:23Z Starkstrombastler $
+#  $Id: 36_Shelly.pm 28696 2024-03-22 08:36:42Z Starkstrombastler $
 #
 ########################################################################################
 #
@@ -66,6 +66,9 @@
 # 5.18      Bug Fix: function of all Gen1 relay devices 
 # 5.19      change back: roller devices: use 'set ... pct' as command 
 # 5.20      Bug Fix: suppress status calls for disabled devices
+# 5.21      Bug Fix: Shelly-dimmer: convert dim-command with brightness=0 to an off-command
+#           Bug Fix: Shelly-dimmer, Shelly-bulb: slider for pct starts with 1
+# 5.21.1    Bug Fix: removed uninitialized $oldtimer
 
 
 package main;
@@ -84,7 +87,7 @@ sub Log($$);
 sub Shelly_Set ($@);
 
 #-- globals on start
-my $version = "5.20 24.01.2024";
+my $version = "5.21.1 22.03.2024";
 
 my $defaultINTERVAL = 60;
 my $secndIntervalMulti = 4;  # Multiplier for 'long update'
@@ -238,7 +241,7 @@ my %shelly_dropdowns = (
     "Multi" => " ON:noArg OFF:noArg xtrachannels:noArg",
     "Rol"   => " closed open stop:noArg pct:slider,0,1,100 delta zero:noArg predefAttr:noArg",
     "RgbwW" => " pct dim dimup dimdown dim-for-timer",
-    "BulbW" => " ct:colorpicker,CT,3000,10,6500 pct:slider,0,1,100",
+    "BulbW" => " ct:colorpicker,CT,3000,10,6500 pct:slider,1,1,100",
     "RgbwC" => " rgbw rgb:colorpicker,HSV hsv white:slider,0,1,100 gain:slider,0,1,100"
 );
 ## may be used for RgbwC:
@@ -1971,7 +1974,11 @@ sub Shelly_Set ($@) {
   if( $cmd =~ /^((on)|(off)|(dim))/ && $cmd!~/(till)/ ){  # on-till, on-till-overnight
     if( $cmd eq "dim" ){
            # 
-           $cmd = "?brightness=$brightness&turn=on";
+           if( $brightness == 0 ){           
+               $cmd = "?turn=off";
+           }else{
+               $cmd = "?brightness=$brightness&turn=on";
+           }
     }
     #-- check timer command
     elsif( $cmd =~ /for-timer/ ){

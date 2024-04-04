@@ -1,5 +1,5 @@
 
-FW_version["fhemweb_iconSwitch.js"] = "$Id: fhemweb_iconSwitch.js 15404 2017-11-06 14:47:33Z Ellert $";
+FW_version["fhemweb_iconSwitch.js"] = "$Id: fhemweb_iconSwitch.js 28688 2024-03-20 18:15:20Z Ellert $";
 
 FW_widgets['iconSwitch'] = {
   createFn:FW_iconSwitchCreate,
@@ -133,6 +133,7 @@ FW_iconSwitchCreate(elName, devName, vArr, currVal, set, params, cmd)
                                             $(newEl).find("label").attr("style","border-style:solid; background-color:#f6f6f6; background-image:none;font-size: inherit;");
                                       }
                                     }
+                                    currVal = arg;                /********* beaune *********/
                                     button.button("refresh");
                                   };
 
