@@ -11,6 +11,7 @@
 #  2023-05-22  generated this module by 'set mdbsWR saveAsModule ModbusSUN2000WR' and adapted the generated module - Robert
 #  2023-10-24  added some readings for battery - passibe
 #  2024-02-14  added some settings for battery
+#  2024-04-06  added states and alarms from https://forum.fhem.de/index.php?topic=115422.msg1303763#msg1303763
 
 package main;
 
