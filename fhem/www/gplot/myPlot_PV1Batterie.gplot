@@ -1,0 +1,24 @@
+# Created by FHEM/98_SVG.pm, 2024-04-08 23:15:14
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Batterie Ladestand'
+set ytics 
+set y2tics 
+set grid
+set ylabel "Prozent"
+set y2label "kWh"
+set yrange [0:100]
+set y2range [0:10]
+
+#dblog sun2000:BAT_Ladestand:::
+#lp ConstY:90
+#lp ConstY:50
+#lp ConstY:20
+
+plot "<IN>" using 1:2 axes x1y1 title 'Ladestand' ls l0 lw 1 with lines,\
+     "<IN>" using 1:2 axes x1y1 title '90/50/20%' ls l7 lw 0.2 with lines,\
+     "<IN>" using 1:2 axes x1y1 title '.' ls l7 lw 0.2 with lines,\
+     "<IN>" using 1:2 axes x1y1 title '.' ls l7 lw 0.2 with lines
