@@ -1,5 +1,5 @@
 ###############################################################
-# $Id: 72_FRITZBOX.pm 28642 2024-03-12 17:00:48Z jowiemann $
+# $Id: 72_FRITZBOX.pm 28783 2024-04-11 12:13:32Z jowiemann $
 #
 #  72_FRITZBOX.pm
 #
@@ -45,7 +45,7 @@ use warnings;
 use Blocking;
 use HttpUtils;
 
-my $ModulVersion = "07.57.12b";
+my $ModulVersion = "07.57.13a";
 my $missingModul = "";
 my $FRITZBOX_TR064pwd;
 my $FRITZBOX_TR064user;
@@ -497,13 +497,10 @@ sub FRITZBOX_Initialize($)
   $hash->{AttrFn}   = "FRITZBOX_Attr";
   $hash->{AttrList} = "boxUser "
                 ."disable:0,1 "
-                ."nonblockingTimeOut:50,75,100,125 "
+                ."nonblockingTimeOut:30,35,40,50,75,100,125 "
                 ."INTERVAL "
                 ."reConnectInterval "
                 ."maxSIDrenewErrCnt "
-                ."m3uFileActive:0,1 "
-                ."m3uFileLocal "
-                ."m3uFileURL "
                 ."userTickets "
                 ."enablePhoneBookInfo:0,1 "
                 ."enableKidProfiles:0,1 "
@@ -534,9 +531,10 @@ sub FRITZBOX_Initialize($)
                                 ."box_moh,box_powerRate,box_rateDown,box_rateUp,box_stdDialPort,box_sys_LogNewest,box_tr064,box_tr069,"
                                 ."box_upnp,box_upnp_control_activated,box_uptime,box_uptimeConnect,box_wan_AccessType,"
                                 ."box_wlan_Count,box_wlan_2.4GHz,box_wlan_5GHz,box_wlan_Active,box_wlan_LogExtended,box_wlan_LogNewest "
-                ."deviceInfo:sortable,ipv4,name,uid,connection,speed,rssi,_noDefInf_ "
+                ."deviceInfo:sortable,ipv4,name,uid,connection,speed,rssi,statIP,_noDefInf_ "
                 ."disableTableFormat:multiple-strict,border(8),cellspacing(10),cellpadding(20) "
                 ."FhemLog3Std:0,1 "
+                ."lanDeviceReading:mac,ip "
                 .$readingFnAttributes;
 
 } # end FRITZBOX_Initialize
@@ -635,6 +633,9 @@ sub FRITZBOX_Define($$)
    $hash->{TR064}      = -1;
    $hash->{UPNP}       = -1;
    
+   CommandDeleteAttr(undef,"$hash m3uFileLocal -silent");
+   CommandDeleteAttr(undef,"$hash m3uFileURL -silent");
+   CommandDeleteAttr(undef,"$hash m3uFileActive -silent");
    
    FRITZBOX_Log $hash, 4, "start of Device readout parameters";
    RemoveInternalTimer($hash->{helper}{TimerReadout});
@@ -828,6 +829,17 @@ sub FRITZBOX_Attr($@)
      }
    }
 
+   if ($aName eq "enablePassivLanDevices") {
+     if ($cmd eq "set") {
+       return "$aName: $aVal. Valid is 0 or 1." if $aVal !~ /[0-1]/;
+     }
+     if ($cmd eq "del" || $aVal == 0) {
+       foreach (keys %{ $hash->{READINGS} }) {
+         readingsDelete($hash, $_) if $_ =~ /^mac_pas_/ && defined $hash->{READINGS}{$_}{VAL};
+       }
+     }
+   }
+
    if ($aName eq "enableKidProfiles") {
      if ($cmd eq "set") {
        return "$aName: $aVal. Valid is 0 or 1." if $aVal !~ /[0-1]/;
@@ -971,6 +983,19 @@ sub FRITZBOX_Attr($@)
      }
    }
 
+   if ($aName eq "lanDeviceReading") {
+     if ($cmd eq "set") {
+       return "$aName: $aVal. Valid is mac or ip." if $aVal !~ /mac|ip/;
+       foreach (keys %{ $hash->{READINGS} }) {
+         readingsDelete($hash, $_) if $_ =~ /^mac_|ip_/ && defined $hash->{READINGS}{$_}{VAL};
+       }
+     }
+     if ($cmd eq "del" || $aVal eq "mac") {
+       foreach (keys %{ $hash->{READINGS} }) {
+         readingsDelete($hash, $_) if $_ =~ /^ip_/ && defined $hash->{READINGS}{$_}{VAL};
+       }
+     }
+   }
 
    # Stop the sub if FHEM is not initialized yet
    unless ($init_done) {
@@ -978,7 +1003,7 @@ sub FRITZBOX_Attr($@)
      return undef;
    }
 
-   if ( ($aName =~ /m3uFileLocal|m3uFileURL|m3uFileActive/ && $hash->{APICHECKED} == 1) || $aName =~ /disable|INTERVAL|nonblockingTimeOut/ ) {
+   if ( ( $hash->{APICHECKED} == 1) || $aName =~ /disable|INTERVAL|nonblockingTimeOut/ ) {
       FRITZBOX_Log $hash, 4, "Attr $cmd $aName -> Neustart internal Timer";
       $hash->{APICHECKED} = 0;
       $hash->{WEBCONNECT} = 0;
@@ -2777,7 +2802,11 @@ sub FRITZBOX_SetGet_Proof_Params($@) {
          return "ERROR: non existing landevice: $val[0]";
       }
 
-      $val[0] = $hash->{fhem}->{landevice}->{$mac} ;
+      if ( (split(/\|/, $hash->{fhem}->{landevice}->{$val[0]}))[0] ) {
+        $val[0] = (split(/\|/, $hash->{fhem}->{landevice}->{$val[0]}))[0];
+      } else {
+        $val[0] = $hash->{fhem}->{landevice}->{$val[0]};
+      }
 
    } else {
 
@@ -2882,6 +2911,7 @@ sub FRITZBOX_Readout_Start($)
       $hash->{helper}{READOUT_RUNNING_PID} = BlockingCall($runFn, $name,
                                                        "FRITZBOX_Readout_Done", $timeout,
                                                        "FRITZBOX_Readout_Aborted", $hash);
+      $hash->{helper}{READOUT_RUNNING_PID}->{loglevel} = GetVerbose($name);
       FRITZBOX_Log $hash, 4, "Fork process $runFn";
    }
    else {
@@ -2937,22 +2967,19 @@ sub FRITZBOX_Readout_Run_Web($)
    FRITZBOX_Log $hash, 4, "Prepare query string for luaQuery.";
 
    my $queryStr = "&radio=configd:settings/WEBRADIO/list(Name)"; # Webradio
+
    #queryStr .= "&box_dectRingTone=dect:settings/ServerRingtone/list(UID,Name)"; #settings/LastSetServerRingtoneState
    #queryStr .= "&box_dectNightTime=dect:settings/NightTime";
    $queryStr .= "&box_dect=dect:settings/enabled"; # DECT Sender
+
    $queryStr .= "&handsetCount=dect:settings/Handset/count"; # Anzahl Handsets
    $queryStr .= "&handset=dect:settings/Handset/list(User,Manufacturer,Model,FWVersion,Productname)"; # DECT Handsets
-   $queryStr .= "&wlanList=wlan:settings/wlanlist/list(mac,speed,speed_rx,rssi,is_guest)"; # WLAN devices
-   $queryStr .= "&wlanListNew=wlan:settings/wlanlist/list(mac,speed,rssi)"; # WLAN devices fw>=6.69
 
-   #wlan:settings/wlanlist/list(hostname,mac,UID,state,rssi,quality,is_turbo,cipher,wmm_active,powersave,is_ap,ap_state,is_repeater,flags,flags_set,mode,is_guest,speed,speed_rx,channel_width,streams)   #wlan:settings/wlanlist/list(hostname,mac,UID,state,rssi,quality,is_turbo,wmm_active,cipher,powersave,is_repeater,flags,flags_set,mode,is_guest,speed,speed_rx,speed_rx_max,speed_tx_max,channel_width,streams,mu_mimo_group,is_fail_client)
-   #$queryStr .= "&lanDevice=landevice:settings/landevice/list(mac,ip,ethernet,ethernet_port,guest,name,active,online,wlan,speed,UID)"; # LAN devices
+   $queryStr .= "&wlanList=wlan:settings/wlanlist/list(mac,speed,speed_rx,rssi,is_guest,is_remote,is_repeater,is_ap)"; # WLAN devices
+   $queryStr .= "&wlanListNew=wlan:settings/wlanlist/list(mac,speed,rssi,is_remote,is_repeater,is_ap)"; # WLAN devices fw>=6.69
 
-   $queryStr .= "&lanDevice=landevice:settings/landevice/list(mac,ip,ethernet,ethernet_port,ethernetport,guest,name,active,online,wlan,speed,UID)"; # LAN devices
-   $queryStr .= "&lanDeviceNew=landevice:settings/landevice/list(mac,ip,ethernet,guest,name,active,online,wlan,speed,UID)"; # LAN devices fw>=6.69
-
-   #landevice:settings/landevice/list(name,ip,mac,UID,dhcp,wlan,ethernet,active,static_dhcp,manu_name,wakeup,deleteable,source,online,speed,wlan_UIDs,auto_wakeup,guest,url,wlan_station_type,vendorname)
-   #landevice:settings/landevice/list(name,ip,mac,parentname,parentuid,ethernet_port,wlan_show_in_monitor,plc,ipv6_ifid,parental_control_abuse,plc_UIDs)   #landevice:settings/landevice/list(name,ip,mac,UID,dhcp,wlan,ethernet,active,static_dhcp,manu_name,wakeup,deleteable,source,online,speed,wlan_UIDs,auto_wakeup,guest,url,wlan_station_type,vendorname,parentname,parentuid,ethernet_port,wlan_show_in_monitor,plc,ipv6_ifid,parental_control_abuse,plc_UIDs)
+   $queryStr .= "&lanDevice=landevice:settings/landevice/list(mac,ip,ethernet,ethernet_port,ethernetport,guest,name,active,online,wlan,speed,UID,static_dhcp)"; # LAN devices
+   $queryStr .= "&lanDeviceNew=landevice:settings/landevice/list(mac,ip,ethernet,guest,name,active,online,wlan,speed,UID,static_dhcp)"; # LAN devices fw>=6.69
 
    $queryStr .= "&init=telcfg:settings/Foncontrol"; # Init
    $queryStr .= "&box_stdDialPort=telcfg:settings/DialPort"; #Dial Port
@@ -3065,11 +3092,10 @@ sub FRITZBOX_Readout_Run_Web($)
     # gets WLAN speed for fw>=6.69 and < 7
       $queryStr="";
       foreach ( @{ $result->{wlanListNew} } ) {
-         $newQueryPart = "&".$_->{_node}."=wlan:settings/".$_->{_node}."/speed_rx";
-         if (length($queryStr.$newQueryPart) < 4050) {
+         $newQueryPart = "&" . $_->{_node} . "=wlan:settings/" . $_->{_node}."/speed_rx";
+         if (length($queryStr . $newQueryPart) < 4050) {
             $queryStr .= $newQueryPart;
-         }
-         else {
+         } else {
             $result2 = FRITZBOX_call_Lua_Query( $hash, $queryStr );
 
             # Abbruch wenn Fehler beim Lesen der Fritzbox-Antwort
@@ -3103,9 +3129,9 @@ sub FRITZBOX_Readout_Run_Web($)
 
     # get missing user-fields for fw>=6.69
       foreach ( @{ $result->{userProfilNew} } ) {
-         $newQueryPart = "&".$_->{_node}."_filter=user:settings/".$_->{_node}."/filter_profile_UID";
-         $newQueryPart .= "&".$_->{_node}."_month=user:settings/".$_->{_node}."/this_month_time";
-         $newQueryPart .= "&".$_->{_node}."_today=user:settings/".$_->{_node}."/today_time";
+         $newQueryPart = "&"  . $_->{_node} . "_filter=user:settings/" . $_->{_node} . "/filter_profile_UID";
+         $newQueryPart .= "&" . $_->{_node} . "_month=user:settings/"  . $_->{_node} . "/this_month_time";
+         $newQueryPart .= "&" . $_->{_node} . "_today=user:settings/"  . $_->{_node} . "/today_time";
          if (length($queryStr.$newQueryPart) < 4050) {
             $queryStr .= $newQueryPart;
          }
@@ -3118,7 +3144,7 @@ sub FRITZBOX_Readout_Run_Web($)
             # $sidNew += $result2->{sidNew} if defined $result2->{sidNew};
 
             %{$result} = ( %{$result}, %{$result2 } );
-            $queryStr = $newQueryPart;
+            $queryStr  = $newQueryPart;
          }
       }
 
@@ -3435,13 +3461,14 @@ sub FRITZBOX_Readout_Run_Web($)
 
 #-------------------------------------------------------------------------------------
 # Create WLAN-List
+
    my %wlanList;
    #to keep compatibility with firmware <= v3.67 and >=7
    if ( ref $result->{wlanList} eq 'ARRAY' ) {
       foreach ( @{ $result->{wlanList} } ) {
          my $mac = $_->{mac};
          $mac =~ s/:/_/g;
-         # Anscheinend gibt es Anmeldungen sowohl fÃƒÂ¼r Repeater als auch fÃƒÂ¼r FBoxen
+         # Anscheinend gibt es Anmeldungen sowohl für Repeater als auch für FBoxen
          $wlanList{$mac}{speed} = $_->{speed}   if ! defined $wlanList{$mac}{speed} || $_->{speed} ne "0";
          $wlanList{$mac}{speed_rx} = $_->{speed_rx} if ! defined $wlanList{$mac}{speed_rx} || $_->{speed_rx} ne "0";
          #$wlanList{$mac}{speed_rx} = $result_lan->{$_->{_node}};
@@ -3455,12 +3482,29 @@ sub FRITZBOX_Readout_Run_Web($)
 
 #-------------------------------------------------------------------------------------
 # Create LanDevice list and delete inactive devices
+
    my $allowPassiv = AttrVal( $name, "enablePassivLanDevices", "0");
    my %oldLanDevice;
+   my $lDevName = AttrVal( $name, "lanDeviceReading", "mac");
 
    #collect current mac-readings (to delete the ones that are inactive or disappeared)
    foreach (keys %{ $hash->{READINGS} }) {
-      $oldLanDevice{$_} = $hash->{READINGS}{$_}{VAL} if $_ =~ /^mac_/ && defined $hash->{READINGS}{$_}{VAL};
+      if ($_ =~ /^${lDevName}_/ && defined $hash->{READINGS}{$_}{VAL}) {
+        my $mac_ip = $_;
+        $mac_ip =~ s/^${lDevName}_//;
+
+        if ( $hash->{fhem}->{landevice}->{$mac_ip} ) {
+          if ( (split(/\|/, $hash->{fhem}->{landevice}->{$mac_ip}))[1] ) {
+            $oldLanDevice{$_} .= (split(/\|/, $hash->{fhem}->{landevice}->{$mac_ip}))[1] . "|";
+          } elsif ((split(/\|/, $hash->{fhem}->{landevice}->{$mac_ip}))[0]) {
+            $oldLanDevice{$_} .= (split(/\|/, $hash->{fhem}->{landevice}->{$mac_ip}))[0] . "|";
+          } else {
+            $oldLanDevice{$_} .= $hash->{fhem}->{landevice}->{$mac_ip} . "|";
+          }
+        }
+        $oldLanDevice{$_} .= $hash->{READINGS}{$_}{VAL};
+#        FRITZBOX_Log $hash, 3, "deviceInfo -> $oldLanDevice{$_} -> $_";
+      }
    }
 
    %landevice = ();
@@ -3471,11 +3515,11 @@ sub FRITZBOX_Readout_Run_Web($)
       #Ipv4,IPv6,lanName,devName,Mbit,RSSI "
       
       # iPad-Familie [landevice810] (WLAN: 142 / 72 Mbit/s RSSI: -53)
-      my $deviceInfo = AttrVal($name, "deviceInfo", "_defDef_,name,[uid],(connection: speedcomma rssi)");
+      my $deviceInfo = AttrVal($name, "deviceInfo", "_defDef_,name,[uid],(connection: speedcomma rssi) statIP");
 
       $deviceInfo =~ s/\n//g;
 
-      $deviceInfo = "_noDefInf_,_defDef_,name,[uid],(connection: speedcomma rssi)" if $deviceInfo eq "_noDefInf_";
+      $deviceInfo = "_noDefInf_,_defDef_,name,[uid],(connection: speedcomma rssi) statIP" if $deviceInfo eq "_noDefInf_";
 
       my $noDefInf = $deviceInfo =~ /_noDefInf_/ ? 1 : 0; #_noDefInf_ 
       $deviceInfo =~ s/\,_noDefInf_|_noDefInf_\,//g;
@@ -3499,9 +3543,11 @@ sub FRITZBOX_Readout_Run_Web($)
       FRITZBOX_Log $hash, 5, "deviceInfo -> " . $deviceInfo;
 
       foreach ( @{ $result->{lanDevice} } ) {
-         my $dIp   = $_->{ip};
-         my $UID   = $_->{UID};
-         my $dName = $_->{name};
+         my $dIp   = $_->{ip};          # IP Adress
+         my $UID   = $_->{UID};         # FritzBoy lan device ID
+         my $dName = $_->{name};        # name of the device
+
+         my $dhcp  = $_->{static_dhcp} eq "0" ? "statIP:off" : "statIP:on"; # IP is defined as static / dynamic
 
          FRITZBOX_Readout_Add_Reading $hash, \@roReadings, "fhem->landevice->$dIp", $dName;
          FRITZBOX_Readout_Add_Reading $hash, \@roReadings, "fhem->landevice->$UID", $dName;
@@ -3510,29 +3556,26 @@ sub FRITZBOX_Readout_Run_Web($)
 
          my $srTmp = $deviceInfo;
 
-      # lan IPv4 ergänzen
+         # lan IPv4 ergänzen
          $srTmp =~ s/ipv4/$dIp/g;
 
-      # lan DeviceName ergänzen
+         # lan DeviceName ergänzen
          $srTmp =~ s/name/$dName/g;
 
-      # lan DeviceID ergänzen
+         # lan DeviceID ergänzen
          $srTmp =~ s/uid/$UID/g;
 
-      # Create a reading if a landevice is connected
-      #   if ( ($_->{active} && $_->{ip}) || $allowPassiv) {
+         # Create a reading if a landevice is connected
          if ( $_->{active} || $allowPassiv) {
             my $mac = $_->{mac};
             $mac =~ s/:/_/g;
+            $mac = $UID if $mac eq "";
 
-            FRITZBOX_Readout_Add_Reading $hash, \@roReadings, "fhem->landevice->$mac", $UID;
-            $landevice{$mac}=$UID;
+            FRITZBOX_Readout_Add_Reading $hash, \@roReadings, "fhem->landevice->$mac", $UID . "|" . $dIp;
+            $landevice{$mac} = $UID;
 
-            # if ( !$_->{ethernet} && $_->{wlan} ) { # funktioniert nicht mehr seit v7
-            # if ( defined $wlanList{$mac} ) {
-
+            # Copes with fw >= 7
             if ( defined $wlanList{$mac} and !$_->{ethernet_port} and !$_->{ethernetport} ) {
-               # Copes with fw>=7
                $_->{guest} = $wlanList{$mac}{is_guest}  if defined $wlanList{$mac}{is_guest} && $_->{guest} eq "";
                $wlanCount++;
                $gWlanCount++      if $_->{guest} eq "1";
@@ -3575,6 +3618,8 @@ sub FRITZBOX_Readout_Run_Web($)
                }
             }
 
+            $srTmp =~ s/statIP/${sep}${dhcp}/g;
+
             $srTmp =~ s/rssi${sep}|${sep}rssi|rssi//g;
 
             if ($defDef) {
@@ -3589,9 +3634,11 @@ sub FRITZBOX_Readout_Run_Web($)
 
             $srTmp = "no match for Informations" if ($srTmp eq "");
 
-            my $rName  = "mac_";
+            $dIp = $UID if $dIp eq "";
+            $mac = $UID if $mac eq "";
+            my $rName  = $lDevName . "_";
                $rName .= "pas_" if $allowPassiv && $_->{active} == 0;
-               $rName .= $mac;
+               $rName .= $lDevName eq "mac" ? $mac : $dIp;
 
             FRITZBOX_Readout_Add_Reading $hash, \@roReadings, $rName, $srTmp ;
 
@@ -3605,12 +3652,19 @@ sub FRITZBOX_Readout_Run_Web($)
 
 # Remove inactive or non existing mac-readings in two steps
    foreach ( keys %oldLanDevice ) {
-      # set the mac readings to 'inactive' and delete at next readout
-      if ( $oldLanDevice{$_} ne "inactive" ) {
-         FRITZBOX_Readout_Add_Reading $hash, \@roReadings, $_, "inactive";
+      # set the lanDevice readings to 'inactive' and delete at next readout
+      if ( $oldLanDevice{$_} !~ /inactive/ ) {
+         my $ip = ": ";
+         if ($oldLanDevice{$_} =~ /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|landevice\d+)/) {
+           $ip .= $1;
+         }
+
+         FRITZBOX_Readout_Add_Reading $hash, \@roReadings, $_, "inactive" . $ip;
+#         FRITZBOX_Log $hash, 3, "deviceInfo -> $oldLanDevice{$_} -> inactive" . $ip;
       }
       else {
          FRITZBOX_Readout_Add_Reading $hash, \@roReadings, $_, "";
+#         FRITZBOX_Log $hash, 3, "deviceInfo -> $oldLanDevice{$_} -> deleted";
       }
    }
 
@@ -5313,13 +5367,10 @@ sub FRITZBOX_Readout_Process($$)
        if (($rValue =~ "Box") && (lc($rValue) =~ "6[4,5,6][3,6,9][0,1]") ) {
          my $cable = "boxUser "
                   ."disable:0,1 "
-                  ."nonblockingTimeOut:50,75,100,125 "
+                  ."nonblockingTimeOut:30,35,40,50,75,100,125 "
                   ."INTERVAL "
                   ."reConnectInterval "
                   ."maxSIDrenewErrCnt "
-                  ."m3uFileLocal "
-                  ."m3uFileURL "
-                  ."m3uFileActive:0,1 "
                   ."userTickets "
                   ."enablePassivLanDevices:0,1 "
                   ."enableKidProfiles:0,1 "
@@ -5353,7 +5404,8 @@ sub FRITZBOX_Readout_Process($$)
                                 ."box_docsis31_Ds_powerLevels,box_docsis31_Ds_frequencys,box_docsis31_Ds_modulations,"
                                 ."box_docsis30_Us_powerLevels,box_docsis30_Us_frequencys,box_docsis30_Us_modulations,"
                                 ."box_docsis31_Us_powerLevels,box_docsis31_Us_frequencys,box_docsis31_Us_modulations "
-                  ."deviceInfo:sortable,ipv4,name,uid,connection,speed,rssi,_noDefInf_ "
+                  ."deviceInfo:sortable,ipv4,name,uid,connection,speed,rssi,statIP,_noDefInf_ "
+                  ."lanDeviceReading:mac,ip "
                   .$readingFnAttributes;
 
          setDevAttrList($hash->{NAME}, $cable);
@@ -5756,6 +5808,7 @@ sub FRITZBOX_Readout_SetGet_Start($)
    $hash->{helper}{CMD_RUNNING_PID} = BlockingCall($cmdFunction, $handover,
                                        "FRITZBOX_Readout_SetGet_Done", $timeout,
                                        "FRITZBOX_Readout_SetGet_Aborted", $hash);
+   $hash->{helper}{READOUT_RUNNING_PID}->{loglevel} = GetVerbose($name);
    return undef;
 } # end FRITZBOX_Readout_SetGet_Start
 
@@ -9838,8 +9891,8 @@ sub FRITZBOX_Helper_process_JSON($$$@) {
    # 2018.03.19 18:43:28 3: FRITZBOX: get Fritzbox luaQuery settings/sip
    if ( ref ($jsonResult) ne "HASH" ) {
       chop $jsonText;
-      FRITZBOX_Log $hash, 4, "no json string returned\n (" . $jsonText . ")";
-      my %retHash = ("Error" => "no json string returned (" . $jsonText . ")", "ResetSID" => "1");
+      FRITZBOX_Log $hash, 4, "no HASH from JSON returned\n (" . $jsonText . ")";
+      my %retHash = ("Error" => "no HASH from JSON returned", "ResetSID" => "1");
       return \%retHash;
    }
 
@@ -10677,9 +10730,11 @@ sub FRITZBOX_Helper_Url_Regex {
       </li><br>
 
       <li><a name="luaFunction"></a>
-         <dt><code>get &lt;name&gt; luaFunction &lt;Command&gt;</code></dt>
+         <dt><code>get &lt;name&gt; luaFunction &lt;function&gt;</code></dt>
          <br>
-         Evaluates commands via AVM lua functions.
+         Executes AVM lua functions.<br>
+         function: <code>&lt;path/luaFunction?&gt;&lt;Parameter&gt;</code><br>
+         function: <code>internet/inetstat_monitor.lua?myXhr=1&action=disconnect&useajax=1&xhr=1</code> gets a new IP address for the FritzBox.
       </li><br>
 
       <li><a name="luaInfo"></a>
@@ -10698,9 +10753,11 @@ sub FRITZBOX_Helper_Url_Regex {
       </li><br>
 
       <li><a name="luaQuery"></a>
-         <dt><code>get &lt;name&gt; luaQuery &lt;Command&gt;</code></dt>
+         <dt><code>get &lt;name&gt; luaQuery &lt;query&gt;</code></dt>
          <br>
-         Shows informations via query.lua requests.
+         Displays information by caling query.lua.<br>
+         query: <code>&lt;queryFunction:&gt;&lt;queryRequest&gt;</code><br>
+         query: <code>uimodlogic:status/uptime_hours</code> gets the hours that the FritzBox has been running continuously since the last restart.
       </li><br>
 
       <li><a name="tr064Command"></a>
@@ -10779,7 +10836,7 @@ sub FRITZBOX_Helper_Url_Regex {
       </li><br>
 
       <li><a name="deviceInfo"></a>
-         <dt><code>deviceInfo &lt;ipv4, name, uid, connection, speed, rssi, _noDefInf_, _default_&, space, comma&gt;</code></dt>
+         <dt><code>deviceInfo &lt;ipv4, name, uid, connection, speed, rssi, statIP, _noDefInf_, _default_&, space, comma&gt;</code></dt>
          <br>
          This attribute can be used to design the content of the device readings (mac_...). If the attribute is not set, sets
          the content breaks down as follows:<br>
@@ -10915,28 +10972,11 @@ sub FRITZBOX_Helper_Url_Regex {
          Defines a new prefix for the reading name of the wlan neighborhood devices that is build from the mac address. Default prefix is nbh_.
       </li><br>
 
-      <li><a name="m3uFileActive"></a>
-         <dt><code>m3uFileActive &lt;0 | 1&gt;</code></dt>
+      <li><a name="lanDeviceReading"></a>
+         <dt><code>lanDeviceReading &lt;mac|ip&gt;</code></dt>
          <br>
-         Activates the use of m3u files for using Internet radio for voice output on the Fritz!Fon devices.
-         <br>
-         This output is currently no longer working.
-      </li><br>
-
-      <li><a name="m3uFileLocal"></a>
-         <dt><code>m3uFileLocal &lt;/path/fileName&gt;</code></dt>
-         <br>
-         Can be used as a work around if the ring tone of a Fritz!Fon cannot be changed because of firmware restrictions (missing telnet or webcm).
-         <br>
-         How it works: If the FHEM server has also a web server running, the FritzFon can play a m3u file from this web server as an internet radio station.
-         For this an internet radio station on the FritzFon must point to the server URL of this file and the internal ring tone must be changed to that station.
-         <br>
-         If the attribute is set, the server file "m3uFileLocal" (local address of the FritzFon URL) will be filled with the URL of the text2speech engine (say:) or a MP3-File (play:). The FritzFon will then play this URL.
-      </li><br>
-
-      <li><a name="m3uFileURL"></a>
-         <dt><code>m3uFileURL &lt;URL&gt;</code></dt>
-         <br>
+         Specifies whether the reading name should be formed from the IP address with prefix ip_ or the MAC address with prefix mac_ for network devices.<br>
+         Default is mac.
       </li><br>
 
       <li><a href="#readingFnAttributes">readingFnAttributes</a></li>
@@ -11068,9 +11108,19 @@ sub FRITZBOX_Helper_Url_Regex {
       <br>
       <li><b>mac_</b><i>nn_nn_nn_nn_nn_nn</i> - MAC address and name of an active network device.
       <br>
-      If connect via WLAN, the term "WLAN" and (from boxes point of view) the down- and upload rate and the signal strength is added. For LAN devices the LAN port and its speed is added. Inactive or removed devices get first the value "inactive" and will be deleted during the next update.</li>
+      If no MAC address is provided, e.g. Switch or VPN, then the FritzBox DeviceID is used instead of the MAC address.
       <br>
-      <li><b>nbh_</b><i>nn_nn_nn_nn_nn_nn</i> - MAC address and name of an active WLAN neighborhood device.
+      For a WLAN connection, "WLAN" and (as seen from the box) the sending and receiving speed and the reception strength are appended. For a LAN connection, the LAN port and the LAN speed are appended. Guest connections are marked with “gWLAN” or “gLAN”.
+      <br>
+      Inactive or removed devices first receive the value "inactive: IP address" or "inactive: DeviceID" if no IP address is available<br>
+      and will be deleted with the next update.</li>
+      <br>
+      <li><b>ip_</b><i>nnn.nnn.nnn.nnn</i> - IP address and name of an active network device.
+      <br>
+      For a WLAN connection, "WLAN" and (as seen from the box) the sending and receiving speed and the reception strength are appended. For a LAN connection, the LAN port and the LAN speed are appended. Guest connections are marked with “gWLAN” or “gLAN”.
+      <br>
+      Inactive or removed devices will first receive the value "inactive: DeviceID" and will be deleted with the next update.</li>
+      <br>      <li><b>nbh_</b><i>nn_nn_nn_nn_nn_nn</i> - MAC address and name of an active WLAN neighborhood device.
       <br>
       shown is the SSID, the channel and the bandwidth. Inactive or removed devices get first the value "inactive" and will be deleted during the next update.</li>
       <br>
@@ -11585,9 +11635,11 @@ sub FRITZBOX_Helper_Url_Regex {
       </li><br>
 
       <li><a name="luaFunction"></a>
-         <dt><code>get &lt;name&gt; luaFunction &lt;Command&gt;</code></dt>
+         <dt><code>get &lt;name&gt; luaFunction &lt;funktion&gt;</code></dt>
          <br>
-         F&uuml;hrt AVM lua Funktionen aus.
+         Führt AVM lua Funktionen aus.<br>
+         funktion: <code>&lt;Pfad/luaFunktion?&gt;&lt;Parameter&gt;</code><br>
+         funktion: <code>internet/inetstat_monitor.lua?myXhr=1&action=disconnect&useajax=1&xhr=1</code> holt eine neue IP-Adresse für die FritzBox.
       </li><br>
 
       <li><a name="luaInfo"></a>
@@ -11606,9 +11658,11 @@ sub FRITZBOX_Helper_Url_Regex {
       </li><br>
 
       <li><a name="luaQuery"></a>
-         <dt><code>get &lt;name&gt; luaQuery &lt;Command&gt;</code></dt>
+         <dt><code>get &lt;name&gt; luaQuery &lt;abfrage&gt;</code></dt>
          <br>
-         Zeigt Informations durch Abfragen der query.lua.
+         Zeigt Informations durch Abfragen der query.lua.<br>
+         abfrage: <code>&lt;queryFunction:&gt;&lt;queryRequest&gt;</code><br>
+         abfrage: <code>uimodlogic:status/uptime_hours</code> holt die Stunden, die die FritzBox seit dem letzten Neustart ununterbrochen läuft.
       </li><br>
 
       <li><a name="tr064Command"></a>
@@ -11685,7 +11739,7 @@ sub FRITZBOX_Helper_Url_Regex {
       </li><br>
 
       <li><a name="deviceInfo"></a>
-         <dt><code>deviceInfo &lt;ipv4, name, uid, connection, speed, rssi, _noDefInf_, _default_&, space, comma&gt;</code></dt>
+         <dt><code>deviceInfo &lt;ipv4, name, uid, connection, speed, rssi, statIP, _noDefInf_, _default_&, space, comma&gt;</code></dt>
          <br>
          Mit diesem Attribut kann der Inhalt der Device Readings (mac_...) gestaltet werden. Ist das Attribut nicht gesetzt, setzt
          sich der Inhalt wie folgt zusammen:<br>
@@ -11828,28 +11882,11 @@ sub FRITZBOX_Helper_Url_Regex {
          Definiert einen Pr&auml;fix f&uuml;r den Reading Namen der WLAN Nachbarschaftsger&auml;te, der aus der MAC Adresse gebildet wird. Der default Pr&auml;fix ist nbh_.
       </li><br>
 
-      <li><a name="m3uFileActive"></a>
-         <dt><code>m3uFileActive &lt;0 | 1&gt;</code></dt>
+      <li><a name="lanDeviceReading"></a>
+         <dt><code>lanDeviceReading &lt;mac|ip&gt;</code></dt>
          <br>
-         Aktiviert die Nutzung von m3u Dateien zur Nutzung des Internet Radios f&uuml;r Sprachausgaben auf den Fritz!Fon Ger&auml;te.
-         <br>
-         Aktuell funktioniert diese Ausgabe nicht mehr.
-      </li><br>
-
-      <li><a name="m3uFileLocal"></a>
-         <dt><code>m3uFileLocal &lt;/path/fileName&gt;</code></dt>
-         <br>
-         Steht als Work around zur Verf&uuml;gung, wenn der Klingelton eines Fritz!Fon, auf Grund von Firmware Restriktionen (fehlendes Telnet oder WebCMD) nicht gewechselt werden kann.
-         <br>
-         Funktionsweise: Wenn der Fhem Server zus&auml;tzlich einen Web Server zur Verf&uuml;gung hat, dann kann das Fritz!Fon eine m3u Datei von diesem Web Server als eine Radio Station abspielen.
-         Hierf&uuml;r muss eine Internet Radio Station auf dem Fritz!Fon auf die Server URL f&uuml;r diese Datei zeigen und der interne Klingelton muss auf diese Station eingestellt werden.
-         <br>
-         Ist das Attribut gesetzt, wird die Server Datei "m3uFileLocal" (lokale Adresse der Fritz!Fon URL) mit der URL der text2speech Engine (say:) oder mit der MP3-Datei (play:) gef&uuml;llt. Das Fritz!Fon spielt dann diese URL ab.
-      </li><br>
-
-      <li><a name="m3uFileURL"></a>
-         <dt><code>m3uFileURL &lt;URL&gt;</code></dt>
-         <br>
+         Legt fest, ob der Reading Name aus der IP-Adresse mit Präfix ip_ oder der MAC-Adresse mit Präfix mac_ für Netzwerk Geräte gebildet werden soll.<br>
+         Standard ist mac.
       </li><br>
 
       <li><a href="#readingFnAttributes">readingFnAttributes</a></li>
@@ -11977,11 +12014,20 @@ sub FRITZBOX_Helper_Url_Regex {
       <br>
       <li><b>mac_</b><i>nn_nn_nn_nn_nn_nn</i> - MAC Adresse und Name eines aktiven Netzwerk-Ger&auml;tes.
       <br>
+      Wird keine MAC-Adresse bereit gestellt,z.B. Switch oder VPN, dann wird anstatt der MAC-Adresse die FritzBox DeviceID genommen.
+      <br>
       Bei einer WLAN-Verbindung wird "WLAN" und (von der Box gesehen) die Sende- und Empfangsgeschwindigkeit und die Empfangsst&auml;rke angehangen. Bei einer LAN-Verbindung wird der LAN-Port und die LAN-Geschwindigkeit angehangen. Gast-Verbindungen werden mit "gWLAN" oder "gLAN" gekennzeichnet.
       <br>
-      Inaktive oder entfernte Ger&auml;te erhalten zuerst den Werte "inactive" und werden beim n&auml;chsten Update gel&ouml;scht.</li>
+      Inaktive oder entfernte Ger&auml;te erhalten zuerst den Werte "inactive: IP-Adresse" bzw "inactiv: DeviceID" wenn keine IP-Adresse zur Verfügung steht<br>
+      und werden beim n&auml;chsten Update gel&ouml;scht.</li>
       <br>
-      <li><b>nbh_</b><i>nn_nn_nn_nn_nn_nn</i> - MAC Adresse und Name eines aktiven WAN-Ger&auml;tes.
+      <li><b>ip_</b><i>nnn.nnn.nnn.nnn</i> - IP-Adresse und Name eines aktiven Netzwerk-Ger&auml;tes.
+      <br>
+      Bei einer WLAN-Verbindung wird "WLAN" und (von der Box gesehen) die Sende- und Empfangsgeschwindigkeit und die Empfangsst&auml;rke angehangen. Bei einer LAN-Verbindung wird der LAN-Port und die LAN-Geschwindigkeit angehangen. Gast-Verbindungen werden mit "gWLAN" oder "gLAN" gekennzeichnet.
+      <br>
+      Inaktive oder entfernte Ger&auml;te erhalten zuerst den Wert "inactive: DeviceID" und werden beim n&auml;chsten Update gel&ouml;scht.</li>
+      <br>
+      <li><b>nbh_</b><i>nn_nn_nn_nn_nn_nn</i> - MAC-Adresse und Name eines aktiven WAN-Ger&auml;tes.
       <br>
       Es wird die SSID, der Kanal und das Frequenzband angezeigt.
       <br>

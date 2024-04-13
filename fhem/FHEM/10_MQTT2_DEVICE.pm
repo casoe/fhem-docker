@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_MQTT2_DEVICE.pm 27935 2023-09-05 11:48:14Z rudolfkoenig $
+# $Id: 10_MQTT2_DEVICE.pm 28770 2024-04-08 09:17:40Z rudolfkoenig $
 package main;
 
 use strict;
@@ -32,7 +32,7 @@ MQTT2_DEVICE_Initialize($)
     IODev
     autocreate:0,1
     bridgeRegexp:textField-long
-    devicetopic
+    devicetopic:textField-long
     devPos
     disable:0,1
     disabledForIntervals

@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: 74_AutomowerConnect.pm 28406 2024-01-23 10:47:27Z Ellert $
+# $Id: 74_AutomowerConnect.pm 28784 2024-04-11 17:58:18Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::AutomowerConnect;
-our $cvsid = '$Id: 74_AutomowerConnect.pm 28406 2024-01-23 10:47:27Z Ellert $';
+our $cvsid = '$Id: 74_AutomowerConnect.pm 28784 2024-04-11 17:58:18Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -74,6 +74,7 @@ sub Initialize() {
                         "mowerCuttingWidth " .
                         "mowerSchedule:textField-long " .
                         "mowingAreaLimits:textField-long " .
+                        "mowingAreaHull:textField-long " .
                         "propertyLimits:textField-long " .
                         "weekdaysToResetWayPoints " .
                         "numberOfWayPointsToDisplay " .
@@ -81,7 +82,8 @@ sub Initialize() {
                         "addPositionPolling:1,0 " .
                         $::readingFnAttributes;
 
-  $::data{FWEXT}{AutomowerConnect}{SCRIPT} = "automowerconnect.js";
+  $::data{FWEXT}{AutomowerConnect}{SCRIPT} = 'automowerconnect.js';
+  $::data{FWEXT}{AutomowerConnectA}{SCRIPT} = '/automowerconnect/hull.js';
 
   return undef;
 }
@@ -101,6 +103,7 @@ __END__
 
 =begin html
 
+<a id="74_AutomowerConnect.pm" ></a>
 <a id="AutomowerConnect" ></a>
 <h3>AutomowerConnect</h3>
 <ul>
@@ -126,6 +129,9 @@ __END__
     <li>To get access to the API an application has to be created in the <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a>. The application has to be connected with the AutomowerConnect API.</li>
     <li>During registration an application key (client_id) and an application secret (client secret) is provided. Use these for the module.</li>
     <li>The module uses client credentials as grant type for authorization.</li>
+    <br>
+    <li>The module downloads third party software from external server necessary to calculate the hull of mowing area.</li>
+    <br>
   </ul>
   <br>
   <a id="AutomowerConnectDefine"></a>
@@ -173,7 +179,8 @@ __END__
 
     <li><a id='AutomowerConnect-set-StartInWorkArea'>StartInWorkArea</a><br>
       <code>set &lt;name&gt; StartInWorkArea &lt;workAreaId|name&gt; [&lt;number of minutes&gt;]</code><br>
-      Testing: Starts immediately in &lt;workAreaId|name&gt; for &lt;number of minutes&gt;<br>
+      Testing: Starts immediately in &lt;workAreaId|name&gt; for &lt;number of minutes&gt;.<br>
+      If &lt;number of minutes&gt; is empty or 0 is selected in the widget the mower will continue forever.<br>
        Work area name must not include space.</li>
 
     <li><a id='AutomowerConnect-set-chargingStationPositionToAttribute'>chargingStationPositionToAttribute</a><br>
@@ -188,13 +195,13 @@ __END__
       <code>set &lt;name&gt; cuttingHeight &lt;1..9&gt;</code><br>
       Sets the cutting height. NOTE: Do not use for 550 EPOS and Ceora.</li>
 
-    <li><a id='AutomowerConnect-set-stayOutZone_enable'>stayOutZone_enable</a><br>
-      <code>set &lt;name&gt; stayOutZone_enable &lt;Id|name&gt;</code><br>
-      Testing: Enables stay out zone by Id or zone name. Zone name must not include space and contain at least one alphabetic character.</li>
+    <li><a id='AutomowerConnect-set-cuttingHeightInWorkArea'>cuttingHeightInWorkArea</a><br>
+      <code>set &lt;name&gt; cuttingHeightInWorkArea &lt;Id|name&gt; &lt;0..100&gt;</code><br>
+      Testing: Sets the cutting height for Id or zone name from 0 to 100. Zone name must not include space and contain at least one alphabetic character.</li>
 
-    <li><a id='AutomowerConnect-set-stayOutZone_disable'>stayOutZone_disable</a><br>
-      <code>set &lt;name&gt; stayOutZone_disable &lt;Id|name&gt;</code><br>
-      Testing: Disables stay out zone by Id or zone name. Zone name must not include space and contain at least one alphabetic character.</li>
+    <li><a id='AutomowerConnect-set-stayOutZone'>stayOutZone</a><br>
+      <code>set &lt;name&gt; stayOutZone &lt;Id|name&gt; &lt;enable|disable&gt;</code><br>
+      Testing: Enables or disables stay out zone by Id or zone name. Zone name must not include space and contain at least one alphabetic character.</li>
 
     <li><a id='AutomowerConnect-set-getNewAccessToken'>getNewAccessToken</a><br>
       <code>set &lt;name&gt; getNewAccessToken</code><br>
@@ -283,14 +290,51 @@ __END__
 
     <li><a id='AutomowerConnect-attr-mapDesignAttributes'>mapDesignAttributes</a><br>
       <code>attr &lt;name&gt; mapDesignAttributes &lt;complete list of design-attributes&gt;</code><br>
-      Load the list of attributes by <code>set &lt;name&gt; defaultDesignAttributesToAttribute</code> to change its values. Some default values are 
+      Load the list of attributes by <code>set &lt;name&gt; defaultDesignAttributesToAttribute</code> to change its values. Design attributes with changed default values are mandatory in this attribute.<br>
+      Default values:
       <ul>
-        <li>mower path for activity MOWING: red</li>
-        <li>path in CS, activity CHARGING,PARKED_IN_CS: grey</li>
-        <li>path for activity LEAVING: green</li>
-        <li>path for activity GOING_HOME: blue</li>
-        <li>path for interval with error (all activities with error): kind of magenta</li>
-        <li>all other activities: grey</li>
+      <code>
+        areaLimitsColor="#ff8000"<br>
+        areaLimitsLineWidth="1"<br>
+        areaLimitsConnector=""<br>
+        hullColor="#0066ff"<br>
+        hullLineWidth="1"<br>
+        hullConnector="1"<br>
+        hullResolution="40"<br>
+        hullCalculate="1"<br>
+        propertyLimitsColor="#33cc33"<br>
+        propertyLimitsLineWidth="1"<br>
+        propertyLimitsConnector="1"<br>
+        errorBackgroundColor="#3d3d3d"<br>
+        errorFont="14px Courier New"<br>
+        errorFontColor="#ff8000"<br>
+        errorPathLineColor="#ff00bf"<br>
+        errorPathLineDash=""<br>
+        errorPathLineWidth="2"<br>
+        chargingStationPathLineColor="#999999"<br>
+        chargingStationPathLineDash="6,2"<br>
+        chargingStationPathLineWidth="1"<br>
+        chargingStationPathDotWidth="2"<br>
+        otherActivityPathLineColor="#999999"<br>
+        otherActivityPathLineDash="6,2"<br>
+        otherActivityPathLineWidth="1"<br>
+        otherActivityPathDotWidth="2"<br>
+        leavingPathLineColor="#33cc33"<br>
+        leavingPathLineDash="6,2"<br>
+        leavingPathLineWidth="1"<br>
+        leavingPathDotWidth="2"<br>
+        goingHomePathLineColor="#0099ff"<br>
+        goingHomePathLineDash="6,2"<br>
+        goingHomePathLineWidth="1"<br>
+        goingHomePathDotWidth="2"<br>
+        mowingPathDisplayStart=""<br>
+        mowingPathLineColor="#ff0000"<br>
+        mowingPathLineDash="6,2"<br>
+        mowingPathLineWidth="1"<br>
+        mowingPathDotWidth="2"<br>
+        mowingPathUseDots=""<br>
+        mowingPathShowCollisions=""
+      </code>
       </ul>
     </li>
 
@@ -402,6 +446,18 @@ __END__
       <code>attr &lt;name&gt; addPositionPolling &lt;[1|<b>0</b>]&gt;</code><br>
       Set position polling, default 0 (no position polling). Gets periodically position data from mower, instead from websocket. It has no effect without setting attribute addPollingMinInterval.</li>
 
+    <li><a id='AutomowerConnect-attr-mowingAreaHull'>mowingAreaHull</a><br>
+      <code>attr &lt;name&gt; mowingAreaHull &lt;use button 'mowingAreaHullToAttribute' to fill the attribute&gt;</code><br>
+      Contains the calculated hull coordinates as JSON string and is set by button 'mowingAreaHullToAttribute' under the dislpayed map.<br>
+      The stored hull polygon is displayed like the other limits.<br>
+      Use the design attribute 'hullResolution' to change the number of fractions &#8469;<br>.
+      The hull polygon is calculated when the design attribut is set to 1 <code>hullCalculate="1"</code> and there are more than 50 Points for activity MOWING.<br>
+      The calculation is done only after site reload.<br>
+      The calculation of hull is stopped when the attribute ist set and starts again when attribute is deleted.<br>
+      The attribute <code>weekdaysToResetWayPoints</code> should be set to - and also the design attribute <code>mowingPathUseDots</code> should be set to "1" until the hull is sufficient.
+      
+    </li>
+
     <li><a href="disable">disable</a></li>
 
     <li><a href="disabledForIntervals">disabledForIntervals</a></li>
@@ -470,6 +526,7 @@ __END__
     <li>status_statusTimestamp - local time of last status update</li>
     <li>status_statusTimestampDiff - time difference in seconds between the last and second last status update</li>
     <li>system_name - name of the mower</li>
+    <li>third_party_library - notice about downloaded JS library. Deleting the reading has no side effects.</li>
 
   </ul>
 </ul>
@@ -506,6 +563,8 @@ __END__
     <li>Für den Zugriff auf die API muss eine Application im <a target="_blank" href="https://developer.husqvarnagroup.cloud/docs/get-started">Husqvarna Developer Portal</a> angelegt und mit der Automower Connect API verbunden werden.</li>
     <li>Währenddessen wird ein Application Key (client_id) und ein Application Secret (client secret) bereitgestellt. Diese Angaben sind im Zusammenhang mit der Definition eines Gerätes erforderlich.</li>
     <li>Das Modul nutzt Client Credentials als Granttype zur Authorisierung.</li>
+    <br>
+    <li>Das Modul läd Drittsoftware, die zur Berechnung der Hüllkurve des Mähbereiches erforderlich ist, von einem externem Server.</li>
   <br>
   </ul>
   <br>
@@ -551,6 +610,7 @@ __END__
     <li><a id='AutomowerConnect-set-StartInWorkArea'>StartInWorkArea</a><br>
       <code>set &lt;name&gt; StartInWorkArea &lt;workAreaId|zone name&gt; [&lt;number of minutes&gt;]</code><br>
       Testing: Startet sofort in &lt;workAreaId|name&gt; für &lt;number of minutes&gt;<br>
+      Wenn &lt;number of minutes&gt; nicht angegeben wird oder im Auswahlfeld 0 gewählt wird, dann wird der Mähvorgang bis auf Weiteres fortgesetzt.<br>
       Der Name der WorkArea darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
 
     <li><a id='AutomowerConnect-set-chargingStationPositionToAttribute'>chargingStationPositionToAttribute</a><br>
@@ -565,13 +625,14 @@ __END__
       <code>set &lt;name&gt; cuttingHeight &lt;1..9&gt;</code><br>
       Setzt die Schnitthöhe. HINWEIS: Nicht für 550 EPOS und Ceora geeignet.</li>
 
-    <li><a id='AutomowerConnect-set-stayOutZone_enable'>stayOutZone_enable</a><br>
-      <code>set &lt;name&gt; stayOutZone_enable &lt;Id|zone name&gt;</code><br>
-      Testing: Enabled stayOutZone für die Id oder den Namen der Zone, er darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
+    <li><a id='AutomowerConnect-set-cuttingHeightInWorkArea'>cuttingHeightInWorkArea</a><br>
+      <code>set &lt;name&gt; cuttingHeightInWorkArea &lt;Id|name&gt; &lt;0..100&gt;</code><br>
+      Testing: Setzt die Schnitthöhe für Id oder Zonennamen von 0 bis 100. Der Zonenname darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
 
-    <li><a id='AutomowerConnect-set-stayOutZone_disable'>stayOutZone_disable</a><br>
-      <code>set &lt;name&gt; stayOutZone_disable &lt;Id|zone name&gt;</code><br>
-      Testing: Disabled stayOutZone für die Id oder den Namen der Zone, er darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
+    <li><a id='AutomowerConnect-set-stayOutZone'>stayOutZone</a><br>
+      <code>set &lt;name&gt; stayOutZone &lt;Id|name&gt; &lt;enable|disable&gt;</code><br>
+      Testing: Schaltet stayOutZone ein oder aus, für die Id oder den Namen der Zone.<br>
+      Der Zonenname darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
 
     <li><a id='AutomowerConnect-set-confirmError'>confirmError</a><br>
       <code>set &lt;name&gt; confirmError</code><br>
@@ -664,14 +725,51 @@ __END__
 
     <li><a id='AutomowerConnect-attr-mapDesignAttributes'>mapDesignAttributes</a><br>
       <code>attr &lt;name&gt; mapDesignAttributes &lt;complete list of design-attributes&gt;</code><br>
-      Lade die Attributliste mit <code>set &lt;name&gt; defaultDesignAttributesToAttribute</code> um die Werte zu ändern. Einige Vorgabewerte:
+      Lade die Attributliste mit <code>set &lt;name&gt; defaultDesignAttributesToAttribute</code> um die Werte zu ändern. Nur Designattribute mit geänderten Standartwerten müssen in diesem Attribut enthalten sein.<br>
+      Vorgabe Werte:
       <ul>
-        <li>Pfad beim mähen, Aktivität MOWING: rot</li>
-        <li>In der Ladestation, Aktivität CHARGING,PARKED_IN_CS: grau</li>
-        <li>Pfad für die Aktivität LEAVING: grün</li>
-        <li>Pfad für Aktivität GOING_HOME: blau</li>
-        <li>Pfad eines Intervalls mit Fehler (alle Aktivitäten with error): Eine Art Magenta</li>
-        <li>Pfad aller anderen Aktivitäten: grau</li>
+      <code>
+        areaLimitsColor="#ff8000"<br>
+        areaLimitsLineWidth="1"<br>
+        areaLimitsConnector=""<br>
+        hullColor="#0066ff"<br>
+        hullLineWidth="1"<br>
+        hullConnector="1"<br>
+        hullResolution="40"<br>
+        hullCalculate="1"<br>
+        propertyLimitsColor="#33cc33"<br>
+        propertyLimitsLineWidth="1"<br>
+        propertyLimitsConnector="1"<br>
+        errorBackgroundColor="#3d3d3d"<br>
+        errorFont="14px Courier New"<br>
+        errorFontColor="#ff8000"<br>
+        errorPathLineColor="#ff00bf"<br>
+        errorPathLineDash=""<br>
+        errorPathLineWidth="2"<br>
+        chargingStationPathLineColor="#999999"<br>
+        chargingStationPathLineDash="6,2"<br>
+        chargingStationPathLineWidth="1"<br>
+        chargingStationPathDotWidth="2"<br>
+        otherActivityPathLineColor="#999999"<br>
+        otherActivityPathLineDash="6,2"<br>
+        otherActivityPathLineWidth="1"<br>
+        otherActivityPathDotWidth="2"<br>
+        leavingPathLineColor="#33cc33"<br>
+        leavingPathLineDash="6,2"<br>
+        leavingPathLineWidth="2"<br>
+        leavingPathDotWidth="2"<br>
+        goingHomePathLineColor="#0099ff"<br>
+        goingHomePathLineDash="6,2"<br>
+        goingHomePathLineWidth="2"<br>
+        goingHomePathDotWidth="2"<br>
+        mowingPathDisplayStart=""<br>
+        mowingPathLineColor="#ff0000"<br>
+        mowingPathLineDash="6,2"<br>
+        mowingPathLineWidth="1"<br>
+        mowingPathDotWidth="2"<br>
+        mowingPathUseDots=""<br>
+        mowingPathShowCollisions=""
+      </code>
       </ul>
     </li>
 
@@ -728,8 +826,8 @@ __END__
      <li><a id='AutomowerConnect-attr-scaleToMeterXY'>scaleToMeterXY</a><br>
       <code>attr &lt;name&gt; scaleToMeterXY &lt;scale factor longitude&gt;&lt;seperator&gt;&lt;scale factor latitude&gt;</code><br>
       Der Skalierfaktor hängt vom Standort ab und muss daher für kurze Strecken berechnet werden. &lt;seperator&gt; ist 1 Leerzeichen.<br>
-      Longitude: <code>(LongitudeMeter_1 - LongitudeMeter_2) / (LongitudeDegree_1 - LongitudeDegree _2)</code><br>
-      Latitude: <code>(LatitudeMeter_1 - LatitudeMeter_2) / (LatitudeDegree_1 - LatitudeDegree _2)</code></li>
+      Longitude: <code>(LongitudeMeter_1 - LongitudeMeter_2) / (LongitudeDegree_1 - LongitudeDegree_2)</code><br>
+      Latitude: <code>(LatitudeMeter_1 - LatitudeMeter_2) / (LatitudeDegree_1 - LatitudeDegree_2)</code></li>
 
     <li><a id='AutomowerConnect-attr-mapZones'>mapZones</a><br>
       <code>attr &lt;name&gt; mapZones &lt;JSON string with zone names in alpabetical order and valid perl condition to seperate the zones&gt;</code><br>
@@ -786,6 +884,17 @@ __END__
     <li><a id='AutomowerConnect-attr-addPositionPolling'>addPositionPolling</a><br>
       <code>attr &lt;name&gt; addPositionPolling &lt;[1|<b>0</b>]&gt;</code><br>
       Setzt das Positionspolling, default 0 (kein Positionpolling). Liest periodisch Positiondaten des Mähers, an Stelle der über Websocket gelieferten Daten. Das Attribut ist nur wirksam, wenn durch das Attribut addPollingMinInterval das Polling eingeschaltet ist.</li>
+
+    <li><a id='AutomowerConnect-attr-mowingAreaHull'>mowingAreaHull</a><br>
+      <code>attr &lt;name&gt; mowingAreaHull &lt;use button 'mowingAreaHullToAttribute' to fill the attribute&gt;</code><br><br>
+      Enthält die berechneten Hüllenkooordinaten als JSON String und wird gesetzt durch den Button 'mowingAreaHullToAttribute' unterhalb der angezeigten Karte.<br>
+      Das gespeicherte Hüllenpolygon wird wie die anderen Grenzen angezeigt.<br>
+      Mit dem Designattribut 'hullResolution' kann die Anzahl der Brechungen beeinflusst werden &#8469;, Default 40.<br>
+      Das Hüllenpolygon wird berechnet wenn das Designattribute gesetzt ist, <code>hullCalculate="1"</code> und es mehr als 50 Wegpunkte der Aktivität MOWING gibt.<br>
+      Die Berechnung wird beim Laden oder Wiederladen der Website ausgeführt.<br>
+      Die Berechnung stopt wenn dieses Attribut gesetzt ist und startet wenn das Attibut gelöscht wird.<br>
+      Das Attribut <code>weekdaysToResetWayPoints</code> sollte auf <code>-</code> und das Designattribut <code>mowingPathUseDots</code> sollte auf <code>"1"</code> gesetzt werden, bis das Polygon die Hülle der Mähfläche zufriedenstellend abbildet.
+    </li>
 
      <li><a href="disable">disable</a></li>
 
@@ -855,6 +964,7 @@ __END__
     <li>status_statusTimestamp - Lokalzeit des letzten Statusupdates in der API</li>
     <li>status_statusTimestampDiff - Zeitdifferenz zwischen dem letzten und vorletzten Statusupdate.</li>
     <li>system_name - Name des Automowers</li>
+    <li>third_party_library - Info, dass die JS-Bibliothek geladen wurde. Das Reading kann bedenkenlos gelöscht werden.</li>
   </ul>
 </ul>
 
