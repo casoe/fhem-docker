@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2024-04-10 19:57:09
+# Created by FHEM/98_SVG.pm, 2024-04-15 21:28:28
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -10,10 +10,11 @@ set y2tics
 set grid
 set ylabel "Leistung (Watt)"
 set y2label ""
+set yrange [-12000:9000]
 
-#dblog sun2000:BAT_Leistung_W:::
-#dblog sun2000:WR_Leistung_String1_W:::
-#dblog sun2000:WR_Leistung_String2_W:::
+#dblog pvDummy:PD_BAT_Leistung_W:::
+#dblog pvDummy:PD_Leistung_String1_W:::
+#dblog pvDummy:PD_Leistung_String2_W:::
 #dblog MQTT2_DVES_9BFAF4:power_gen:::
 #dblog Stromzaehler:power:::
 #lp ConstY:0
@@ -23,4 +24,4 @@ plot "<IN>" using 1:2 axes x1y1 title 'Batterie' ls l3 lw 1 with lines,\
      "<IN>" using 1:2 axes x1y1 title 'Dach West' ls l1 lw 1 with lines,\
      "<IN>" using 1:2 axes x1y1 title 'Balkonkraftwerk' ls l5 lw 1 with lines,\
      "<IN>" using 1:2 axes x1y1 title 'Stromnetz' ls l0 lw 1 with lines,\
-     "<IN>" using 1:2 axes x1y1 title 'Null' ls l7 lw 1 with lines
+     "<IN>" using 1:2 axes x1y1 title 'Null' ls l7 lw 0.5 with lines
