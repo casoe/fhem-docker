@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 01_FHEMWEB.pm 28687 2024-03-20 17:14:30Z rudolfkoenig $
+# $Id: 01_FHEMWEB.pm 28809 2024-04-19 19:32:58Z rudolfkoenig $
 package main;
 
 use strict;
@@ -1929,7 +1929,7 @@ FW_makeDeviceLine($$$$$)
   my ($d,$row,$extPage,$nameDisplay,$usuallyAtEnd) = @_;
   my $rf = ($FW_room ? "&amp;room=$FW_room" : ""); # stay in the room
 
-  FW_pF "\n<tr class=\"%s\">", ($row&1)?"odd":"even";
+  FW_pF "\n<tr class=\"%s devname_$d\">", ($row&1)?"odd":"even";
   my $devName = FW_alias($d,$nameDisplay);
   my $icon = AttrVal($d, "icon", $defs{$d}{icon});
   $icon = "" if(!defined($icon));
@@ -2000,11 +2000,11 @@ FW_makeDeviceLine($$$$$)
           FW_pO "</tr><tr>"          if($wcl[$i1] =~ m/\n/);
           FW_pO "</tr></table></td>" if($i1 == @cl-1);
         } else {
-          FW_pO  "<td><div class='col3'>$wcl[$i1]$htmlTxt</div></td>";
+          FW_pO  "<td><div class='col3 col3_$i1'>$wcl[$i1]$htmlTxt</div></td>";
         }
 
       } else {
-        FW_pO  "<td><div class='col3'>$htmlTxt</div></td>";
+        FW_pO  "<td><div class='col3 col3_$i1'>$htmlTxt</div></td>";
       }
     }
   }

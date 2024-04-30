@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: 74_AutomowerConnect.pm 28784 2024-04-11 17:58:18Z Ellert $
+# $Id: 74_AutomowerConnect.pm 28823 2024-04-26 13:14:53Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::AutomowerConnect;
-our $cvsid = '$Id: 74_AutomowerConnect.pm 28784 2024-04-11 17:58:18Z Ellert $';
+our $cvsid = '$Id: 74_AutomowerConnect.pm 28823 2024-04-26 13:14:53Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -45,42 +45,44 @@ require FHEM::Devices::AMConnect::Common;
 sub Initialize() {
   my ($hash) = @_;
 
-  $hash->{DefFn}      = \&FHEM::Devices::AMConnect::Common::Define;
-  $hash->{GetFn}      = \&FHEM::Devices::AMConnect::Common::Get;
-  $hash->{UndefFn}    = \&FHEM::Devices::AMConnect::Common::Undefine;
-  $hash->{DeleteFn}   = \&FHEM::Devices::AMConnect::Common::Delete;
-  $hash->{ShutdownFn} = \&FHEM::Devices::AMConnect::Common::Shutdown;
-  $hash->{RenameFn}   = \&FHEM::Devices::AMConnect::Common::Rename;
-  $hash->{FW_detailFn}= \&FHEM::Devices::AMConnect::Common::FW_detailFn;
-  $hash->{ReadFn}     = \&FHEM::Devices::AMConnect::Common::wsRead; 
-  $hash->{ReadyFn}    = \&FHEM::Devices::AMConnect::Common::wsReady;
-  $hash->{SetFn}      = \&FHEM::Devices::AMConnect::Common::Set;
-  $hash->{AttrFn}     = \&FHEM::Devices::AMConnect::Common::Attr;
-  $hash->{AttrList}   = "disable:1,0 " .
-                        "debug:1,0 " .
-                        "disabledForIntervals " .
-                        "mapImagePath " .
-                        "mapImageWidthHeight " .
-                        "mapImageCoordinatesToRegister:textField-long " .
-                        "mapImageCoordinatesUTM:textField-long " .
-                        "mapImageZoom " .
-                        "mapBackgroundColor " .
-                        "mapDesignAttributes:textField-long " .
-                        "mapZones:textField-long " .
-                        "showMap:1,0 " .
-                        "chargingStationCoordinates " .
-                        "chargingStationImagePosition:left,top,right,bottom,center " .
-                        "scaleToMeterXY " .
-                        "mowerCuttingWidth " .
-                        "mowerSchedule:textField-long " .
-                        "mowingAreaLimits:textField-long " .
-                        "mowingAreaHull:textField-long " .
-                        "propertyLimits:textField-long " .
-                        "weekdaysToResetWayPoints " .
-                        "numberOfWayPointsToDisplay " .
-                        "addPollingMinInterval " .
-                        "addPositionPolling:1,0 " .
-                        $::readingFnAttributes;
+  $hash->{DefFn}        = \&FHEM::Devices::AMConnect::Common::Define;
+  $hash->{GetFn}        = \&FHEM::Devices::AMConnect::Common::Get;
+  $hash->{UndefFn}      = \&FHEM::Devices::AMConnect::Common::Undefine;
+  $hash->{DeleteFn}     = \&FHEM::Devices::AMConnect::Common::Delete;
+  $hash->{ShutdownFn}   = \&FHEM::Devices::AMConnect::Common::Shutdown;
+  $hash->{RenameFn}     = \&FHEM::Devices::AMConnect::Common::Rename;
+  $hash->{FW_detailFn}  = \&FHEM::Devices::AMConnect::Common::FW_detailFn;
+  # $hash->{FW_summaryFn} = \&FHEM::Devices::AMConnect::Common::FW_summaryFn;
+  $hash->{ReadFn}       = \&FHEM::Devices::AMConnect::Common::wsRead; 
+  $hash->{ReadyFn}      = \&FHEM::Devices::AMConnect::Common::wsReady;
+  $hash->{SetFn}        = \&FHEM::Devices::AMConnect::Common::Set;
+  $hash->{AttrFn}       = \&FHEM::Devices::AMConnect::Common::Attr;
+  $hash->{AttrList}     = "disable:1,0 " .
+                          "debug:1,0 " .
+                          "disabledForIntervals " .
+                          "mapImagePath " .
+                          "mapImageWidthHeight " .
+                          "mapImageCoordinatesToRegister:textField-long " .
+                          "mapImageCoordinatesUTM:textField-long " .
+                          "mapImageZoom " .
+                          "mapBackgroundColor " .
+                          "mapDesignAttributes:textField-long " .
+                          "mapZones:textField-long " .
+                          "showMap:1,0 " .
+                          "chargingStationCoordinates " .
+                          "chargingStationImagePosition:left,top,right,bottom,center " .
+                          "scaleToMeterXY " .
+                          "mowerCuttingWidth " .
+                          "mowerPanel:textField-long,85 " .
+                          "mowerSchedule:textField-long " .
+                          "mowingAreaLimits:textField-long " .
+                          "mowingAreaHull:textField-long " .
+                          "propertyLimits:textField-long " .
+                          "weekdaysToResetWayPoints " .
+                          "numberOfWayPointsToDisplay " .
+                          "addPollingMinInterval " .
+                          "addPositionPolling:1,0 " .
+                          $::readingFnAttributes;
 
   $::data{FWEXT}{AutomowerConnect}{SCRIPT} = 'automowerconnect.js';
   $::data{FWEXT}{AutomowerConnectA}{SCRIPT} = '/automowerconnect/hull.js';
@@ -103,7 +105,6 @@ __END__
 
 =begin html
 
-<a id="74_AutomowerConnect.pm" ></a>
 <a id="AutomowerConnect" ></a>
 <h3>AutomowerConnect</h3>
 <ul>
@@ -118,6 +119,9 @@ __END__
     <li>The mower path is shown in the detail view.</li>
     <li>An arbitrary map can be used as background for the mower path.</li>
     <li>The map has to be a raster image in webp, png or jpg format.</li>
+    <li>The property limits can be registered manually.</li>
+    <li>The mowing area limits can be registered manually.</li>
+    <li>The mowing area limits can be calculated, alternatively.</li>
     <li>It's possible to control everything the API offers, e.g. schedule, headlight, cutting height and actions like start, pause, park etc. </li>
     <li>Zones are definable. </li>
     <li>Cutting height can be set for each zone differently. </li>
@@ -145,6 +149,15 @@ __END__
     <br><br>
   </ul>
   <br>
+
+  <b>Button</b>
+  <ul>
+    <li><a id='AutomowerConnect-button-mowerschedule'>Mower Schedule</a><br>
+      The Button <button >Mower Schedule</button> opens GUI to maintain the mower schedule..<br>
+      Add/change entry: fill out the schedule fields and press <button >&plusmn;</button>.<br>
+      Delete entry: unselect each weekday and press <button >&plusmn;</button>.<br>
+      Reset entry: fill any time field with -- and press <button >&plusmn;</button>.</li>
+  </ul>
 
   <a id="AutomowerConnectSet"></a>
   <b>Set</b>
@@ -302,6 +315,7 @@ __END__
         hullConnector="1"<br>
         hullResolution="40"<br>
         hullCalculate="1"<br>
+        hullSubtract=""<br>
         propertyLimitsColor="#33cc33"<br>
         propertyLimitsLineWidth="1"<br>
         propertyLimitsConnector="1"<br>
@@ -367,7 +381,7 @@ __END__
 
     <li><a id='AutomowerConnect-attr-mowerSchedule'>mowerSchedule</a><br>
       <code>attr &lt;name&gt; mowerSchedule &lt;schedule array&gt;</code><br>
-      This attribute provides the possebility to edit the mower schedule in form of an JSON array.<br>The actual schedule can be loaded with the command <code>set &lt;name&gt; mowerScheduleToAttribute</code>. <br>The command <code>set &lt;name&gt; sendScheduleFromAttributeToMower</code> sends the schedule to the mower. The maximum of array elements is 14 and 2 each day, so every day of a week can have 2 time spans. Each array element consists of 7 unsorted day values (<code>monday</code> to <code>sunday</code>) which can be <code>true</code> or <code>false</code>, a <code>start</code> and <code>duration</code> value in minutes. Start time counts from midnight.  NOTE: Do not use for 550 EPOS and Ceora. Delete the attribute after the schedule is successfully uploaded.</li>
+      This attribute provides the possebility to edit the mower schedule in form of an JSON array.<br>The actual schedule can be loaded with the command <code>set &lt;name&gt; mowerScheduleToAttribute</code>. <br>The command <code>set &lt;name&gt; sendScheduleFromAttributeToMower</code> sends the schedule to the mower. The maximum of array elements is 14 and 2 each day, so every day of a week can have 2 time spans. Each array element consists of 7 day values (<code>monday</code> to <code>sunday</code>) which can be <code>true</code> or <code>false</code>, a <code>start</code> and <code>duration</code> value in minutes. Start time counts from midnight.  NOTE: Do not use for 550 EPOS and Ceora. Delete the attribute after the schedule is successfully uploaded.</li>
 
     <li><a id='AutomowerConnect-attr-mowingAreaLimits'>mowingAreaLimits</a><br>
       <code>attr &lt;name&gt; mowingAreaLimits &lt;positions list&gt;</code><br>
@@ -455,7 +469,37 @@ __END__
       The calculation is done only after site reload.<br>
       The calculation of hull is stopped when the attribute ist set and starts again when attribute is deleted.<br>
       The attribute <code>weekdaysToResetWayPoints</code> should be set to - and also the design attribute <code>mowingPathUseDots</code> should be set to "1" until the hull is sufficient.
-      
+      If there is a polygon in attribute, it can be changed.<br>
+      The design attribute <code>hullSubtract</code> can be set to a natural number {&#8469;}, it depicts the recursion depth in which polygon points removed from way points.<br>
+      This reduces spikes in border region.<br>
+      <code>hullSubtract=""</code> removes the button 'Subtract Hull'.<br>
+    </li>
+
+    <li><a id='AutomowerConnect-attr-mowerPanel'>mowerPanel</a><br>
+      <code>attr &lt;name&gt; mowerPanel &lt;html code&gt;</code><br>
+      Shows user defined html beneath the map. usefull for a panel with shortcuts<br>
+      The command attribute has to contain the mower command, without set &lt;name&gt;<br>
+      <code>command="Start 210"</code> stands for <code>set &lt;name&gt; Start 210</code><br>
+      A directive as comment in the first line allows positioning.<br>
+      <ul>
+        <li>
+          &lt;!-- ON_TOP --&gt; shows html above map</li>
+      </ul>
+      Panel has to be enclosed by a div-tag with a mandatory HTML-attribute <code>data-amc_panel_inroom=&lt;"1"|""&gt;</code>. Panel is shown in room view, i.e. for uiTable, weblink, etc., for value  "1" and hidden for value "" look at example.<br>
+      Example:<br>
+      <code>
+        &lt;style&gt;<br>
+          .amc_panel_button {height:50px; width:150px;}<br>
+          .amc_panel_div {position:relative; left:348px; top:-330px;  z-index: 2; width:150px; height:1px}<br>
+        &lt;/style&gt;<br>
+        &lt;div class="amc_panel_div" data-amc_panel_inroom="1" &gt;<br>
+          &lt;button class="amc_panel_button" command="Start 210" &gt;Start für 3 1/2 h&lt;/button&gt;<br>
+          &lt;button class="amc_panel_button" command="Pause" &gt;Pause bis auf Weiteres&lt;/button&gt;<br>
+          &lt;button class="amc_panel_button" command="ResumeSchedule" &gt;Weiter nach Plan&lt;/button&gt;<br>
+          &lt;button class="amc_panel_button" command="ParkUntilNextSchedule" &gt;Parken bis nächsten Termin&lt;/button&gt;<br>
+          &lt;button class="amc_panel_button" command="ParkUntilNextSchedule" &gt;Parken bis auf Weiteres&lt;/button&gt;<br>
+        &lt;/div&gt;<br>
+      </code>
     </li>
 
     <li><a href="disable">disable</a></li>
@@ -551,6 +595,9 @@ __END__
     <li>Der Pfad des Mähroboters wird in der Detailansicht des FHEMWEB Frontends angezeigt.</li>
     <li>Der Pfad kann mit einer beliebigen Karte hinterlegt werden.</li>
     <li>Die Karte muss als Rasterbild im webp, png oder jpg Format vorliegen.</li>
+    <li>Die Grundstücksgrenze kann manuell eingetragen werden.</li>
+    <li>Die Die Mähflächengrenze kann manuell eingetragen werden.</li>
+    <li>Alternativ kann die Mähflächengrenze berechnet werden.</li>
     <li>Es ist möglich alles was die API anbietet zu steuern, z.B. Mähplan,Scheinwerfer, Schnitthöhe und Aktionen wie, Start, Pause, Parken usw. </li>
     <li>Zonen können selbst definiert werden. </li>
     <li>Die Schnitthöhe kann je selbstdefinierter Zone eingestellt werden. </li>
@@ -580,8 +627,17 @@ __END__
   </ul>
   <br>
 
-    <a id="AutomowerConnectSet"></a>
-    <b>Set</b>
+  <b>Button</b>
+  <ul>
+    <li><a id='AutomowerConnect-button-mowerschedule'>Mower Schedule</a><br>
+      Über den Button <button >Mower Schedule</button> kann eine Benutzeroberfläche zur Bearbeitung des Mähplans geöffnet werden.<br>
+      Eintrag zufügen/ändern: Die gewünschten Angaben eintragen und <button >&plusmn;</button> betätigen.<br>
+      Eintrag löschen: Alle Wochentage abwählen und <button >&plusmn;</button> betätigen.<br>
+      Eintrag zurücksetzen: Irgend ein Zeitfeld mit -- füllen und <button >&plusmn;</button> betätigen.</li>
+  </ul>
+
+  <a id="AutomowerConnectSet"></a>
+  <b>Set</b>
   <ul>
     <li><a id='AutomowerConnect-set-Park'>Park</a><br>
       <code>set &lt;name&gt; Park &lt;number of minutes&gt;</code><br>
@@ -737,6 +793,7 @@ __END__
         hullConnector="1"<br>
         hullResolution="40"<br>
         hullCalculate="1"<br>
+        hullSubtract=""<br>
         propertyLimitsColor="#33cc33"<br>
         propertyLimitsLineWidth="1"<br>
         propertyLimitsConnector="1"<br>
@@ -805,7 +862,7 @@ __END__
 
     <li><a id='AutomowerConnect-attr-mowerSchedule'>mowerSchedule</a><br>
       <code>attr &lt;name&gt; mowerSchedule &lt;schedule array&gt;</code><br>
-      Dieses Attribut bietet die Möglichkeit den Mähplan zu ändern, er liegt als JSON Array vor.<br>Der aktuelleMähplan kann mit dem Befehl <code>set &lt;name&gt; mowerScheduleToAttrbute</code> ins Attribut geschrieben werden. <br>Der Befehl <code>set &lt;name&gt; sendScheduleFromAttributeToMower</code> sendet den Mähplan an den Mäher. Das Maximum der Arrayelemente beträgt 14, 2 für jeden Tag, so daß jeden Tag zwei Intervalle geplant werden können. Jedes Arrayelement besteht aus 7 unsortierten Tageswerten (<code>monday</code> bis <code>sunday</code>) die auf <code>true</code> oder <code>false</code> gesetzt werden können, einen <code>start</code> Wert und einen <code>duration</code> Wert in Minuten. Die Startzeit <code>start</code> wird von Mitternacht an gezählt.  HINWEIS: Nicht für 550 EPOS und Ceora geeignet.</li>
+      Dieses Attribut bietet die Möglichkeit den Mähplan zu ändern, er liegt als JSON Array vor.<br>Der aktuelle Mähplan kann mit dem Befehl <code>set &lt;name&gt; mowerScheduleToAttrbute</code> ins Attribut geschrieben werden. <br>Der Befehl <code>set &lt;name&gt; sendScheduleFromAttributeToMower</code> sendet den Mähplan an den Mäher. Das Maximum der Arrayelemente beträgt 14, 2 für jeden Tag, so daß jeden Tag zwei Intervalle geplant werden können. Jedes Arrayelement besteht aus 7 Tageswerten (<code>monday</code> bis <code>sunday</code>) die auf <code>true</code> oder <code>false</code> gesetzt werden können, einen <code>start</code> Wert und einen <code>duration</code> Wert in Minuten. Die Startzeit <code>start</code> wird von Mitternacht an gezählt.  HINWEIS: Nicht für 550 EPOS und Ceora geeignet.</li>
 
     <li><a id='AutomowerConnect-attr-mowingAreaLimits'>mowingAreaLimits</a><br>
       <code>attr &lt;name&gt; mowingAreaLimits &lt;positions list&gt;</code><br>
@@ -893,7 +950,38 @@ __END__
       Das Hüllenpolygon wird berechnet wenn das Designattribute gesetzt ist, <code>hullCalculate="1"</code> und es mehr als 50 Wegpunkte der Aktivität MOWING gibt.<br>
       Die Berechnung wird beim Laden oder Wiederladen der Website ausgeführt.<br>
       Die Berechnung stopt wenn dieses Attribut gesetzt ist und startet wenn das Attibut gelöscht wird.<br>
-      Das Attribut <code>weekdaysToResetWayPoints</code> sollte auf <code>-</code> und das Designattribut <code>mowingPathUseDots</code> sollte auf <code>"1"</code> gesetzt werden, bis das Polygon die Hülle der Mähfläche zufriedenstellend abbildet.
+      Das Attribut <code>weekdaysToResetWayPoints</code> sollte auf <code>-</code> und das Designattribut <code>mowingPathUseDots</code> sollte auf <code>"1"</code> gesetzt werden.<br>
+      Befindet sich ein Polygon im Attribut, besteht die Möglichkeit das Polygon anzupassen.<br>
+      Das Designattribut <code>hullSubtract</code> kann auf eine natürliche Zahl {&#8469;} gesetzt werden, die angibt in welcher Rekursionstiefe Polygonpunkte aus der Menge der Wegpunkte entfernt werden.<br>
+      Das reduziert Ausreißer im Randbereich der vom Polygon umschlossenen Fläche.<br>
+      Wenn <code>hullSubtract=""</code> gesetzt wird, dann wird der Button 'Subtract Hull' entfernt.<br>
+    </li>
+
+    <li><a id='AutomowerConnect-attr-mowerPanel'>mowerPanel</a><br>
+      <code>attr &lt;name&gt; mowerPanel &lt;html code&gt;</code><br>
+      Zeigt HTML Kode unterhalb der Karte z.B. für ein Panel mit Kurzbefehlen.<br>
+      Das command Attribut beinhaltet den Mäherbefehl, ohne set &lt;name&gt;<br>
+      <code>command="Start 210"</code> steht für <code>set &lt;name&gt; Start 210</code><br>
+      Eine Direktive als Kommentar in der ersten Zeile erlaubt die Positionierung:<br>
+      <ul>
+        <li>
+          &lt;!-- ON_TOP --&gt; zeigt das Panel über der Karte an.</li>
+      </ul>
+      Das Panel muss in einem div-Element eingebettet sein das ein HTML-Attribut <code>data-amc_panel_inroom=&lt;"1"|""&gt;</code> enthält. Das Panel wird in der Raumansicht, z.B. bei uiTable, weblink, usw., angezeigt wenn der Wert "1" ist und versteckt falls der Wert "" ist, s. Bsp.<br>
+      Beispiel:<br>
+      <code>
+        &lt;style&gt;<br>
+          .amc_panel_button {height:50px; width:150px;}<br>
+          .amc_panel_div {position:relative; left:348px; top:-330px;  z-index: 2; width:150px; height:1px}<br>
+        &lt;/style&gt;<br>
+        &lt;div class="amc_panel_div" data-amc_panel_inroom="1" &gt;<br>
+          &lt;button class="amc_panel_button" command="Start 210" &gt;Start für 3 1/2 h&lt;/button&gt;<br>
+          &lt;button class="amc_panel_button" command="Pause" &gt;Pause bis auf Weiteres&lt;/button&gt;<br>
+          &lt;button class="amc_panel_button" command="ResumeSchedule" &gt;Weiter nach Plan&lt;/button&gt;<br>
+          &lt;button class="amc_panel_button" command="ParkUntilNextSchedule" &gt;Parken bis nächsten Termin&lt;/button&gt;<br>
+          &lt;button class="amc_panel_button" command="ParkUntilNextSchedule" &gt;Parken bis auf Weiteres&lt;/button&gt;<br>
+        &lt;/div&gt;<br>
+      </code>
     </li>
 
      <li><a href="disable">disable</a></li>
