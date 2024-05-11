@@ -1,10 +1,10 @@
-# Created by FHEM/98_SVG.pm, 2023-07-01 10:32:41
+# Created by FHEM/98_SVG.pm, 2024-05-11 11:23:50
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
 set timefmt "%Y-%m-%d_%H:%M:%S"
 set xlabel " "
-set title 'Energieverbrauch '
+set title 'Verbrauch Netz/Einspeisung Netz'
 set ytics 
 set y2tics 
 set grid ytics
