@@ -11,6 +11,6 @@ set grid
 set ylabel ""
 set y2label ""
 
-#dblog Stromzaehler:total_consumption
+#dblog Stromzaehler:total_consumption_kwh
 
 plot "<IN>" using 1:2 axes x1y1 title 'Zähler' ls l0 lw 1 with steps

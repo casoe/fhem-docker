@@ -13,6 +13,6 @@ set y2label ""
 set yrange [0:35]
 set y2range [0:35]
 
-#dblog Stromzaehler:statTotal_consumptionDayLast:::
+#dblog Stromzaehler:statTotal_consumption_kwhDayLast:::
 
 plot "<IN>" using 1:2 axes x1y1 title 'Täglicher Verbrauch' ls l0fill lw 1 with histeps
