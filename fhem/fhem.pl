@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 28666 2024-03-16 12:11:51Z rudolfkoenig $
+# $Id: fhem.pl 28849 2024-05-07 08:54:34Z rudolfkoenig $
 
 
 use strict;
@@ -281,7 +281,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 28666 2024-03-16 12:11:51Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 28849 2024-05-07 08:54:34Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -4946,8 +4946,14 @@ readingsEndUpdate($$)
       #Debug "Evaluating " . $reading;
       $cmdFromAnalyze = $perlCode;      # For the __WARN__ sub
       my $NAME = $name; # no exceptions, #53069
+
+      my $stopRecursion = ".evalUserReading_$reading";
+      next if($hash->{$stopRecursion}); # No warning / #138149
+      $hash->{$stopRecursion} = 1;
       my $value= eval $perlCode;
+      delete($hash->{$stopRecursion});
       $cmdFromAnalyze = undef;
+
       my $result;
       # store result
       if($@) {
