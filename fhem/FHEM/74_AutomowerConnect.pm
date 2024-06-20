@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: 74_AutomowerConnect.pm 28885 2024-05-18 10:19:53Z Ellert $
+# $Id: 74_AutomowerConnect.pm 28961 2024-06-10 20:54:08Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::AutomowerConnect;
-our $cvsid = '$Id: 74_AutomowerConnect.pm 28885 2024-05-18 10:19:53Z Ellert $';
+our $cvsid = '$Id: 74_AutomowerConnect.pm 28961 2024-06-10 20:54:08Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -352,7 +352,8 @@ __END__
         mowingPathLineWidth="1"<br>
         mowingPathDotWidth="2"<br>
         mowingPathUseDots=""<br>
-        mowingPathShowCollisions=""
+        mowingPathShowCollisions=""<br>
+        hideSchedulerButton=""
       </code>
       </ul>
     </li>
@@ -543,6 +544,18 @@ __END__
 
     <br><br>
   </ul>
+
+
+  <a id="AutomowerConnectEvents"></a>
+  <b>additional Events</b>
+  <ul>
+  A List of Events generated besides readings events.<br>
+  
+    <li><code>&lt;device name&gt;:AUTHENTICATION ERROR</code> Error during Authentification.</li>
+    <li><code>&lt;device name&gt;:MOWERAPI ERROR</code> Error while Connecting AutomowerConnect API.</li>
+    <li><code>&lt;device name&gt;:WEBSOCKET ERROR</code> Error related to websocket connection.</li>
+  </ul>
+  <br>
 
 
   <a id="AutomowerConnectReadings"></a>
@@ -837,7 +850,8 @@ __END__
         mowingPathLineWidth="1"<br>
         mowingPathDotWidth="2"<br>
         mowingPathUseDots=""<br>
-        mowingPathShowCollisions=""
+        mowingPathShowCollisions=""<br>
+        hideSchedulerButton=""
       </code>
       </ul>
     </li>
@@ -996,12 +1010,11 @@ __END__
       </code>
     </li>
 
-     <li><a href="disable">disable</a></li>
+    <li><a href="disable">disable</a></li>
 
-     <li><a href="disabledForIntervals">disabledForIntervals</a></li>
-  <br>
+    <li><a href="disabledForIntervals">disabledForIntervals</a></li>
+    <br>
   </ul>
-  <br>
 
 
   <a id="AutomowerConnectUserAttr"></a>
@@ -1030,8 +1043,19 @@ __END__
       <code>attr &lt;name&gt; testing 1</code><br>
      Macht Befehle verfügbar, die mit Testing markiert sind.</li><br>
 
-    <br><br>
   </ul>
+
+
+  <a id="AutomowerConnectEvents"></a>
+  <b>zusätzliche Events</b>
+  <ul>
+  Eine Liste von Events zusätzlich zu den Readingsevents.<br>
+  
+    <li><code>&lt;device name&gt;:AUTHENTICATION ERROR</code> Fehler bei der Authentifizierung.</li>
+    <li><code>&lt;device name&gt;:MOWERAPI ERROR</code> Fehler bei der Verbindung zur AutomowerConnect API.</li>
+    <li><code>&lt;device name&gt;:WEBSOCKET ERROR</code> Fehler bei der Websocketverbindung.</li>
+  </ul>
+  <br>
 
 
   <a id="AutomowerConnectReadings"></a>

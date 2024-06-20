@@ -1,5 +1,5 @@
 ###############################################################
-# $Id: 72_FRITZBOX.pm 28783 2024-04-11 12:13:32Z jowiemann $
+# $Id: 72_FRITZBOX.pm 28945 2024-06-05 06:36:37Z jowiemann $
 #
 #  72_FRITZBOX.pm
 #
@@ -45,7 +45,7 @@ use warnings;
 use Blocking;
 use HttpUtils;
 
-my $ModulVersion = "07.57.13a";
+my $ModulVersion = "07.57.13c";
 my $missingModul = "";
 my $FRITZBOX_TR064pwd;
 my $FRITZBOX_TR064user;
@@ -2911,7 +2911,7 @@ sub FRITZBOX_Readout_Start($)
       $hash->{helper}{READOUT_RUNNING_PID} = BlockingCall($runFn, $name,
                                                        "FRITZBOX_Readout_Done", $timeout,
                                                        "FRITZBOX_Readout_Aborted", $hash);
-      $hash->{helper}{READOUT_RUNNING_PID}->{loglevel} = GetVerbose($name);
+#      $hash->{helper}{READOUT_RUNNING_PID}->{loglevel} = GetVerbose($name);
       FRITZBOX_Log $hash, 4, "Fork process $runFn";
    }
    else {
@@ -5808,7 +5808,7 @@ sub FRITZBOX_Readout_SetGet_Start($)
    $hash->{helper}{CMD_RUNNING_PID} = BlockingCall($cmdFunction, $handover,
                                        "FRITZBOX_Readout_SetGet_Done", $timeout,
                                        "FRITZBOX_Readout_SetGet_Aborted", $hash);
-   $hash->{helper}{READOUT_RUNNING_PID}->{loglevel} = GetVerbose($name);
+#   $hash->{helper}{READOUT_RUNNING_PID}->{loglevel} = GetVerbose($name);
    return undef;
 } # end FRITZBOX_Readout_SetGet_Start
 
@@ -8180,7 +8180,7 @@ sub FRITZBOX_Get_SmartHome_Devices_List($@) {
                    my $endTime     = $timeSchedule->[$i]{'timeSetting'}{'endTime'};
                
                    $ret{$holiday . "ID"}        = $i + 1;
-                   $ret{$holiday . "Enabled"}   = ( ( $timeSchedule->[$i]{'timeSetting'}{'isEnabled'} ) ? 1 : 0 );
+                   $ret{$holiday . "Enabled"}   = ( ( $timeSchedule->[$i]{'isEnabled'} ) ? 1 : 0 );
                    $ret{$holiday ."StartDay"}   = $startDate;
                    $ret{$holiday ."StartDay"}   =~ s/([0-9]{4})-([0-9]{2})-([0-9]{2})/$3/;
                    $ret{$holiday ."StartMonth"} = $startDate;
@@ -8217,7 +8217,7 @@ sub FRITZBOX_Get_SmartHome_Devices_List($@) {
                    $ret{SummerEndMonth}   = $endDate;
                    $ret{SummerEndMonth}   =~ s/([0-9]{4})-([0-9]{2})-([0-9]{2})/$2/;
                
-                   $ret{SummerEnabled}    = ( ( $timeSchedule->[$i]{'timeSetting'}{'isEnabled'} ) ? 1 : 0 );
+                   $ret{SummerEnabled}    = ( ( $timeSchedule->[$i]{'isEnabled'} ) ? 1 : 0 );
                  }
 
                }

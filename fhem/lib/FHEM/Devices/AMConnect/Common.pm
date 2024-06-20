@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: Common.pm 28885 2024-05-18 10:19:53Z Ellert $
+# $Id: Common.pm 28960 2024-06-10 18:00:02Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::Devices::AMConnect::Common;
-my $cvsid = '$Id: Common.pm 28885 2024-05-18 10:19:53Z Ellert $';
+my $cvsid = '$Id: Common.pm 28960 2024-06-10 18:00:02Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -46,6 +46,7 @@ BEGIN {
           AttrVal
           CommandAttr
           CommandDeleteReading
+          DoTrigger
           FmtDateTime
           FW_ME
           FW_dir
@@ -168,6 +169,7 @@ mowingPathLineWidth="1"
 mowingPathDotWidth="2"
 mowingPathUseDots=""
 mowingPathShowCollisions=""
+hideSchedulerButton=""
 ';
 
   my $mapZonesTpl = '{
@@ -453,6 +455,7 @@ sub FW_detailFn {
   my $iam = "$type $name FW_detailFn:";
   return '' if( AttrVal($name, 'disable', 0) || !$::init_done || !$FW_ME );
 
+  my $mapDesign = getDesignAttr( $hash );
   my $reta = "<div id='amc_${name}_schedule_buttons' name='fhem_amc_mower_schedule_buttons' ><button id='amc_${name}_schedule_button' onclick='AutomowerConnectSchedule( \"$name\" )' style='font-size:16px; ' >Mower Schedule</button>";
   # $reta .= "<label for='amc_${name}_select_workareas' > for Work Area: </label><select id='amc_${name}_select_workareas' name=work_areas_select>";
   # $reta .= "<option value='-1' selected >default</option>";
@@ -464,8 +467,6 @@ sub FW_detailFn {
   my $zoom=AttrVal( $name,"mapImageZoom", 0.7 );
   my $backgroundcolor = AttrVal($name, 'mapBackgroundColor','');
   my $bgstyle = $backgroundcolor ? " background-color:$backgroundcolor;" : '';
-
-  my $mapDesign = getDesignAttr( $hash );
 
   my ($picx,$picy) = AttrVal( $name,"mapImageWidthHeight", $hash->{helper}{imageWidthHeight} ) =~ /(\d+)\s(\d+)/;
   $picx=int($picx*$zoom);
@@ -544,7 +545,7 @@ sub FW_detailFn {
 
   my $ret = "";
   $ret .= "<style>
-  .${type}_devname_div{padding:0px !important;
+  .${type}_${name}_div{padding:0px !important;
     $bgstyle background-image: url('$img');
     background-size: ${picx}px ${picy}px;
     background-repeat: no-repeat; 
@@ -559,11 +560,13 @@ sub FW_detailFn {
   my $contentflg = $content =~ /ON_TOP/;
   $content =~ s/command=['"](.*?)['"]/onclick="AutomowerConnectPanelCmd('set $name $1')"/g;
   $ret .= $content if ( $contentflg );
-  $ret .= "<div id='${type}_${name}_div' class='${type}_devname_div' $$mapDesign $csdata $limi $propli width='$picx' height='$picy' >";
+  my $mDesign = $$mapDesign;
+  $mDesign =~ s/data-hideSchedulerButton="1?"//;
+  $ret .= "<div id='${type}_${name}_div' class='${type}_${name}_div' $mDesign $csdata $limi $propli width='$picx' height='$picy' >";
   $ret .= "<canvas id='${type}_${name}_canvas_0' class='${type}_${name}_canvas_0' width='$picx' height='$picy' ></canvas>";
   $ret .= "<canvas id='${type}_${name}_canvas_1' class='${type}_${name}_canvas_1' width='$picx' height='$picy' ></canvas>";
   $ret .= "</div>";
-  $ret .=  $reta if( AttrVal ($name, 'showMap', 1 ) );
+  $ret .=  $reta if( AttrVal ($name, 'showMap', 1 ) ) && $$mapDesign =~ m/hideSchedulerButton=""/g;
 
   $ret .= "<div class='fhem_amc_hull_buttons' >";
   $ret .= "<button class='fhem_amc_hull_button' title='Sends the hull polygon points to attribute mowingAreaHull.' onclick='AutomowerConnectGetHull( \"$FW_ME/$type/$name/json\" )' style='font-size:12pt; ' >mowingAreaHullToAttribute</button>"
@@ -806,6 +809,8 @@ sub APIAuthResponse {
   RemoveInternalTimer( $hash, \&APIAuth );
   InternalTimer( gettimeofday() + $hash->{helper}{retry_interval_apiauth}, \&APIAuth, $hash, 0 );
   Log3 $name, 1, "$iam failed retry in $hash->{helper}{retry_interval_apiauth} seconds.";
+  DoTrigger($name, "AUTHENTICATION ERROR");
+
   return undef;
 
 }
@@ -960,12 +965,14 @@ sub getMowerResponse {
 
     readingsSingleUpdate( $hash, 'device_state', "error statuscode $statuscode", 1 );
     Log3 $name, 1, "$iam \$statuscode >$statuscode<, \$err >$err<, \$param->url $param->{url} \n\$data >$data<";
+    DoTrigger($name, "MOWERAPI ERROR");
 
   }
 
   RemoveInternalTimer( $hash, \&APIAuth );
   InternalTimer( gettimeofday() + $hash->{helper}{retry_interval_getmower}, \&APIAuth, $hash, 0 );
   Log3 $name, 1, "$iam failed retry in $hash->{helper}{retry_interval_getmower} seconds.";
+
   return undef;
 
 }
@@ -1090,6 +1097,8 @@ sub getMowerResponseWs {
 
     readingsSingleUpdate( $hash, 'device_state', "additional Polling error statuscode $statuscode", 1 );
     Log3 $name, 1, "$iam \$statuscode [$statuscode]\n\$err [$err],\n \$data [$data] \n\$param->url $param->{url}";
+    DoTrigger($name, "MOWERAPI ERROR");
+
 
   }
 
@@ -1538,7 +1547,7 @@ sub Attr {
 
       readingsSingleUpdate( $hash,'device_state','disabled',1);
       RemoveInternalTimer( $hash );
-      DevIo_CloseDev( $hash ) if ( DevIo_IsOpen( $hash ) );
+      DevIo_CloseDev( $hash );
       DevIo_setStates( $hash, "closed" );
       Log3 $name, 3, "$iam $cmd $attrName disabled";
 
@@ -2980,7 +2989,10 @@ sub wsCb {
   my $type = $hash->{TYPE};
   my $iam = "$type $name wsCb:";
   my $l = $hash->{devioLoglevel};
-  Log3 $name, ( $l ? $l : 1 ), "$iam failed with error: $error" if( $error );
+  if( $error ){
+    Log3 $name, ( $l ? $l : 1 ), "$iam failed with error: $error";
+    DoTrigger($name, "WEBSOCKET ERROR");
+  }
   return undef;
 
 }
