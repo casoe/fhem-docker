@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2024-05-27 20:01:49
+# Created by FHEM/98_SVG.pm, 2024-06-24 13:07:04
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -10,6 +10,8 @@ set y2tics
 set grid ytics
 set ylabel "kWh"
 set y2label ""
+set yrange [0:8]
+set y2range [0:8]
 
 #dblog MQTT2_DVES_9BFAF4:statTotal_kwh_genDay:::
 #dblog MQTT2_DVES_9BFAF4:ENERGY_Today:::
