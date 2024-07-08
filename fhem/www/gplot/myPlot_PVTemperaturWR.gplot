@@ -1,0 +1,22 @@
+# Created by FHEM/98_SVG.pm, 2024-07-08 14:26:04
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Temperatur Wechselrichter'
+set ytics 
+set y2tics 
+set grid
+set ylabel "Temperatur"
+set y2label "Temperatur"
+set yrange [30:90]
+set y2range [30:90]
+
+#dblog sun2000:WR_Temperatur_Intern:::
+#lp ConstY:80
+#lp ConstY:40
+
+plot "<IN>" using 1:2 axes x1y1 title 'Temperatur' ls l0 lw 1 with lines,\
+     "<IN>" using 1:2 axes x1y1 title '80°, 40°' ls l7 lw 1 with lines,\
+     "<IN>" using 1:2 axes x1y2 title ' ' ls l7 lw 1 with lines
