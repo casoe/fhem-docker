@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_FBDECT.pm 28212 2023-11-26 10:50:43Z rudolfkoenig $
+# $Id: 10_FBDECT.pm 29026 2024-07-15 07:19:08Z rudolfkoenig $
 package main;
 
 # See also https://avm.de/fileadmin/user_upload/Global/Service/Schnittstellen/AHA-HTTP-Interface.pdf
@@ -111,7 +111,8 @@ FBDECT_SetHttp($@)
   if($p =~ m/HANFUNUnit/ && $unittype eq "BLIND") {
     $cmd{open} = $cmd{close} = $cmd{stop} = "noArg";
   }
-  if($p =~ m/HANFUNUnit/ && $unittype eq "DIMMABLE_COLOR_BULB") {
+  if(($p =~ m/HANFUNUnit/ && $unittype eq "DIMMABLE_COLOR_BULB") ||
+     ($p =~ m/colorswitch/ && $p =~ m/dimmer/)) {        # 138740
     $cmd{"color"} = "select,red,orange,yellow,lawngreen,green,turquoise,".
                         "cyan,azure,blue,violet,magenta,pink";
     $cmd{"satindex"}         = "slider,1,1,3,1";
