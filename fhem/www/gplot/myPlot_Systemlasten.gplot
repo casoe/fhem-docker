@@ -1,0 +1,22 @@
+# Created by FHEM/98_SVG.pm, 2024-08-13 16:46:29
+set terminal png transparent size <SIZE> crop
+set output '<OUT>.png'
+set xdata time
+set timefmt "%Y-%m-%d_%H:%M:%S"
+set xlabel " "
+set title 'Systemlasten'
+set ytics 
+set y2tics 
+set grid ytics
+set ylabel "Load"
+set y2label "Load"
+set yrange [0:4.2]
+set y2range [0:4.2]
+
+#dblog sysstat_hades:load:::
+#dblog sysstat_zerberus:load:::
+#dblog sysstat_apollon:load:::
+
+plot "<IN>" using 1:2 axes x1y1 title 'Hades' ls l0 lw 1 with lines,\
+     "<IN>" using 1:2 axes x1y1 title 'Zerberus' ls l1 lw 1 with lines,\
+     "<IN>" using 1:2 axes x1y1 title 'Apollon' ls l2 lw 1 with lines
