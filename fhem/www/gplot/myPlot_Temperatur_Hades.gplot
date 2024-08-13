@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2022-05-06 22:26:55
+# Created by FHEM/98_SVG.pm, 2024-08-13 16:07:16
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -13,6 +13,6 @@ set y2label "Temperature"
 set yrange [30:80]
 set y2range [30:80]
 
-#dblog sysstat:temperature
+#dblog sysstat_hades:temperature:::
 
 plot "<IN>" using 1:2 axes x1y1 title 'geometric average over the last 4 values' ls l0 lw 1 with lines
