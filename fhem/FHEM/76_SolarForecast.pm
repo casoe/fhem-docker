@@ -1,5 +1,5 @@
 ########################################################################################################################
-# $Id: 76_SolarForecast.pm 29033 2024-07-20 19:57:17Z DS_Starter $
+# $Id: 76_SolarForecast.pm 29089 2024-08-20 19:14:29Z DS_Starter $
 #########################################################################################################################
 #       76_SolarForecast.pm
 #
@@ -155,6 +155,9 @@ BEGIN {
 
 # Versions History intern
 my %vNotesIntern = (
+  "1.31.0" => "20.08.2024  rename attributes ctrlWeatherDevX to setupWeatherDevX ",
+  "1.30.0" => "18.08.2024  new attribute flowGraphicShift, Forum:https://forum.fhem.de/index.php?msg=1318597 ",
+  "1.29.4" => "03.08.2024  delete writeCacheToFile from _getRoofTopData, _specialActivities: avoid loop caused by \@widgetreadings ",
   "1.29.3" => "20.07.2024  eleminate hand over \$hash in _getRoofTopData routines, fix label 'gcon' to 'gcons' ",
   "1.29.2" => "17.06.2024  ___readCandQ: improve manual setting of pvCorrectionFactor_XX ",
   "1.29.1" => "17.06.2024  fix Warnings, Forum: https://forum.fhem.de/index.php?msg=1315283, fix roofIdentPair ",
@@ -386,7 +389,7 @@ my $WhtokJ         = 3.6;                                                       
 my $defmaxvar      = 0.5;                                                           # max. Varianz pro Tagesberechnung Autokorrekturfaktor
 my $definterval    = 70;                                                            # Standard Abfrageintervall
 my $slidenumdef    = 3;                                                             # max. Anzahl der Arrayelemente in Schieberegistern
-my $weatherDevMax  = 3;                                                             # max. Anzahl Wetter Devices (Attr ctrlWeatherDevX)
+my $weatherDevMax  = 3;                                                             # max. Anzahl Wetter Devices (Attr setupWeatherDevX)
 my $maxSoCdef      = 95;                                                            # default Wert (%) auf den die Batterie maximal aufgeladen werden soll bzw. als aufgeladen gilt
 my $carecycledef   = 20;                                                            # max. Anzahl Tage die zwischen der Batterieladung auf maxSoC liegen dürfen
 my $batSocChgDay   = 5;                                                             # prozentuale SoC Änderung pro Tag
@@ -520,7 +523,7 @@ my @aconfigs = qw( affect70percentRule affectBatteryPreferredCharge affectConsFo
                    ctrlBatSocManagement ctrlConsRecommendReadings ctrlGenPVdeviation ctrlInterval
                    ctrlLanguage ctrlNextDayForecastReadings ctrlShowLink ctrlSolCastAPImaxReq
                    ctrlSolCastAPIoptimizeReq ctrlStatisticReadings ctrlUserExitFn
-                   ctrlWeatherDev1 ctrlWeatherDev2 ctrlWeatherDev3
+                   setupWeatherDev1 setupWeatherDev2 setupWeatherDev3
                    disable
                    flowGraphicSize flowGraphicAnimate flowGraphicConsumerDistance flowGraphicShowConsumer
                    flowGraphicShowConsumerDummy flowGraphicShowConsumerPower flowGraphicShowConsumerRemainTime
@@ -607,9 +610,9 @@ my %hattr = (                                                                # H
   ctrlConsRecommendReadings => { fn => \&_attrcreateConsRecRdgs   },
   ctrlStatisticReadings     => { fn => \&_attrcreateStatisticRdgs },
   ctrlDebug                 => { fn => \&_attrctrlDebug           },
-  ctrlWeatherDev1           => { fn => \&_attrWeatherDev          },
-  ctrlWeatherDev2           => { fn => \&_attrWeatherDev          },
-  ctrlWeatherDev3           => { fn => \&_attrWeatherDev          },
+  setupWeatherDev1          => { fn => \&_attrWeatherDev          },
+  setupWeatherDev2          => { fn => \&_attrWeatherDev          },
+  setupWeatherDev3          => { fn => \&_attrWeatherDev          },
   setupMeterDev             => { fn => \&_attrMeterDev            },
   setupBatteryDev           => { fn => \&_attrBatteryDev          },
   setupInverterDev          => { fn => \&_attrInverterDev         },
@@ -659,8 +662,8 @@ my %hqtxt = (                                                                   
                        "set LINK plantConfiguration check" oder mit Druck auf das angebotene Icon.<br>
                        Korrigieren sie bitte eventuelle Fehler und beachten sie m&ouml;gliche Hinweise.<br>
                        (Die Anzeigesprache kann mit dem Attribut "ctrlLanguage" umgestellt werden.)<hr><br>}                },
-  cfd    => { EN => qq{Please enter at least one weather forecast device with "attr LINK ctrlWeatherDev1"},
-              DE => qq{Bitte geben sie mindestens ein Wettervorhersage Device mit "attr LINK ctrlWeatherDev1" an}           },
+  cfd    => { EN => qq{Please enter at least one weather forecast device with "attr LINK setupWeatherDev1"},
+              DE => qq{Bitte geben sie mindestens ein Wettervorhersage Device mit "attr LINK setupWeatherDev1" an}          },
   crd    => { EN => qq{Please select the radiation forecast service with "attr LINK setupRadiationAPI"},
               DE => qq{Bitte geben sie den Strahlungsvorhersage Dienst mit "attr LINK setupRadiationAPI" an}                },
   cid    => { EN => qq{Please specify the Inverter device with "attr LINK setupInverterDev"},
@@ -1180,13 +1183,11 @@ sub Initialize {
                                 "ctrlSolCastAPIoptimizeReq:1,0 ".
                                 "ctrlStatisticReadings:multiple-strict,$srd ".
                                 "ctrlUserExitFn:textField-long ".
-                                "ctrlWeatherDev1 ".
-                                "ctrlWeatherDev2 ".
-                                "ctrlWeatherDev3 ".
                                 "disable:1,0 ".
                                 "flowGraphicSize ".
                                 "flowGraphicAnimate:1,0 ".
                                 "flowGraphicConsumerDistance:slider,80,10,500 ".
+                                "flowGraphicShift:slider,-80,5,80 ".
                                 "flowGraphicShowConsumer:1,0 ".
                                 "flowGraphicShowConsumerDummy:1,0 ".
                                 "flowGraphicShowConsumerPower:0,1 ".
@@ -1229,6 +1230,9 @@ sub Initialize {
                                 "setupInverterDev:textField-long ".
                                 "setupInverterStrings ".
                                 "setupMeterDev:textField-long ".
+                                "setupWeatherDev1 ".
+                                "setupWeatherDev2 ".
+                                "setupWeatherDev3 ".
                                 "setupRoofTops ".
                                 "setupBatteryDev:textField-long ".
                                 "setupRadiationAPI ".
@@ -1242,6 +1246,9 @@ sub Initialize {
   # $hash->{FW_atPageEnd} = 1;                         # wenn 1 -> kein Longpoll ohne informid in HTML-Tag
 
    $hash->{AttrRenameMap} = { "graphicBeamHeight"  => "graphicBeamHeightLevel1",     # 07.05.24
+                              "ctrlWeatherDev1"    => "setupWeatherDev1",            # 20.08.24
+                              "ctrlWeatherDev2"    => "setupWeatherDev2",
+                              "ctrlWeatherDev3"    => "setupWeatherDev3",
                             };
 
   eval { FHEM::Meta::InitMod( __FILE__, $hash ) };     ## no critic 'eval'
@@ -2591,7 +2598,6 @@ sub __solCast_ApiRequest {
   my $hash       = $defs{$name};
   
   if (!$allstrings) {                                                   # alle Strings wurden abgerufen
-      writeCacheToFile ($hash, 'solcastapi', $scpicache.$name);         # Cache File SolCast API Werte schreiben
       return;
   }
 
@@ -3009,7 +3015,6 @@ sub __forecastSolar_ApiRequest {
   my $hash       = $defs{$name};
 
   if (!$allstrings) {                                                                  # alle Strings wurden abgerufen
-      writeCacheToFile ($hash, 'solcastapi', $scpicache.$name);                        # Cache File API Werte schreiben
       $data{$type}{$name}{solcastapi}{'?All'}{'?All'}{todayDoneAPIcalls} += 1;
       return;
   }
@@ -3906,7 +3911,6 @@ sub __openMeteoDWD_ApiRequest {
   my $hash       = $defs{$name};
   
   if (!$allstrings) {                                                        # alle Strings wurden abgerufen
-      writeCacheToFile ($hash, 'solcastapi', $scpicache.$name);
       my $apiitv = SolCastAPIVal ($hash, '?All', '?All', 'currentAPIinterval', $ometeorepdef);
       readingsSingleUpdate ($hash, 'nextRadiationAPICall', $hqtxt{after}{$lang}.' '.(timestampToTimestring ($t + $apiitv, $lang))[0], 1);
       $data{$type}{$name}{solcastapi}{'?All'}{'?All'}{todayDoneAPIcalls} += 1;
@@ -5669,7 +5673,7 @@ return;
 }
 
 ################################################################
-#                      Attr ctrlWeatherDevX
+#                      Attr setupWeatherDevX
 ################################################################
 sub _attrWeatherDev {                    ## no critic "not used"
   my $paref = shift;
@@ -5687,11 +5691,11 @@ sub _attrWeatherDev {                    ## no critic "not used"
       }
 
       if ($aVal =~ /^OpenMeteo/xs) {
-          if ($aName ne 'ctrlWeatherDev1') {
-              return qq{Only the leading attribute 'ctrlWeatherDev1' can set to '$aVal'};
+          if ($aName ne 'setupWeatherDev1') {
+              return qq{Only the leading attribute 'setupWeatherDev1' can set to '$aVal'};
           }
 
-          InternalTimer (gettimeofday()+1, 'FHEM::SolarForecast::__setRadAPIdelayed', $hash, 0);   # automatisch setupRadiationAPI setzen wenn ctrlWeatherDev1
+          InternalTimer (gettimeofday()+1, 'FHEM::SolarForecast::__setRadAPIdelayed', $hash, 0);   # automatisch setupRadiationAPI setzen wenn setupWeatherDev1
           return;
       }
 
@@ -5723,12 +5727,12 @@ sub _attrRadiationAPI {                  ## no critic "not used"
           return qq{The device "$aVal" doesn't exist or has no TYPE "DWD_OpenData"};
       }
 
-      my $awdev1 = AttrVal ($name, 'ctrlWeatherDev1', '');
+      my $awdev1 = AttrVal ($name, 'setupWeatherDev1', '');
 
       if (($awdev1 eq 'OpenMeteoDWD-API'         && $aVal ne 'OpenMeteoDWD-API')         ||
           ($awdev1 eq 'OpenMeteoDWDEnsemble-API' && $aVal ne 'OpenMeteoDWDEnsemble-API') ||
           ($awdev1 eq 'OpenMeteoWorld-API'       && $aVal ne 'OpenMeteoWorld-API')) {
-          return "The attribute 'ctrlWeatherDev1' is set to '$awdev1'. \n".
+          return "The attribute 'setupWeatherDev1' is set to '$awdev1'. \n".
                  "Change that attribute to another weather device first if you want use an other API.";
       }
 
@@ -5798,7 +5802,7 @@ sub __setRadAPIdelayed {
   my $hash = shift;
 
   my $name   = $hash->{NAME};
-  my $awdev1 = AttrVal ($name, 'ctrlWeatherDev1', '');
+  my $awdev1 = AttrVal ($name, 'setupWeatherDev1', '');
 
   CommandAttr (undef, "$name setupRadiationAPI $awdev1");                         # automatisch setupRadiationAPI setzen
 
@@ -6160,8 +6164,6 @@ sub writeCacheToFile {
   }
 
   my $type = $hash->{TYPE};
-
-  my @data;
   my ($error, $err, $lw);
 
   if ($cachename eq 'aitrained') {
@@ -6188,12 +6190,12 @@ sub writeCacheToFile {
 
       if ($data) {
           $error = fileStore ($data, $file);
-      }
-
-      if ($error) {
-          $err = qq{ERROR while writing AI data to file "$file": $error};
-          Log3 ($name, 1, "$name - $err");
-          return $err;
+          
+          if ($error) {
+              $err = qq{ERROR while writing AI data to file "$file": $error};
+              Log3 ($name, 1, "$name - $err");
+              return $err;
+          }
       }
 
       $lw                 = gettimeofday();
@@ -6206,15 +6208,15 @@ sub writeCacheToFile {
   if ($cachename eq 'dwdcatalog') {
       if (scalar keys %{$data{$type}{$name}{dwdcatalog}}) {
           $error = fileStore ($data{$type}{$name}{dwdcatalog}, $file);
+          
+          if ($error) {
+              $err = qq{ERROR while writing DWD Station Catalog to file "$file": $error};
+              Log3 ($name, 1, "$name - $err");
+              return $err;
+          }
       }
       else {
           return "The DWD Station Catalog is empty";
-      }
-
-      if ($error) {
-          $err = qq{ERROR while writing DWD Station Catalog to file "$file": $error};
-          Log3 ($name, 1, "$name - $err");
-          return $err;
       }
 
       return;
@@ -6225,12 +6227,12 @@ sub writeCacheToFile {
 
       if (scalar keys %{$plantcfg}) {
           $error = fileStore ($plantcfg, $file);
-      }
-
-      if ($error) {
-          $err = qq{ERROR writing cache file "$file": $error};
-          Log3 ($name, 1, "$name - $err");
-          return $err;
+          
+          if ($error) {
+              $err = qq{ERROR writing cache file "$file": $error};
+              Log3 ($name, 1, "$name - $err");
+              return $err;
+          }
       }
 
       $lw                 = gettimeofday();
@@ -6241,10 +6243,11 @@ sub writeCacheToFile {
   }
 
   return if(!$data{$type}{$name}{$cachename});
-  my $json = encode_json ($data{$type}{$name}{$cachename});
-  push @data, $json;
-
-  $error = FileWrite ($file, @data);
+  
+  my @arr;
+  push @arr, encode_json ($data{$type}{$name}{$cachename});
+  
+  $error = FileWrite ($file, @arr);
 
   if ($error) {
       $err = qq{ERROR writing cache file "$file": $error};
@@ -6429,7 +6432,7 @@ sub _addDynAttr {
   my $hash = shift;
   my $type = $hash->{TYPE};
 
-  ## Attr ctrlWeatherDevX zur Laufzeit hinzufügen
+  ## Attr setupWeatherDevX zur Laufzeit hinzufügen
   #################################################
   my $adwds  = '';
   my @alldwd = devspec2array ("TYPE=DWD_OpenData");
@@ -6446,16 +6449,17 @@ sub _addDynAttr {
 
   my @deva   = split " ", $modules{$type}{AttrList};
 
-  my $atd = 'ctrlWeatherDev|setupRadiationAPI';
+  my $atd = 'setupWeatherDev|setupRadiationAPI';
   @deva   = grep {!/$atd/} @deva;
 
   for my $step (1..$weatherDevMax) {
       if ($step == 1) {
-          push @deva, ($adwds ? "ctrlWeatherDev1:OpenMeteoDWD-API,OpenMeteoDWDEnsemble-API,OpenMeteoWorld-API,$adwds" : "ctrlWeatherDev1:OpenMeteoDWD-API,OpenMeteoDWDEnsemble-API,OpenMeteoWorld-API");
+          push @deva, ($adwds ? "setupWeatherDev1:OpenMeteoDWD-API,OpenMeteoDWDEnsemble-API,OpenMeteoWorld-API,$adwds" : 
+                       "setupWeatherDev1:OpenMeteoDWD-API,OpenMeteoDWDEnsemble-API,OpenMeteoWorld-API");
           next;
       }
 
-      push @deva, ($adwds ? "ctrlWeatherDev".$step.":$adwds" : "");
+      push @deva, ($adwds ? "setupWeatherDev".$step.":$adwds" : "");
   }
 
   push @deva, "setupRadiationAPI:$rdd ";
@@ -6496,49 +6500,7 @@ sub centralTask {
   return if(!$init_done);
 
   ### nicht mehr benötigte Daten verarbeiten - Bereich kann später wieder raus !!
-  ##########################################################################################################################
-  my $val = ReadingsVal ($name, 'currentMeterDev', '');                       # 01.06.2024
-  if ($val) {
-      CommandAttr (undef, "$name setupMeterDev $val");
-      readingsDelete ($hash, 'currentMeterDev');
-  }
-
-  my $val1 = ReadingsVal ($name, 'currentBatteryDev', '');                    # 02.06.2024
-  if ($val1) {
-      CommandAttr (undef, "$name setupBatteryDev $val1");
-      readingsDelete ($hash, 'currentBatteryDev');
-  }
-
-  my $idts = ReadingsTimestamp ($name, 'currentInverterDev', '');             # 02.06.2024
-  if ($idts) {
-      $idts = timestringToTimestamp ($idts);
-      $data{$type}{$name}{circular}{99}{attrInvChangedTs} = $idts;
-  }
-
-  my $val2 = ReadingsVal ($name, 'currentInverterDev', '');                    # 03.06.2024
-  if ($val2) {
-      CommandAttr (undef, "$name setupInverterDev $val2");
-      readingsDelete ($hash, 'currentInverterDev');
-  }
-
-  my $val3 = ReadingsVal ($name, 'inverterStrings', '');                    # 05.06.2024
-  if ($val3) {
-      CommandAttr (undef, "$name setupInverterStrings $val3");
-      readingsDelete ($hash, 'inverterStrings');
-  }
-
-  my $val4 = ReadingsVal ($name, 'currentRadiationAPI', '');                    # 10.06.2024
-  if ($val4) {
-      CommandAttr (undef, "$name setupRadiationAPI $val4");
-      readingsDelete ($hash, 'currentRadiationAPI');
-  }
-
-  my $val5 = ReadingsVal ($name, 'modulePeakString', '');                    # 12.06.2024
-  if ($val5) {
-      CommandAttr (undef, "$name setupStringPeak $val5");
-      readingsDelete ($hash, 'modulePeakString');
-  }
-  
+  ##########################################################################################################################  
   my $dir = ReadingsVal ($name, 'moduleAzimuth', '');                         # 16.06.2024
   if ($dir) {
       readingsSingleUpdate ($hash, 'setupStringAzimuth', $dir, 0);
@@ -7145,7 +7107,7 @@ sub _specialActivities {
 
           Log3 ($name, 4, "$name - Daily special tasks - Task 1 started");
 
-          $date = strftime "%Y-%m-%d", localtime($t-7200);                                   # Vortag (2 h Differenz reichen aus)
+          $date = strftime "%Y-%m-%d", localtime($t-7200);                                         # Vortag (2 h Differenz reichen aus)
           $ts   = $date." 23:59:59";
 
           $pvfc = ReadingsNum ($name, "Today_Hour24_PVforecast", 0);
@@ -7162,8 +7124,13 @@ sub _specialActivities {
           readingsDelete    ($hash, 'Today_PVdeviation');
           readingsDelete    ($hash, 'Today_PVreal');
 
-          for my $wdr (@widgetreadings) {                                                     # Array der Hilfsreadings (Attributspeicher) löschen
-              readingsDelete ($hash, $wdr);
+          if (scalar(@widgetreadings)) {                                                          # vermeide Schleife falls FHEMWEB geöfffnet
+              my @acopy       = @widgetreadings;
+              @widgetreadings = ();                                                       
+              
+              for my $wdr (@acopy) {                                                              # Array der Hilfsreadings (Attributspeicher) löschen
+                  readingsDelete ($hash, $wdr);
+              }
           }
 
           delete $data{$type}{$name}{solcastapi}{'?All'}{'?All'}{todayDoneAPIrequests};
@@ -7388,7 +7355,7 @@ sub _transferWeatherValues {
   my $chour = $paref->{chour};
   my $hash  = $defs{$name};
 
-  my ($valid, $fcname, $apiu) = isWeatherDevValid ($hash, 'ctrlWeatherDev1');                  # Standard Weather Forecast Device
+  my ($valid, $fcname, $apiu) = isWeatherDevValid ($hash, 'setupWeatherDev1');                  # Standard Weather Forecast Device
   return if(!$valid);
 
   my $type = $paref->{type};
@@ -7469,7 +7436,7 @@ return;
 }
 
 ################################################################
-#   lese Wetterdaten aus Device im Attribut ctrlWeatherDevX
+#   lese Wetterdaten aus Device im Attribut setupWeatherDevX
 #   X = laufende Schleifenvariable $step
 ################################################################
 sub __readDataWeather {
@@ -7480,7 +7447,7 @@ sub __readDataWeather {
   my $step  = $paref->{step};
   my $hash  = $defs{$name};
 
-  my ($valid, $fcname, $apiu) = isWeatherDevValid ($hash, 'ctrlWeatherDev'.$step);              # Weather Forecast Device
+  my ($valid, $fcname, $apiu) = isWeatherDevValid ($hash, 'setupWeatherDev'.$step);             # Weather Forecast Device
   return if(!$valid);
 
   if ($apiu) {                                                                                  # eine API wird verwendet
@@ -7588,7 +7555,7 @@ sub __mergeDataWeather {
   my $ds = 0;
 
   for my $wd (1..$weatherDevMax) {
-      my ($valid, $fcname, $apiu) = isWeatherDevValid ($hash, 'ctrlWeatherDev'.$wd);              # Weather Forecast Device
+      my ($valid, $fcname, $apiu) = isWeatherDevValid ($hash, 'setupWeatherDev'.$wd);              # Weather Forecast Device
       $ds++ if($valid);
   }
 
@@ -10319,17 +10286,7 @@ sub __getCyclesAndRuntime {
 
   ### nicht mehr benötigte Daten verarbeiten - Bereich kann später wieder raus !!
   ##########################################################################################################################
-  my $nds = ConsumerVal ($hash, $c, 'numberDayStarts', 'leer');           # 28.05.2024
-  my $art = ConsumerVal ($hash, $c, 'avgruntime', 'leer');
-  if ($nds ne 'leer') {
-      $data{$type}{$name}{consumers}{$c}{cycleDayNum} = $nds;
-      delete $data{$type}{$name}{consumers}{$c}{numberDayStarts};
-  }
 
-  if ($art ne 'leer') {
-      $data{$type}{$name}{consumers}{$c}{runtimeAvgDay} = $art;
-      delete $data{$type}{$name}{consumers}{$c}{avgruntime};
-  }
   ##########################################################################################################################
 
   my ($starthour, $startday);
@@ -11540,6 +11497,7 @@ sub entryGraphic {
       hdrDetail      => AttrVal ($name, 'graphicHeaderDetail',            'all'),                # ermöglicht den Inhalt zu begrenzen, um bspw. passgenau in ftui einzubetten
       flowgsize      => AttrVal ($name, 'flowGraphicSize',        $flowGSizedef),                # Größe Energieflußgrafik
       flowgani       => AttrVal ($name, 'flowGraphicAnimate',                 0),                # Animation Energieflußgrafik
+      flowgshift     => AttrVal ($name, 'flowGraphicShift',                   0),                # Verschiebung der Flußgrafikbox (muß negiert werden)
       flowgcons      => AttrVal ($name, 'flowGraphicShowConsumer',            1),                # Verbraucher in der Energieflußgrafik anzeigen
       flowgconX      => AttrVal ($name, 'flowGraphicShowConsumerDummy',       1),                # Dummyverbraucher in der Energieflußgrafik anzeigen
       flowgconsPower => AttrVal ($name, 'flowGraphicShowConsumerPower'     ,  1),                # Verbraucher Leistung in der Energieflußgrafik anzeigen
@@ -11710,17 +11668,7 @@ sub _checkSetupNotComplete {
   my $type  = $hash->{TYPE};
 
   ### nicht mehr benötigte Daten verarbeiten - Bereich kann später wieder raus !!
-  ##########################################################################################
-  my $val2 = ReadingsVal ($name, 'currentInverterDev', '');                    # 03.06.2024
-  if ($val2) {
-      CommandAttr (undef, "$name setupInverterDev $val2");
-  }
-
-  my $val3 = ReadingsVal ($name, 'inverterStrings', '');                       # 05.06.2024
-  if ($val3) {
-      CommandAttr (undef, "$name setupInverterStrings $val3");
-  }
-  
+  ##########################################################################################  
   my $dir = ReadingsVal ($name, 'moduleAzimuth', '');                         # 16.06.2024
   if ($dir) {
       readingsSingleUpdate ($hash, 'setupStringAzimuth', $dir, 0);
@@ -11734,7 +11682,7 @@ sub _checkSetupNotComplete {
   ##########################################################################################
 
   my $is    = AttrVal     ($name, 'setupInverterStrings',   undef);                       # String Konfig
-  my $wedev = AttrVal     ($name, 'ctrlWeatherDev1',        undef);                       # Device Vorhersage Wetterdaten (Bewölkung etc.)
+  my $wedev = AttrVal     ($name, 'setupWeatherDev1',       undef);                       # Device Vorhersage Wetterdaten (Bewölkung etc.)
   my $radev = AttrVal     ($name, 'setupRadiationAPI',      undef);                       # Device Strahlungsdaten Vorhersage
   my $indev = AttrVal     ($name, 'setupInverterDev',       undef);                       # Inverter Device
   my $medev = AttrVal     ($name, 'setupMeterDev',          undef);                       # Meter Device
@@ -13610,10 +13558,11 @@ sub _flowGraphic {
   my $name          = $paref->{name};
   my $flowgsize     = $paref->{flowgsize};
   my $flowgani      = $paref->{flowgani};
-  my $flowgcons     = $paref->{flowgcons};
+  my $flowgshift    = $paref->{flowgshift};                   # Verschiebung der Flußgrafikbox (muß negiert werden)
+  my $flowgcons     = $paref->{flowgcons};                    # Verbraucher in der Energieflußgrafik anzeigen
+  my $flowgconTime  = $paref->{flowgconsTime};                # Verbraucher Restlaufeit in der Energieflußgrafik anzeigen
   my $flowgconX     = $paref->{flowgconX};
   my $flowgconPower = $paref->{flowgconsPower};
-  my $flowgconTime  = $paref->{flowgconsTime};
   my $consDist      = $paref->{flowgconsDist};
   my $css           = $paref->{css};
   
@@ -13666,14 +13615,14 @@ sub _flowGraphic {
 
   my $batout_direction = 'M902,305 L730,510';                                                  # Batterientladung aus Netz
 
-  if($batin) {
+  if ($batin) {
       my $gbi = $batin - $cpv;
 
-      if($gbi > 1) {
-        $batin            -= $gbi;
-        $batout_style      = 'flowg active_in';
-        $batout_direction  = 'M730,510 L902,305';
-        $batout            = $gbi;
+      if ($gbi > 1) {
+          $batin            -= $gbi;
+          $batout_style      = 'flowg active_in';
+          $batout_direction  = 'M730,510 L902,305';
+          $batout            = $gbi;
       }
   }
 
@@ -13682,9 +13631,14 @@ sub _flowGraphic {
   my $csc_style    = $csc && $cpv  ? 'flowg active_out'              : 'flowg inactive_out';
   my $cgfi_style   = $cgfi         ? 'flowg active_out'              : 'flowg inactive_out';
 
-  my $vbox_default = !$flowgcons   ? '5 -25 800 480' :
-                     $flowgconTime ? '5 -25 800 700' :
-                     '5 -25 800 680';
+  my $vbminx       = -10 * $flowgshift;                                                          # min-x and min-y represent the smallest X and Y coordinates that the viewBox may have
+  my $vbminy       = -25;
+  my $vbwidth      = 800;                                                                        # width and height specify the viewBox size
+  my $vbhight      = !$flowgcons   ? 480 :                      
+                     $flowgconTime ? 700 :
+                     680;
+  
+  my $vbox = "$vbminx $vbminy $vbwidth $vbhight";
 
   my $ret = << "END0";
       <style>
@@ -13692,7 +13646,7 @@ sub _flowGraphic {
       $animation
       </style>
 
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="$vbox_default" style="$style" id="SVGPLOT">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="$vbox" style="$style" id="SVGPLOT">
 
       <g transform="translate(400,50)">
         <g>
@@ -13812,7 +13766,7 @@ END3
       $consumer_style    = 'flowg active_in' if($cc_dummy > 1);
 
       my $chain_color = "";                                                                       # Farbe der Laufkette Consumer-Dummy
-      if($cc_dummy > 0.5) {
+      if ($cc_dummy > 0.5) {
           $chain_color  = 'style="stroke: #'.substr(Color::pahColor(0,500,1000,$cc_dummy,[0,255,0, 127,255,0, 255,255,0, 255,127,0, 255,0,0]),0,6).';"';
           #$chain_color  = 'style="stroke: #DF0101;"';
       }
@@ -13850,7 +13804,7 @@ END3
           $consumer_style    = 'flowg active_out' if($p > $defpopercent);
           my $chain_color    = "";                                                                 # Farbe der Laufkette des Consumers
 
-          if($p > 0.5) {
+          if ($p > 0.5) {
               $chain_color  = 'style="stroke: #'.substr(Color::pahColor(0,50,100,$p,[0,255,0, 127,255,0, 255,255,0, 255,127,0, 255,0,0]),0,6).';"';
               #$chain_color  = 'style="stroke: #DF0101;"';
           }
@@ -13986,7 +13940,7 @@ sub consinject {
       if ($_) {
           my ($cons,$im,$start,$end) = split (':', $_);
 
-          if($debug =~ /graphic/x) {
+          if ($debug =~ /graphic/x) {
               Log3 ($name, 1, qq{$name DEBUG> Consumer to show -> $cons, relative to current time -> start: $start, end: $end}) if($i<1);
           }
 
@@ -14075,7 +14029,7 @@ sub weather_icon {
   $id      = int $id;
   my $txt  = $lang eq "DE" ? "txtd" : "txte";
 
-  if(defined $weather_ids{$id}) {
+  if (defined $weather_ids{$id}) {
       return $weather_ids{$id}{icon}, encode("utf8", $weather_ids{$id}{$txt});
   }
 
@@ -14104,7 +14058,7 @@ sub checkdwdattr {
       $err = qq{ERROR - device "$dwddev" -> attribute "forecastProperties" must contain: }.join ",",@aneeded;
   }
 
-  if($fcr != 1) {
+  if ($fcr != 1) {
       $err .= ", " if($err);
       $err .= qq{ERROR - device "$dwddev" -> attribute "forecastResolution" must be set to "1"};
   }
@@ -14769,7 +14723,6 @@ return $ridx;
 ################################################################
 sub writeToHistory {
   my $ph    = shift;
-
   my $paref = $ph->{paref};
   my $key   = $ph->{key};
   my $val   = $ph->{val};
@@ -15651,14 +15604,14 @@ sub checkPlantConfig {
   my $resh;
 
   for my $step (1..$weatherDevMax) {
-      my ($valid, $fcname, $apiu) = isWeatherDevValid ($hash, 'ctrlWeatherDev'.$step);
+      my ($valid, $fcname, $apiu) = isWeatherDevValid ($hash, 'setupWeatherDev'.$step);
       next if(!$fcname && $step ne 1);
 
       if (!$valid) {
           $result->{'DWD Weather Properties'}{state} = $nok;
 
           if (!$fcname) {
-              $result->{'DWD Weather Properties'}{result} .= qq{No DWD device is defined in attribute "ctrlWeatherDev$step". <br>};
+              $result->{'DWD Weather Properties'}{result} .= qq{No DWD device is defined in attribute "setupWeatherDev$step". <br>};
           }
           else {
               $result->{'DWD Weather Properties'}{result} .= qq{The DWD device "$fcname" doesn't exist. <br>};
@@ -15684,7 +15637,7 @@ sub checkPlantConfig {
                       $result->{'DWD Weather Properties'}{info}    = 1;
                   }
 
-                  $result->{'DWD Weather Properties'}{result} .= $hqtxt{fulfd}{$lang}." ($hqtxt{attrib}{$lang}: ctrlWeatherDev$step)<br>";
+                  $result->{'DWD Weather Properties'}{result} .= $hqtxt{fulfd}{$lang}." ($hqtxt{attrib}{$lang}: setupWeatherDev$step)<br>";
               }
 
               $result->{'DWD Weather Properties'}{note} .= qq{checked parameters and attributes of device "$fcname": <br>};
@@ -15692,7 +15645,7 @@ sub checkPlantConfig {
               $result->{'DWD Weather Properties'}{note} .= 'forecastRefresh '.($mosm eq 'MOSMIX_L' ? '-> set attribute to below "6" if possible' : '').'<br>';
           }
           else {
-              $result->{'DWD Weather Properties'}{result} .= $hqtxt{fulfd}{$lang}." ($hqtxt{attrib}{$lang}: ctrlWeatherDev$step)<br>";
+              $result->{'DWD Weather Properties'}{result} .= $hqtxt{fulfd}{$lang}." ($hqtxt{attrib}{$lang}: setupWeatherDev$step)<br>";
           }
       }
   }
@@ -16399,15 +16352,15 @@ sub createAssociatedWith {
       my (@cd, @nd);
       my ($afc, $ara, $ain, $ame, $aba, $h);
 
-      my $fcdev1 = AttrVal ($name, 'ctrlWeatherDev1', '');                   # Weather forecast Device 1
+      my $fcdev1 = AttrVal ($name, 'setupWeatherDev1', '');                  # Weather forecast Device 1
       ($afc,$h)  = parseParams ($fcdev1);
       $fcdev1    = $afc->[0] // "";
 
-      my $fcdev2 = AttrVal ($name, 'ctrlWeatherDev2', '');                   # Weather forecast Device 2
+      my $fcdev2 = AttrVal ($name, 'setupWeatherDev2', '');                  # Weather forecast Device 2
       ($afc,$h)  = parseParams ($fcdev2);
       $fcdev2    = $afc->[0] // "";
 
-      my $fcdev3 = AttrVal ($name, 'ctrlWeatherDev3', '');                   # Weather forecast Device 3
+      my $fcdev3 = AttrVal ($name, 'setupWeatherDev3', '');                  # Weather forecast Device 3
       ($afc,$h)  = parseParams ($fcdev3);
       $fcdev3    = $afc->[0] // "";
 
@@ -17178,7 +17131,7 @@ return ($err, $a->[0], $h);
 }
 
 #####################################################################
-#    Prüft ob das in ctrlWeatherDevX
+#    Prüft ob das in setupWeatherDevX
 #    übergebene Weather Device valide ist
 #    return - $valid -> ist die Angabe valide (1)
 #             $apiu  -> wird ein Device oder API verwendet
@@ -17226,13 +17179,13 @@ sub isWeatherAgeExceeded {
   my ($newts, $th);
 
   for my $step (1..$weatherDevMax) {
-      my ($valid, $fcname, $apiu) = isWeatherDevValid ($hash, 'ctrlWeatherDev'.$step);
+      my ($valid, $fcname, $apiu) = isWeatherDevValid ($hash, 'setupWeatherDev'.$step);
       next if(!$fcname && $step ne 1);
 
       if (!$apiu) {
           if (!$fcname || !$valid) {
               if (!$fcname) {
-                  return (qq{No DWD device is defined in attribute "ctrlWeatherDev$step"}, $resh);
+                  return (qq{No DWD device is defined in attribute "setupWeatherDev$step"}, $resh);
               }
               else {
                   return (qq{The DWD device "$fcname" doesn't exist}, $resh);
@@ -18397,7 +18350,7 @@ to ensure that the system configuration is correct.
       <ul>
          <table>
          <colgroup> <col width="25%"> <col width="75%"> </colgroup>
-            <tr><td> <b>ctrlWeatherDevX</b>        </td><td>DWD_OpenData Device which provides meteorological data (e.g. cloud cover)     </td></tr>
+            <tr><td> <b>setupWeatherDevX</b>       </td><td>DWD_OpenData Device which provides meteorological data (e.g. cloud cover)     </td></tr>
             <tr><td> <b>setupRadiationAPI </b>     </td><td>DWD_OpenData Device or API for the delivery of radiation data.                </td></tr>
             <tr><td> <b>setupInverterDev</b>       </td><td>Device which provides PV performance data                                     </td></tr>
             <tr><td> <b>setupMeterDev</b>          </td><td>Device which supplies network I/O data                                        </td></tr>
@@ -19791,12 +19744,12 @@ to ensure that the system configuration is correct.
        </li>
        <br>
 
-       <a id="SolarForecast-attr-ctrlWeatherDev" data-pattern="ctrlWeatherDev.*"></a>
-       <li><b>ctrlWeatherDevX </b> <br><br>
+       <a id="SolarForecast-attr-setupWeatherDev" data-pattern="setupWeatherDev.*"></a>
+       <li><b>setupWeatherDevX </b> <br><br>
 
        Specifies the device or API for providing the required weather data (cloud cover, precipitation, etc.).<br>
-       The attribute 'ctrlWeatherDev1' specifies the leading weather service and is mandatory.<br>
-       If an Open-Meteo API is selected in the 'ctrlWeatherDev1' attribute, this Open-Meteo service is automatically set as the
+       The attribute 'setupWeatherDev1' specifies the leading weather service and is mandatory.<br>
+       If an Open-Meteo API is selected in the 'setupWeatherDev1' attribute, this Open-Meteo service is automatically set as the
        source of the radiation data (Attribute setupRadiationAPI). <br><br>
 
        <b>OpenMeteoDWD-API</b> <br>
@@ -19842,9 +19795,9 @@ to ensure that the system configuration is correct.
        As an alternative to Open-Meteo, an FHEM 'DWD_OpenData' device can be used to supply the weather data.<br>
        If no device of this type exists, at least one DWD_OpenData device must first be defined.
        (see <a href="http://fhem.de/commandref.html#DWD_OpenData">DWD_OpenData Commandref</a>). <br>
-       If more than one ctrlWeatherDevX is specified, the average of all weather stations is determined
+       If more than one setupWeatherDevX is specified, the average of all weather stations is determined
        if the respective value was supplied and is numerical. <br>
-       Otherwise, the data from 'ctrlWeatherDev1' is always used as the leading weather device.<br>
+       Otherwise, the data from 'setupWeatherDev1' is always used as the leading weather device.<br>
        At least these attributes must be set in the selected DWD_OpenData Device: <br><br>
 
        <ul>
@@ -19909,6 +19862,13 @@ to ensure that the system configuration is correct.
        <li><b>flowGraphicShowConsumer </b><br>
          Suppresses the display of loads in the energy flow graph when set to "0". <br>
          (default: 1)
+       </li>
+       <br>
+       
+       <a id="SolarForecast-attr-flowGraphicShift"></a>
+       <li><b>flowGraphicShift &lt;Pixel/10&gt; </b><br>
+         Horizontal shift of the energy flow graph. <br>
+         (default: 0)
        </li>
        <br>
 
@@ -20475,7 +20435,7 @@ to ensure that the system configuration is correct.
 
        Defines the source for the delivery of the solar radiation data. You can select a device of the type DWD_OpenData or
        an implemented API can be selected. <br>
-       <b>Note:</b> If OpenMeteoDWD-API is set in the 'ctrlWeatherDev1' attribute, no radiation data service other than
+       <b>Note:</b> If OpenMeteoDWD-API is set in the 'setupWeatherDev1' attribute, no radiation data service other than
        OpenMeteoDWD-API can be selected. <br><br>
 
        <b>OpenMeteoDWD-API</b> <br>
@@ -20673,7 +20633,7 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
       <ul>
          <table>
          <colgroup> <col width="25%"> <col width="75%"> </colgroup>
-            <tr><td> <b>ctrlWeatherDevX</b>        </td><td>DWD_OpenData Device welches meteorologische Daten (z.B. Bewölkung) liefert     </td></tr>
+            <tr><td> <b>setupWeatherDevX</b>       </td><td>DWD_OpenData Device welches meteorologische Daten (z.B. Bewölkung) liefert     </td></tr>
             <tr><td> <b>setupRadiationAPI </b>     </td><td>DWD_OpenData Device bzw. API zur Lieferung von Strahlungsdaten                 </td></tr>
             <tr><td> <b>setupInverterDev</b>       </td><td>Device welches PV Leistungsdaten liefert                                       </td></tr>
             <tr><td> <b>setupMeterDev</b>          </td><td>Device welches Netz I/O-Daten liefert                                          </td></tr>
@@ -22077,12 +22037,12 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
        </li>
        <br>
 
-       <a id="SolarForecast-attr-ctrlWeatherDev" data-pattern="ctrlWeatherDev.*"></a>
-       <li><b>ctrlWeatherDevX </b> <br><br>
+       <a id="SolarForecast-attr-setupWeatherDev" data-pattern="setupWeatherDev.*"></a>
+       <li><b>setupWeatherDevX </b> <br><br>
 
        Gibt das Gerät oder die API zur Lieferung der erforderlichen Wetterdaten (Wolkendecke, Niederschlag usw.) an.<br>
-       Das Attribut 'ctrlWeatherDev1' definiert den führenden Wetterdienst und ist zwingend erforderlich.<br>
-       Ist eine Open-Meteo API im Attribut 'ctrlWeatherDev1' ausgewählt, wird dieser Open-Meteo Dienst automatisch auch als Quelle
+       Das Attribut 'setupWeatherDev1' definiert den führenden Wetterdienst und ist zwingend erforderlich.<br>
+       Ist eine Open-Meteo API im Attribut 'setupWeatherDev1' ausgewählt, wird dieser Open-Meteo Dienst automatisch auch als Quelle
        der Strahlungsdaten (Attribut setupRadiationAPI) eingestellt. <br><br>
 
        <b>OpenMeteoDWD-API</b> <br>
@@ -22128,9 +22088,9 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
        Alternativ zu Open-Meteo kann ein FHEM 'DWD_OpenData'-Gerät zur Lieferung der Wetterdaten dienen.<br>
        Ist noch kein Gerät dieses Typs vorhanden, muß zunächst mindestens ein DWD_OpenData Gerät
        definiert werden (siehe <a href="http://fhem.de/commandref.html#DWD_OpenData">DWD_OpenData Commandref</a>). <br>
-       Sind mehr als ein ctrlWeatherDevX angegeben, wird der Durchschnitt aller Wetterstationen ermittelt
+       Sind mehr als ein setupWeatherDevX angegeben, wird der Durchschnitt aller Wetterstationen ermittelt
        sofern der jeweilige Wert geliefert wurde und numerisch ist. <br>
-       Anderenfalls werden immer die Daten von 'ctrlWeatherDev1' als führendes Wetterdevice genutzt. <br>
+       Anderenfalls werden immer die Daten von 'setupWeatherDev1' als führendes Wetterdevice genutzt. <br>
        Im ausgewählten DWD_OpenData Gerät müssen mindestens diese Attribute gesetzt sein: <br><br>
 
        <ul>
@@ -22195,6 +22155,13 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
        <li><b>flowGraphicShowConsumer </b><br>
          Unterdrückt die Anzeige der Verbraucher in der Energieflußgrafik wenn auf "0" gesetzt. <br>
          (default: 1)
+       </li>
+       <br>
+       
+       <a id="SolarForecast-attr-flowGraphicShift"></a>
+       <li><b>flowGraphicShift &lt;Pixel/10&gt; </b><br>
+         Horizontale Verschiebung der Energieflußgrafik. <br>
+         (default: 0)
        </li>
        <br>
 
@@ -22759,7 +22726,7 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
 
       Legt die Quelle zur Lieferung der solaren Strahlungsdaten fest. Es kann ein Device vom Typ DWD_OpenData oder
       eine implementierte API eines Dienstes ausgewählt werden. <br>
-      <b>Hinweis:</b> Ist eine OpenMeteo API im Attribut 'ctrlWeatherDev1' gesetzt, kann kein anderer Strahlungsdatendienst als
+      <b>Hinweis:</b> Ist eine OpenMeteo API im Attribut 'setupWeatherDev1' gesetzt, kann kein anderer Strahlungsdatendienst als
       diese OpenMeteo API ausgewählt werden. <br><br>
 
       <b>OpenMeteoDWD-API</b> <br>

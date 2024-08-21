@@ -1,5 +1,18 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it
+ - change:  76_SolarForecast: attr ctrlWeatherDevX to setupWeatherDevX, 
+ - bufgix:  76_SMAInverter: fix PW Lengs Bug
+ - bugfix:  10_KNX: prevent set/get-cmd during fhem start
+                    add sub dpts for dpt14, enfoce gadname rules 
+ - bugfix:  00_KNXIO: fix error msg when mode S fails to open
+ - feature: 76_SolarForecast: new attribute flowGraphicShift, 
+                              Forum:https://forum.fhem.de/index.php?msg=1318597
+ - change:  93_DbRep: message data ignored change loglevel to 2, Forum:#138986
+ - bufgix:  76_SMAInverter: fix IDC2 bug 3MPP
+ - bufgix:  76_SMAInverter: fix IDC3 bug
+ - redesign:36_Shelly.pm: Überarbeitung der HTTP-Kommunikation
+             zahlreiche Änderungen und Ergänzungen
+             siehe Forum ../Sonstige Systeme/Support-Thread Modul 36_Shelly.pm
  - feature: 31_HUEDevice.pm: added addlight and removelight command for groups
  - bufgix:  72_FRITZBOX: Fehler behoben bei FritzOS >= 6.69 und < 7.00
  - feature: 76_SolarForecast: improve manual setting of pvCorrectionFactor_XX
