@@ -1,4 +1,4 @@
-# $Id: 98_GoogleAuth.pm 23628 2021-01-27 17:59:58Z betateilchen $
+# $Id: 98_GoogleAuth.pm 29115 2024-08-28 07:12:05Z betateilchen $
 
 # License & technical informations
 =for comment
@@ -73,6 +73,8 @@
 # 2020-03-31 - changed: remove prototyping and undef results
 #
 # 2021-01-26 - changed: rework code to use own package
+#
+# 2024-08-28 - changed: use new api url
 #
 =cut
 
@@ -222,7 +224,8 @@ sub _ga_make_url {
   my $secret_base32 = getKeyValue("googleAuth$name");
   return unless defined($secret_base32);
   my $url           = "otpauth://totp/$label?secret=$secret_base32&issuer=FHEM";
-  my $qr_url        = "https://chart.googleapis.com/chart?cht=qr&chs=$qrsize"."&chl=";
+  #my $qr_url        = "https://chart.googleapis.com/chart?cht=qr&chs=$qrsize"."&chl=";
+  my $qr_url        = "https://quickchart.io/chart?cht=qr&chs=$qrsize"."&chl="; #msg=1319182
      $qr_url       .= uri_escape($url);
   return $qr_url;
 }

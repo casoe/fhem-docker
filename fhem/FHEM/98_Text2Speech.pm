@@ -1,6 +1,6 @@
 
 ##############################################
-# $Id: 98_Text2Speech.pm 29035 2024-07-21 14:17:28Z Tobias.Faust $
+# $Id: 98_Text2Speech.pm 29135 2024-09-08 10:11:10Z Tobias.Faust $
 #
 # 98_Text2Speech.pm
 #
@@ -1369,7 +1369,7 @@ sub Text2Speech_AddExtension(@) {
 }
 
 #########################
-sub Text2SpeechRemoveExtension(@) {
+sub Text2Speech_RemoveExtension(@) {
     my ($link) = @_;
     my $url  = "/$link";
     my $name = $::data{FWEXT}{$url}{deviceName};

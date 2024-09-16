@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_FS20.pm 14888 2017-08-13 12:07:12Z rudolfkoenig $
+# $Id: 10_FS20.pm 29139 2024-09-10 18:32:52Z rudolfkoenig $
 package main;
 
 use strict;
@@ -161,12 +161,20 @@ FS20_Follow($$$$)
   }
 
   if($newState) {
-    my $to = sprintf("%02d:%02d:%02d", $val/3600, ($val%3600)/60, $val%60);
-    $modules{FS20}{ldata}{$name} = $to;
-    Log3 $name, 4, "Follow: +$to setstate $name $newState";
-    CommandDefine(undef, $name."_timer at +$to ".
-      "{readingsSingleUpdate(\$defs{'$name'},'state','$newState', 1);".
-      "delete \$defs{'$name'}->{TIMED_OnOff}; undef}");
+    if(int($val) == $val) {
+      my $to = sprintf("%02d:%02d:%02d", $val/3600, ($val%3600)/60, $val%60);
+      $modules{FS20}{ldata}{$name} = $to;
+      Log3 $name, 4, "Follow: +$to setstate $name $newState";
+      CommandDefine(undef, $name."_timer at +$to ".
+        "{readingsSingleUpdate(\$defs{'$name'},'state','$newState', 1);".
+        "delete \$defs{'$name'}->{TIMED_OnOff}; undef}");
+
+    } else {
+      Log3 $name, 4, "Follow: sleep $val; setstate $name $newState";
+      AnalyzeCommandChain(undef,
+        "sleep $val; setreading $name state $newState; ".
+        "{delete \$defs{'$name'}->{TIMED_OnOff};;undef}");
+    }
 
     if($defs{$name}) {
       $defs{$name}->{TIMED_OnOff} = {
