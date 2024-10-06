@@ -1,5 +1,18 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it
+ - feature: 76_SolarForecast: features and changes, see 
+                              https://forum.fhem.de/index.php?msg=1321556
+ - change:  74_AutomowerConnect: convert model to upper case due to changed
+            spelling
+ - bugfix:  76_SolarForecast: internal code change
+ - change:  76_SolarForecast: internal code change
+ - bufgix:  72_FRITZBOX: Blockade des Intervall-Timers durch 
+                         nonBlocking set/get Befehle
+ - feature: 72_FRITZBOX:
+            attr <device> enableLogReadings <liste>, Achtung das
+                 standardmäßige Abholen wurde deaktiviert
+            set <device> wlanGuestParams <param:value> [<param:value> ...]
+ - bugfix:  76_SolarForecast: calculation of consumption forecast
  - bugfix:  36_Shelly: removed irrelevant log-entries for dimmer
  - bugfix:  36_Shelly: removed package command: use Sub::Util
  - bugfix:  36_Shelly: added package command: use Sub::Util
@@ -51,7 +64,7 @@
  - bugfix:  98_CDCOpenData:  entfernt BlockingCall loglevel = GetVerbose($name)
  - bufgix:  72_FRITZBOX:   entfernt BlockingCall loglevel = GetVerbose($name)
  - change:  76_SolarForecast: set currentBatteryDev to attr setupBatteryDev
-                              !NOTE! save FHEM config after restart,
+                              !NOTE! save FHEM configs after restart,
                               minor other changes
  - change:  76_SolarForecast: change set currentMeterDev to attr setupMeterDev
  - feature: 76_SolarForecast: ctrlStatisticReadings: new runTimeAvgDayConsumer

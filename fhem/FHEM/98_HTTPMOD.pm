@@ -1,5 +1,5 @@
 #########################################################################
-# $Id: 98_HTTPMOD.pm 29046 2024-07-28 12:46:06Z StefanStrobel $
+# $Id: 98_HTTPMOD.pm 29159 2024-09-23 15:27:13Z StefanStrobel $
 # fhem Modul für Geräte mit Web-Oberfläche / Webservices
 #   
 #     This file is part of fhem.
@@ -61,7 +61,7 @@ use warnings;
 use GPUtils         qw(:all);
 use Time::HiRes     qw(gettimeofday);    
 use Encode          qw(decode encode);
-use SetExtensions   qw(:all);
+use SetExtensions;
 use HttpUtils;
 use FHEM::HTTPMOD::Utils  qw(:all);
 use POSIX;

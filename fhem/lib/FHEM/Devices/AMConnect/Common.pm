@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: Common.pm 28960 2024-06-10 18:00:02Z Ellert $
+# $Id: Common.pm 29189 2024-10-03 16:53:15Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::Devices::AMConnect::Common;
-my $cvsid = '$Id: Common.pm 28960 2024-06-10 18:00:02Z Ellert $';
+my $cvsid = '$Id: Common.pm 29189 2024-10-03 16:53:15Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -2415,7 +2415,7 @@ sub fillReadings {
 
   $pref = 'system';
   readingsBulkUpdateIfChanged( $hash, $pref."_name", $hash->{helper}{mower}{attributes}{$pref}{name} );
-  my $model = $hash->{helper}{mower}{attributes}{$pref}{model};
+  my $model = uc $hash->{helper}{mower}{attributes}{$pref}{model};
   $model =~ s/AUTOMOWER./AM/;
   readingsBulkUpdateIfChanged( $hash, "model", $model );
   $pref = 'planner';
