@@ -3,6 +3,7 @@
 !.gitkeep
 /fhem/FHEM/FhemUtils/uniqueID
 /fhem/FHEM/FhemUtils/cacheDbRep
+/fhem/FHEM/FhemUtils/*_solarforecast
 /fhem/fhem.cfg.bak
 /fhem/log/*
 /fhem/restoreDir/*
