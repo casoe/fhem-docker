@@ -1,5 +1,5 @@
 ##############################################
-# $Id: HttpUtils.pm 27406 2023-04-07 16:52:19Z rudolfkoenig $
+# $Id: HttpUtils.pm 28894 2024-05-21 09:00:43Z rudolfkoenig $
 package main;
 
 use strict;
@@ -1058,7 +1058,11 @@ HttpUtils_ParseAnswer($)
   my $encoding = defined($hash->{forceEncoding}) ? $hash->{forceEncoding} :
                  $hash->{httpheader} =~ m/^Content-Type.*charset=(\S*)/im ? $1 :
                 'UTF-8';
-  $ret = Encode::decode($encoding, $ret) if($unicodeEncoding && $encoding);
+  if($unicodeEncoding && $encoding) {
+    $encoding =~ s/"//g; #138273
+    eval { $ret = Encode::decode($encoding, $ret) };
+    return $@ if($@);
+  }
 
   # Debug
   Log3 $hash, $hash->{loglevel}+1,

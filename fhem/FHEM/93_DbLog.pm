@@ -1,5 +1,5 @@
 ##############################################################################################################################
-# $Id: 93_DbLog.pm 28675 2024-03-17 19:05:45Z DS_Starter $
+# $Id: 93_DbLog.pm 29036 2024-07-21 20:47:25Z DS_Starter $
 ##############################################################################################################################
 # 93_DbLog.pm
 # written by Dr. Boris Neubert 2007-12-30
@@ -54,12 +54,13 @@ use Encode qw(encode_utf8);
 use HttpUtils;
 use SubProcess;
 
-no if $] >= 5.017011, warnings => 'experimental::smartmatch';
-
 use vars qw($FW_ME $FW_subdir);                                      # predeclare global variable names
 
 # Version History intern by DS_Starter:
 my %DbLog_vNotesIntern = (
+  "5.10.2"  => "21.07.2024 _DbLog_copyCache: Copy process changed to minimize memory usage after reopen ", 
+  "5.10.1"  => "01.04.2024 _DbLog_plotData: avoid possible uninitialized value \$out_value (SVG: Argument '' isn't numeric) ".
+                           "replace Smartmatch Forum:#137776 ",
   "5.10.0"  => "17.03.2024 support of MariaDB driver, optimize Timer execMemCacheAsync, optimize DbLog_configcheck,_DbLog_SBP_connectDB ".
                            "remove countNbl, support compression between client and server, improved performance if attr excludeDevs is set ".
                            "Fix _DbLog_plotData Forum: https://forum.fhem.de/index.php?topic=136930.0 ",
@@ -821,14 +822,13 @@ sub _DbLog_setaddLog {                   ## no critic "not used"
   }
 
   my @args = @{$argsref};
-
-  my $nce = ("\!useExcludes" ~~ @args) ? 1 : 0;
+  my $nce  = grep (/\!useExcludes/, @args) ? 1 : 0;    
 
   map (s/\!useExcludes//g, @args);
 
   my $cn;
 
-  if(/CN=/ ~~ @args) {
+  if (grep (/CN=/, @args)) {                        
       my $t = join " ", @args;
       ($cn) = ($t =~ /^.*CN=(\w+).*$/);
       map(s/CN=$cn//g, @args);
@@ -2048,11 +2048,10 @@ sub _DbLog_copyCache {
 
   while (my ($key, $val) = each %{$data{DbLog}{$name}{cache}{memcache}} ) {
       $memc->{cdata}{$key} = $val;                                              # Subprocess Daten, z.B.:  2022-11-29 09:33:32|SolCast|SOLARFORECAST||nextCycletime|09:33:47|
+      delete $data{DbLog}{$name}{cache}{memcache}{$key};
   }
 
   $memc->{cdataindex} = $data{DbLog}{$name}{cache}{index};                      # aktuellen Index an Subprozess übergeben
-
-  undef %{$data{DbLog}{$name}{cache}{memcache}};                                # Löschen mit Memory freigeben: https://perlmaven.com/undef-on-perl-arrays-and-hashes , bzw. https://www.effectiveperlprogramming.com/2018/09/undef-a-scalar-to-release-its-memory/
 
 return $memc;
 }
@@ -6876,23 +6875,23 @@ sub _DbLog_plotData {
               $writeout = 0 if (!defined($sql_value) && AttrVal($name, 'suppressUndef', 0));
 
               ###################### Ausgabe ###########################
-              if($writeout) {
+              if ($writeout) {
                   if ($outf =~ m/(all)/) {
                       # Timestamp: Device, Type, Event, Reading, Value, Unit
                       $retval .= sprintf("%s: %s, %s, %s, %s, %s, %s\n", $out_tstamp, $sql_device, $type, $event, $sql_reading, $out_value, $unit);
                       $retval .= $retvaldummy;
                   }
                   elsif ($outf =~ m/(array)/) {
-                      push(@ReturnArray, {"tstamp" => $out_tstamp, "device" => $sql_device, "type" => $type, "event" => $event, "reading" => $sql_reading, "value" => $out_value, "unit" => $unit});
+                      push (@ReturnArray, {"tstamp" => $out_tstamp, "device" => $sql_device, "type" => $type, "event" => $event, "reading" => $sql_reading, "value" => $out_value, "unit" => $unit});
                   }
-                  else {                                                         # generating plots
-                      $out_tstamp =~ s/\ /_/g;                                   # needed by generating plots
-                      $retval    .= "$out_tstamp $out_value\n";
+                  else {                                                                  # generating plots
+                      $out_tstamp =~ s/\ /_/g;                                            # needed by generating plots
+                      $retval    .= "$out_tstamp $out_value\n" if(defined  $out_value);   # V 5.10.1
                       $retval    .= $retvaldummy;
                   }
               }
 
-              if (Scalar::Util::looks_like_number($sql_value)) {                  # nur setzen wenn numerisch
+              if (Scalar::Util::looks_like_number($sql_value)) {                          # nur setzen wenn numerisch
                   if ($deltacalc) {
                       if (Scalar::Util::looks_like_number($out_value)) {
                           if ($out_value < $min[$i]) {
@@ -8812,13 +8811,13 @@ sub DbLog_setVersionInfo {
 
   if($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {       # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;                                        # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{DbLog}{META}}
-      if($modules{$type}{META}{x_version}) {                                          # {x_version} ( nur gesetzt wenn $Id: 93_DbLog.pm 28675 2024-03-17 19:05:45Z DS_Starter $ im Kopf komplett! vorhanden )
+      if($modules{$type}{META}{x_version}) {                                          # {x_version} ( nur gesetzt wenn $Id: 93_DbLog.pm 29036 2024-07-21 20:47:25Z DS_Starter $ im Kopf komplett! vorhanden )
           $modules{$type}{META}{x_version} =~ s/1\.1\.1/$v/xsg;
       }
       else {
           $modules{$type}{META}{x_version} = $v;
       }
-      return $@ unless (FHEM::Meta::SetInternals($hash));                             # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbLog.pm 28675 2024-03-17 19:05:45Z DS_Starter $ im Kopf komplett! vorhanden )
+      return $@ unless (FHEM::Meta::SetInternals($hash));                             # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbLog.pm 29036 2024-07-21 20:47:25Z DS_Starter $ im Kopf komplett! vorhanden )
       if(__PACKAGE__ eq "FHEM::$type" || __PACKAGE__ eq $type) {
           # es wird mit Packages gearbeitet -> Perl übliche Modulversion setzen
           # mit {<Modul>->VERSION()} im FHEMWEB kann Modulversion abgefragt werden

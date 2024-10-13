@@ -1,6 +1,6 @@
 ################################################################
 #
-#  $Id: 73_MPD.pm 27027 2023-01-11 19:11:55Z Beta-User $
+#  $Id: 73_MPD.pm 28820 2024-04-24 09:31:59Z Beta-User $
 #
 #  (c) 2014 Copyright: Wzut
 #  All rights reserved
@@ -1282,7 +1282,7 @@ sub MPD_IdleStart($)
        $output .= "|".$_; 
        $step=1;
      }
-     elsif ($_ !~ m{\Aplayer|playlist|mixer|options|update\z}x){
+     elsif ($_ !~ m{\Aplayer|playlist|mixer|options|update|OK\z}x){
        print $sock "idle\n";
        $step=1;
        readingsSingleUpdate($hash,'last_error',$_,1);

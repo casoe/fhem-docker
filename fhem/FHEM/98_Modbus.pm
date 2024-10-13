@@ -1,5 +1,5 @@
 ##############################################################################
-# $Id: 98_Modbus.pm 28647 2024-03-12 18:39:15Z StefanStrobel $
+# $Id: 98_Modbus.pm 28814 2024-04-21 14:12:59Z StefanStrobel $
 # fhem Modul für Geräte mit Modbus-Interface - 
 # Basis für logische Geräte-Module wie zum Beispiel 
 # ModbusAttr.pm or ModbusSET.pm
@@ -3474,7 +3474,7 @@ sub GetFC {
 
     SEARCH:                                             # find default function code first
     foreach my $fc (keys %fcMap) {
-        if ($fcMap{$fc}{type} && $fcMap{$fc}{type} eq $type && exists $fcMap{$fc}{$op} && exists $fcMap{$fc}{default}) {
+        if ($fcMap{$fc}{type} && $fcMap{$fc}{type} eq $type && exists $fcMap{$fc}{$fcKey} && exists $fcMap{$fc}{default}) {
             $defFC = $fc;
             last SEARCH;
         }

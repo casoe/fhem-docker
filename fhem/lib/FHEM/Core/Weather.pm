@@ -1,13 +1,14 @@
-# $Id: Weather.pm 27178 2023-02-05 08:51:35Z CoolTux $
+# $Id: Weather.pm 29223 2024-10-11 17:51:30Z CoolTux $
 ##############################################################################
 #
 #     59_Weather.pm
-#     (c) 2009-2023 Copyright by Dr. Boris Neubert
+#     (c) 2009-2024 Copyright by Dr. Boris Neubert
 #     e-mail: omega at online dot de
 #
 #       Contributors:
 #         - Marko Oldenburg (CoolTux)
 #         - Lippie
+#         - stefanru (wundergroundAPI)
 #
 #
 #     This file is part of fhem.

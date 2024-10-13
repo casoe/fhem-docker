@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_ZWave.pm 28490 2024-02-08 11:22:13Z rudolfkoenig $
+# $Id: 10_ZWave.pm 28978 2024-06-16 18:22:09Z rudolfkoenig $
 # See ZWDongle.pm for inspiration
 package main;
 
@@ -22,6 +22,7 @@ sub ZWave_secEnd($);
 sub ZWave_configParseModel($;$);
 sub ZWave_callbackId($;$);
 sub ZWave_setEndpoints($);
+sub ZWave_mfsParse($$$$$;$);
 
 our ($FW_ME,$FW_tp,$FW_ss);
 our %zwave_id2class;
@@ -415,7 +416,7 @@ my %zwave_class = (
                 'sprintf("userCode:id %d status %d code %s", $1, $2, $3)' ,
               "..6305(..)" => '"userCodeUsersNumber:".hex($1)'}
     },
-  APPLIANCE                => { id => '64' },
+  APPLIANCE                => { id => '64' }, # or HUMIDITY_CONTROL_SETPOINT (?)
   DMX                      => { id => '65' },
   BARRIER_OPERATOR         => { id => '66',
     set   => { barrierClose=> "0100",
@@ -433,6 +434,8 @@ my %zwave_class = (
   WINDOW_COVERING          => { id => '6a' },
   IRRIGATION               => { id => '6b' },
   SUPERVISION              => { id => '6c' },
+  HUMIDITY_CONTROL_MODE    => { id => '6d' },
+  HUMIDITY_CONTROL_OPSTATE => { id => '6e' },
   ENTRY_CONTROL            => { id => '6f',
     parse => { "^..6f01(.*)" => 'ZWave_entryControlParse($hash,$1)'} },
   CONFIGURATION            => { id => '70',
@@ -443,7 +446,7 @@ my %zwave_class = (
     get   => { config      => "05%02x",
                configAll   => 'ZWave_configAllGet($hash)' },
     parse => { "^..70..(..)(..)(.*)" => 'ZWave_configParse($hash,$1,$2,$3)'} },
-  ALARM                    => { id => '71', deprecated=>1,
+  ALARM                    => { id => '71', deprecated=>1,  # or  NOTIFICATION
     set   => {
       alarmnotification   => 'ZWave_ALARM_06_Set("%s")',    # >=V2
       },
@@ -480,6 +483,7 @@ my %zwave_class = (
                "067306(..)(..)(....)" =>
                    '"powerlvlTest:node ".hex($1)." status ".hex($2).
                     " frameAck ".hex($3)',} },
+  INCLUSION_CONTROLLER     => { id => '74' },
   PROTECTION               => { id => '75',
     set   => { protectionOff => "0100",
                protectionSeq => "0101",
@@ -498,6 +502,7 @@ my %zwave_class = (
                location => '05' },
     parse => { '..770300(.*)' => '"name:".pack("H*", $1)',
                '..770600(.*)' => '"location:".pack("H*", $1)' } },
+  NODE_PROVISIONING        => { id => '78' },
   SOUND_SWITCH             => { id => '79',
     set   => { toneConfiguration  => "05%02x%02x",
                tonePlay           => "08%02x",
@@ -517,6 +522,7 @@ my %zwave_class = (
   GROUPING_NAME            => { id => '7b', deprecated=>1 },
   REMOTE_ASSOCIATION_ACTIVATE=>{id => '7c', obsoleted=>1 },
   REMOTE_ASSOCIATION       => { id => '7d', obsoleted=>1 },
+  ANTITEFT_UNLOCK          => { id => '7e' },
   BATTERY                  => { id => '80',
     get   => { battery     => "02" },
     parse => { "0.8003(..)"=> 'ZWave_battery($1)'} } ,
@@ -2571,9 +2577,9 @@ ZWave_mfsAddClasses($$)
 }
 
 sub
-ZWave_mfsParse($$$$$)
+ZWave_mfsParse($$$$$;$)
 {
-  my ($hash, $mf, $prod, $id, $config) = @_;
+  my ($hash, $mf, $prod, $id, $config, $ozw) = @_;
   my $getVal = sub { return $_[0] =~ m/$_[1]\s*=\s*"([^"]*)"/ ? $1 : "unknown"};
 
   if($config == 2) {
@@ -2581,8 +2587,8 @@ ZWave_mfsParse($$$$$)
     return "modelId:$mf-$prod-$id";
   }
 
-  my $xml = $attr{global}{modpath}.
-            "/FHEM/lib/openzwave_manufacturer_specific.xml";
+  my $xml = $attr{global}{modpath}."/FHEM/lib/".
+              ($ozw ? "openzwave" : "user_zwave"). "_manufacturer_specific.xml";
   ($mf, $prod, $id) = (lc($mf), lc($prod), lc($id)); # Just to make it sure
   if(open(FH, $xml)) {
     my ($lastMf, $mName, $ret) = ("","");
@@ -2616,9 +2622,10 @@ ZWave_mfsParse($$$$$)
     return $ret if($ret);
 
   } else {
-    Log 1, "can't open $xml: $!";
+    Log 1, "can't open $xml: $!" if($ozw);
 
   }
+  return ZWave_mfsParse($hash, $mf, $prod, $id, $config, 1) if(!$ozw);
   return sprintf("model:0x%s 0x%s 0x%s", $mf, $prod, $id);
 }
 
@@ -2915,15 +2922,16 @@ ZWave_cleanString($$$)
 sub
 ZWave_configParseModel($;$)
 {
-  my ($cfg, $my) = @_;
-  return if(!$my && ZWave_configParseModel($cfg, 1));
+  my ($cfg, $run) = @_;
+  $run = 0 if(!$run);
 
-  my $fn = $attr{global}{modpath}."/FHEM/lib/".($my ? "fhem_":"open").
+  my @fList = ("user_", "fhem_", "open");
+  my $fn = $attr{global}{modpath}."/FHEM/lib/".$fList[$run].
                                 "zwave_deviceconfig.xml.gz";
   my $gz = gzopen($fn, "rb");
   if(!$gz) {
-    Log 3, "Can't open $fn: $!" if(!$my);
-    return 0;
+    Log 3, "Can't open $fn: $!" if($run == 2); # user_
+    return $run < 2 ? ZWave_configParseModel($cfg, $run+1) : 0;
   }
 
   my ($ret, $line, $class, %hash, $cmdName, %classInfo, %group, $origName);
@@ -3000,7 +3008,9 @@ ZWave_configParseModel($;$)
     }
 
     if($line =~ m+<Help>(.*)</Help>+s) {
-      $hash{$cmdName}{Help} .= "$bsHelp$1<br>";
+      my $h = $1;
+      $h =~ s/ {9}/<br>/g; #138451
+      $hash{$cmdName}{Help} .= "$bsHelp$h<br>";
       $bsHelp="";
     }
 
@@ -3045,9 +3055,11 @@ ZWave_configParseModel($;$)
   }
 
   $zwave_modelConfig{$cfg} = \%mc;
-  Log 3, "ZWave got config for $cfg from $fn, found ".keys(%hash)." commands"
-    if($ret);
-  return $ret;
+  if($ret) {
+    Log 3, "ZWave got config for $cfg from $fn, found ".keys(%hash)." commands";
+  } elsif($run < 2) {
+    return ZWave_configParseModel($cfg, $run+1);
+  }
 }
 
 ###################################
@@ -4214,7 +4226,7 @@ ZWave_secNonceReceived($$)
   my $cmd    = $secArr[3];
 
   if (!$secMsg) {
-    Log3 $name, 1, "$name: Error, nonce reveived but no stored command for ".
+    Log3 $name, 1, "$name: Error, nonce received but no stored command for ".
       "encryption found";
     return undef;
   }
@@ -7134,9 +7146,8 @@ ZWave_tmSet($)
     return the manufacturer specific id (16bit),
     the product type (16bit)
     and the product specific id (16bit).<br>
-    Note: if the openzwave xml files are installed, then return the name of the
-    manufacturer and of the product. This call is also necessary to decode more
-    model specific configuration commands and parameters.
+    Note: if the id combination is found in the user_, fhem_ or openzwave files,
+    more descriptive config commands and help for these commands is available.
     </li>
 
   <br><br><b>Class METER</b>

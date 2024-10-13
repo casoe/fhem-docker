@@ -2,7 +2,7 @@
 #
 #  88_HMCCU.pm
 #
-#  $Id: 88_HMCCU.pm 28673 2024-03-17 10:52:10Z zap $
+#  $Id: 88_HMCCU.pm 28794 2024-04-14 12:03:39Z zap $
 #
 #  Version 5.0
 #
@@ -35,6 +35,7 @@ use warnings;
 use Encode qw(decode encode);
 use RPC::XML::Client;
 use RPC::XML::Server;
+use JSON;
 use HttpUtils;
 use SetExtensions;
 use HMCCUConf;
@@ -57,7 +58,7 @@ my %HMCCU_CUST_CHN_DEFAULTS;
 my %HMCCU_CUST_DEV_DEFAULTS;
 
 # HMCCU version
-my $HMCCU_VERSION = '5.0 2024-03';
+my $HMCCU_VERSION = '5.0 2024-04';
 
 # Timeout for CCU requests (seconds)
 my $HMCCU_TIMEOUT_REQUEST = 4;
@@ -290,7 +291,6 @@ sub HMCCU_GetDeviceList ($);
 sub HMCCU_GetDeviceModel ($$$;$);
 sub HMCCU_GetDeviceName ($$;$);
 sub HMCCU_GetDeviceType ($$$);
-sub HMCCU_GetFirmwareVersions ($$);
 sub HMCCU_GetParamDef ($$$;$);
 sub HMCCU_GetReceivers ($$$);
 sub HMCCU_IsValidChannel ($$$);
@@ -307,7 +307,6 @@ sub HMCCU_UpdateDevice ($$);
 sub HMCCU_UpdateDeviceRoles ($$;$$);
 sub HMCCU_UpdateDeviceTable ($$);
 sub HMCCU_UpdateRoleCommands ($$);
-sub HMCCU_UpdateAdditionalCommands ($$;$$);
 
 # Handle datapoints
 sub HMCCU_GetSCDatapoints ($);
@@ -483,9 +482,10 @@ sub HMCCU_Define ($$$)
 	$hash->{hmccu}{postInit} = 0;
 
 	# Check if authentication is active
-	my ($erruser, $encuser) = getKeyValue ($name.'_username');
-	my ($errpass, $encpass) = getKeyValue ($name.'_password');
-	$hash->{authentication} = (defined($encuser) && defined($encpass)) ? 'on' : 'off';
+	my ($username, $password) = HMCCU_GetCredentials ($hash);
+	$hash->{authentication} = $username ne '' && $password ne '' ? 'on' : 'off';
+
+	$hash->{json} = HMCCU_JSONLogin ($hash) ? 'on' : 'off';
 
 	HMCCU_Log ($hash, 1, "Initialized version $HMCCU_VERSION");
 	
@@ -1329,10 +1329,8 @@ sub HMCCU_Undef ($$)
 	}
 
 	# Delete CCU credentials
-	my ($erruser, $encuser) = getKeyValue ($name.'_username');
-	my ($errpass, $encpass) = getKeyValue ($name.'_password');
-	setKeyValue ($name."_username", undef) if (!defined($erruser) && defined($encuser));
-	setKeyValue ($name."_password", undef) if (!defined($errpass) && defined($encpass));
+	HMCCU_SetCredentials ($hash);
+	HMCCU_SetCredentials ($hash, '_json_');
 
 	return undef;
 }
@@ -1345,15 +1343,15 @@ sub HMCCU_Rename ($$)
 {
 	my ($oldName, $newName);
 
-	my ($erruser, $encuser) = getKeyValue ($oldName.'_username');
-	my ($errpass, $encpass) = getKeyValue ($oldName.'_password');
-	if (!defined($erruser) && defined($encuser)) {
-		setKeyValue ($newName."_username", $encuser);
-		setKeyValue ($oldName."_username", undef);
+	my ($username, $password) = HMCCU_GetCredentials ($oldName);
+	if ($username ne '' && $password ne '') {
+		HMCCU_SetCredentials ($oldName);
+		HMCCU_SetCredentials ($newName, '_', $username, $password);
 	}
-	if (!defined($errpass) && defined($encpass)) {
-		setKeyValue ($newName."_password", $encpass);
-		setKeyValue ($oldName."_password", undef);
+	($username, $password) = HMCCU_GetCredentials ($oldName, '_json_');
+	if ($username ne '' && $password ne '') {
+		HMCCU_SetCredentials ($oldName, '_json_');
+		HMCCU_SetCredentials ($newName, '_json_', $username, $password);
 	}
 }
 
@@ -1495,29 +1493,42 @@ sub HMCCU_Set ($@)
 		return HMCCU_SetState ($hash, 'OK');
 	}
 	elsif ($opt eq 'authentication') {
+		my $json = 0;
+		my $credKey = '_';
+		my $credInt = 'authentication';
 		my $username = shift @$a;
+		if (defined($username) && $username eq 'json') {
+			$json = 1;
+			$credKey = '_json_';
+			$credInt = 'json';
+			$username = shift @$a;
+		}
 		my $password = shift @$a;
-		$usage = "set $name $opt username password";
+		$usage = "set $name $opt ['json'] username password";
 
 		if (!defined($username)) {
-			setKeyValue ($name."_username", undef);
-			setKeyValue ($name."_password", undef);
-			$hash->{authentication} = 'off';
-			return 'Credentials for CCU authentication deleted';
+			my $err = HMCCU_SetCredentials ($hash, $credKey);
+			if (!defined($err)) {
+				$hash->{$credInt} = 'off';
+				return 'Credentials for CCU authentication deleted';
+			}
+			else {
+				return HMCCU_SetError ($hash, "Can't delete credentials. $err");
+			}
 		}		
 		return HMCCU_SetError ($hash, $usage) if (!defined($password));
 
-		my $encuser = HMCCU_Encrypt ($username);
-		my $encpass = HMCCU_Encrypt ($password);
-		return HMCCU_SetError ($hash, 'Encryption of credentials failed') if ($encuser eq '' || $encpass eq '');
-		
-		my $err = setKeyValue ($name."_username", $encuser);
-		return HMCCU_SetError ($hash, "Can't store credentials. $err") if (defined ($err));
-		$err = setKeyValue ($name."_password", $encpass);
-		return HMCCU_SetError ($hash, "Can't store credentials. $err") if (defined ($err));
+		my $err = HMCCU_SetCredentials ($hash, $credKey, $username, $password);
+		return HMCCU_SetError ($hash, "Can't store credentials. $err") if (defined($err));
 
-		$hash->{authentication} = 'on';
-		
+		if ($credInt eq 'json') {
+			if (!HMCCU_JSONLogin ($hash)) {
+				$hash->{json} = 'off';
+				return HMCCU_SetError ($hash, "JSON API login failed");
+			}
+		}
+
+		$hash->{$credInt} = 'on';
 		return 'Credentials for CCU authentication stored';		
 	}
 	elsif ($opt eq 'clear') {
@@ -1757,7 +1768,7 @@ sub HMCCU_Get ($@)
 	$opt = lc($opt);
 
 	my $options = "create createDev detectDev defaults:noArg exportDefaults dutycycle:noArg vars update".
-		" paramsetDesc firmware rpcEvents:noArg rpcState:noArg deviceInfo".
+		" paramsetDesc rpcEvents:noArg rpcState:noArg deviceInfo".
 		" ccuMsg:alarm,service ccuConfig:noArg ccuDevices:noArg".
 		" internal:groups,interfaces,versions";
 	if (defined($hash->{hmccu}{ccuSuppDevList}) && $hash->{hmccu}{ccuSuppDevList} ne '') {
@@ -1946,38 +1957,6 @@ sub HMCCU_Get ($@)
 	elsif ($opt eq 'dutycycle') {
 		HMCCU_GetDutyCycle ($hash);
 		return HMCCU_SetState ($hash, 'OK');
-	}
-	elsif ($opt eq 'firmware') {
-		my $devtype = shift @$a // '.*';
-		my $dtexp = $devtype eq 'full' ? '.*' : $devtype;
-		my $dc = HMCCU_GetFirmwareVersions ($hash, $dtexp);
-		return 'Found no firmware downloads' if ($dc == 0);
-		$result = "Found $dc firmware downloads. Click on the new version number for download\n\n";
-		if ($devtype eq 'full') {
-			$result .= "Type                 Available Date\n".('-' x 41)."\n";
-			foreach my $ct (keys %{$hash->{hmccu}{type}}) {
-				$result .= sprintf "%-20s <a href=\"http://www.eq-3.de/%s\">%-9s</a> %-10s\n",
-					$ct, $hash->{hmccu}{type}{$ct}{download},
-					$hash->{hmccu}{type}{$ct}{firmware}, $hash->{hmccu}{type}{$ct}{date};
-			}
-		}
-		else {
-			my @devlist = HMCCU_FindClientDevices ($hash, "(HMCCUDEV|HMCCUCHN)");
-			return $result if (scalar (@devlist) == 0);
-			$result .= 
-				"Device                    Type                 Current Available Date\n".('-' x 76)."\n";
-			foreach my $dev (@devlist) {
-				my $ch = $defs{$dev};
-				my $ct = uc($ch->{ccutype});
-				my $fw = $ch->{firmware} // 'N/A';
-				next if (!exists ($hash->{hmccu}{type}{$ct}) || $ct !~ /$dtexp/);
-				$result .= sprintf "%-25s %-20s %-7s <a href=\"http://www.eq-3.de/%s\">%-9s</a> %-10s\n",
-					$ch->{NAME}, $ct, $fw, $hash->{hmccu}{type}{$ct}{download},
-					$hash->{hmccu}{type}{$ct}{firmware}, $hash->{hmccu}{type}{$ct}{date};
-			}
-		}
-				
-		return HMCCU_SetState ($hash, 'OK', $result);
 	}
 	elsif ($opt eq 'defaults') {
 		$result = HMCCU_GetDefaults ($hash, 1);
@@ -2251,22 +2230,35 @@ sub HMCCU_GetReadingName ($$$$$;$$$)
 	my $rn = '';
 	my @rnlist = ();
 
+	# Get reading prefix definitions
+	$ps = 'DEVICE' if (($c eq '0' && $ps eq 'MASTER') || $c eq 'd');
+	my $readingPrefix = HMCCU_GetAttribute ($ioHash, $hash, 'ccuReadingPrefix', '');
+	foreach my $pd (split (',', $readingPrefix)) {
+		my ($rSet, $rPre) = split (':', $pd);
+		if (exists($prefix{$rSet})) {
+			$prefix{$rSet} = defined($rPre) && $rPre ne '' ? $rPre : '';
+		}
+	}
+	my $rpf = exists($prefix{$ps}) ? $prefix{$ps} : '';
+
 	# Add device state reading
 	if (exists($newReadings{$d}) && ($c eq '' || $c eq '0')) {
 		push @rnlist, $newReadings{$d};
 	}
 
-	# Build list of reading name rul
+	# Build list of reading name rules
 	my @srl = ();
 	my $crn = AttrVal ($name, 'ccureadingname', '');
 	push @srl, split(';', $crn) if ($crn ne '');
-	if (!$hideStandard &&
-		(exists($hash->{hmccu}{control}{chn}) && "$c" eq $hash->{hmccu}{control}{chn}) ||
-		(exists($hash->{hmccu}{state}{chn}) && "$c" eq $hash->{hmccu}{state}{chn})
-	) {
-		my $role = HMCCU_GetChannelRole ($hash, $c);
+#	if (!$hideStandard &&
+#		(exists($hash->{hmccu}{control}{chn}) && "$c" eq $hash->{hmccu}{control}{chn}) ||
+#		(exists($hash->{hmccu}{state}{chn}) && "$c" eq $hash->{hmccu}{state}{chn})
+#	) {
+	if (!$hideStandard) {
+		my $role = $c ne '' && $c ne 'd' ? HMCCU_GetChannelRole ($hash, $c) : '';
 		$crn = $role ne '' && exists($HMCCU_READINGS->{$role}) ? $HMCCU_READINGS->{$role} : $HMCCU_READINGS->{DEFAULT};
 		$crn =~ s/C#\\/$c\\/g;
+		$crn =~ s/P#/$rpf/g;
 		push @srl, map { $replaceStandard ? $_ =~ s/\+//g : $_ } split(';',$crn);
 	}
 	
@@ -2280,17 +2272,6 @@ sub HMCCU_GetReadingName ($$$$$;$$$)
 	if ($i eq '' && $a ne '') {
 		$i = HMCCU_GetDeviceInterface ($ioHash, $a);
 	}
-
-	# Get reading prefix definitions
-	$ps = 'DEVICE' if (($c eq '0' && $ps eq 'MASTER') || $c eq 'd');
-	my $readingPrefix = HMCCU_GetAttribute ($ioHash, $hash, 'ccuReadingPrefix', '');
-	foreach my $pd (split (',', $readingPrefix)) {
-		my ($rSet, $rPre) = split (':', $pd);
-		if (exists($prefix{$rSet})) {
-			$prefix{$rSet} = defined($rPre) && $rPre ne '' ? $rPre : '';
-		}
-	}
-	my $rpf = exists($prefix{$ps}) ? $prefix{$ps} : '';
 
 	# Format reading name
 	if (!$h) {
@@ -4381,6 +4362,16 @@ sub HMCCU_GetEnumValues ($$$$;$$)
 			}
 		}
 	}
+	elsif (defined($paramDef) &&
+		defined($paramDef->{MIN}) && HMCCU_IsIntNum($paramDef->{MIN}) &&
+		defined($paramDef->{MAX}) && HMCCU_IsIntNum($paramDef->{MAX}) &&
+		$paramDef->{MAX}-$paramDef->{MIN} < 10
+	) {
+		for (my $i=$paramDef->{MIN}; $i<=$paramDef->{MAX}; $i++) {
+			$valList{$i} = $i;
+			$valIndex{$i} = $i;
+		}
+	}
 
 	if (defined($value)) {
 		if ($value eq '#') {
@@ -5256,81 +5247,6 @@ sub HMCCU_FormatHashTable ($)
 }
 
 ######################################################################
-# Get available firmware versions from EQ-3 server.
-# Firmware version, date and download link are stored in hash
-# {hmccu}{type}{$type} in elements {firmware}, {date} and {download}.
-# Parameter type can be a regular expression matching valid Homematic
-# device types in upper case letters. Default is '.*'. 
-# Return number of available firmware downloads.
-######################################################################
-
-sub HMCCU_GetFirmwareVersions ($$)
-{
-	my ($hash, $type) = @_;
-	my $name = $hash->{NAME};
-	my $ccureqtimeout = AttrVal ($name, 'ccuReqTimeout', $HMCCU_TIMEOUT_REQUEST);
-	
-	my $url = 'http://www.eq-3.de/service/downloads.html';
-	my $response = GetFileFromURL ($url, $ccureqtimeout, "suchtext=&suche_in=&downloadart=11");
-	my @download = $response =~ m/<a.href="(Downloads\/Software\/Firmware\/[^"]+)/g;
-	my $dc = 0;
-	my @ts = localtime (time);
-	$ts[4] += 1;
-	$ts[5] += 1900;
-	
-	foreach my $dl (@download) {
-		my $dd = $ts[3];
-		my $mm = $ts[4];
-		my $yy = $ts[5];
-		my $fw;
-		my $date = "$dd.$mm.$yy";
-
-		my @path = split (/\//, $dl);
-		my $file = pop @path;
-		next if ($file !~ /(\.tgz|\.tar\.gz)/);
-		
-		$file =~ s/_update_V?/\|/;
-		my ($dt, $rest) = split (/\|/, $file);
-		next if (!defined($rest));
-		$dt =~ s/_/-/g;
-		$dt = uc($dt);
-		
-		next if ($dt !~ /$type/);
-		
-		if ($rest =~ /^([\d_]+)([0-9]{2})([0-9]{2})([0-9]{2})\./) {
-			# Filename with version and date
-			($fw, $yy, $mm, $dd) = ($1, $2, $3, $4);
-			$yy += 2000 if ($yy < 100);
-			$date = "$dd.$mm.$yy";
-			$fw =~ s/_$//;
-		}
-		elsif ($rest =~ /^([\d_]+)\./) {
-			# Filename with version
-			$fw = $1;
-		}
-		else {
-			$fw = $rest;
-		}
-		$fw =~ s/_/\./g;
-
-		# Compare firmware dates
-		if (exists ($hash->{hmccu}{type}{$dt}{date})) {
-			my ($dd1, $mm1, $yy1) = split (/\./, $hash->{hmccu}{type}{$dt}{date});
-			my $v1 = $yy1*10000+$mm1*100+$dd1;
-			my $v2 = $yy*10000+$mm*100+$dd;
-			next if ($v1 > $v2);
-		}
-
-		$dc++;		
-		$hash->{hmccu}{type}{$dt}{firmware} = $fw;
-		$hash->{hmccu}{type}{$dt}{date} = $date;
-		$hash->{hmccu}{type}{$dt}{download} = $dl;
-	}
-	
-	return $dc;
-}
-
-######################################################################
 # Read CCU device identified by device or channel name via Homematic
 # Script.
 # Return (device count, channel count) or (-1, -1) on error.
@@ -5386,9 +5302,6 @@ sub HMCCU_GetDevice ($$)
 	if (scalar(keys %objects) > 0) {
 		# Update HMCCU device tables
 		($devcount, $chncount) = HMCCU_UpdateDeviceTable ($hash, \%objects);
-
-		# Read available datapoints for device type
-#		HMCCU_GetDatapointList ($hash, $devname, $devtype) if (defined ($devname) && defined ($devtype));
 	}
 
 	return ($devcount, $chncount);
@@ -5593,11 +5506,6 @@ sub HMCCU_GetDeviceList ($)
 	if (scalar (keys %objects) > 0) {
 		# Update HMCCU device tables
 		($devcount, $chncount) = HMCCU_UpdateDeviceTable ($hash, \%objects);
-
-		# Read available datapoints for each device type
-		# This will lead to problems if some devices have different firmware versions
-		# or links to system variables !
-#		HMCCU_GetDatapointList ($hash);
 	}
 	
 	# Store group configurations
@@ -5645,6 +5553,20 @@ sub HMCCU_GetDeviceList ($)
 	HMCCU_UpdateReadings ($hash, \%ccuReading);
 	
 	return ($devcount, $chncount, $ifcount, $prgcount, $gcount);
+}
+
+sub HMCCU_GetDeviceList2 ($)
+{
+	my ($hash) = @_;
+	
+	my $response = HMCCU_JSONRequest ($hash, qq(
+{
+	"method": "Device.listAllDetail",
+	"params": {
+		"_session_id_": "$hash->{hmccu}{jsonAPI}{sessionId}"
+	}
+}
+	));
 }
 
 ######################################################################
@@ -6708,35 +6630,43 @@ sub HMCCU_UpdateRoleCommands ($$)
 
 				$cmdChn = 'd' if ($ps eq 'D');
 
-				# Allow different datapoint/config parameter names for same command, if name depends on firmware revision of device type
 				my $dptValid = 0;
 				my $dpt = '';
-				# Find supported datapoint/config parameter
-				foreach my $d (split /,/, $dptList) {
-					next if (!defined($d) || $d eq '');
-					if ($combDpt ne '') {
-						next if (!exists($HMCCU_ROLECMDS->{$role}{$combDpt}{$d}));
-						$dpt = $HMCCU_ROLECMDS->{$role}{$combDpt}{$d};
-						push @combArgs, $d;
+				my $paramDef = { };
+
+				if ($dptList ne '*') {
+					# Allow different datapoint/config parameter names for same command, if name depends on firmware revision of device type
+					# Find supported datapoint/config parameter
+					foreach my $d (split /,/, $dptList) {
+						next if (!defined($d) || $d eq '');
+						if ($combDpt ne '') {
+							next if (!exists($HMCCU_ROLECMDS->{$role}{$combDpt}{$d}));
+							$dpt = $HMCCU_ROLECMDS->{$role}{$combDpt}{$d};
+							push @combArgs, $d;
+						}
+						else {
+							$dpt = $d;
+						}
+						if (HMCCU_IsValidParameter ($clHash, "$addr:$cmdChn", $psName, $dpt, $parAccess)) {
+							$dptValid = 1;
+							last;
+						}
 					}
-					else {
-						$dpt = $d;
+					if (!$dptValid) {
+						HMCCU_Log ($clHash, 4, "HMCCUConf: Unsupported parameter $addr:$cmdChn $psName $dpt $parAccess. Ignoring sub command $subCmd in role $role for $devType device $devName");
+						next URCSUB;
 					}
-					if (HMCCU_IsValidParameter ($clHash, "$addr:$cmdChn", $psName, $dpt, $parAccess)) {
-						$dptValid = 1;
-						last;
+					
+					$paramDef = HMCCU_GetParamDef ($ioHash, "$addr:$cmdChn", $psName, $dpt);
+					if (!defined($paramDef)) {
+						HMCCU_Log ($ioHash, 4, "HMCCUConf: Can't get definition of datapoint $addr:$cmdChn.$dpt. Ignoring command $cmd in role $role for $devType device $devName");
+						next URCCMD;
 					}
 				}
-				if (!$dptValid) {
-					HMCCU_Log ($clHash, 4, "HMCCUConf: Unsupported parameter $addr:$cmdChn $psName $dpt $parAccess. Ignoring sub command $subCmd in role $role for $devType device $devName");
-					next URCSUB;
+				else {
+					$dpt = '_any_';
 				}
-				
-				my $paramDef = HMCCU_GetParamDef ($ioHash, "$addr:$cmdChn", $psName, $dpt);
-				if (!defined($paramDef)) {
-					HMCCU_Log ($ioHash, 4, "HMCCUConf: Can't get definition of datapoint $addr:$cmdChn.$dpt. Ignoring command $cmd in role $role for $devType device $devName");
-					next URCCMD;
-				}
+
 				$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{subcmd}{$scn}{scn}  = sprintf("%03d", $subCmdNo);
 				$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{subcmd}{$scn}{type} = $paramDef->{TYPE} // '';
 				$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{subcmd}{$scn}{min}  = $paramDef->{MIN};
@@ -6753,7 +6683,19 @@ sub HMCCU_UpdateRoleCommands ($$)
 
 						# Build lookup table
 						my $argList = '';
-						my $el = HMCCU_GetEnumValues ($ioHash, $paramDef, $dpt, $role, '#', $pv);
+						my $el = '';
+
+						if (defined($pv) && $pv =~ /^[A-Z0-9_]+$/) {
+							$paramDef = HMCCU_GetParamDef ($ioHash, "$addr:$cmdChn", 'VALUES', $pv);
+							if (defined($paramDef)) {
+								$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{subcmd}{$scn}{min}  = $paramDef->{MIN};
+								$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{subcmd}{$scn}{max}  = $paramDef->{MAX};
+								$el = HMCCU_GetEnumValues ($ioHash, $paramDef, $pv, $role, '#');
+							}
+						}
+						else {
+							$el = HMCCU_GetEnumValues ($ioHash, $paramDef, $dpt, $role, '#', $pv);
+						}
 						if ($el ne '') {
 							my $min;
 							my $max;
@@ -6775,6 +6717,9 @@ sub HMCCU_UpdateRoleCommands ($$)
 							# Parameter definition contains names for min and max value
 							$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{subcmd}{$scn}{min} = $min;
 							$clHash->{hmccu}{roleCmds}{$cmdType}{$cmd}{subcmd}{$scn}{max} = $max;
+						}
+						else {
+							HMCCU_Log ($clHash, 2, "$cmdType $cmd: Cannot find enum values for parameter $pn, pv = $pv");
 						}
 
 						# Parameter list
@@ -6833,7 +6778,7 @@ sub HMCCU_UpdateRoleCommands ($$)
 			if ($parTypes[1] == 1 && $parTypes[2] == 0 && $cmdArgList ne '') {
 				# Only one variable argument. Argument belongs to a predefined value list
 				# If values contain blanks, substitute blanks by # and enclose strings in quotes
-				$cmdDef .= ':'.join(',', map { $_ =~ / / ? '"'.(s/ /#/gr).'"' : $_ } split(',', $cmdArgList));
+				$cmdDef .= ':'.join(',', sort map { $_ =~ / / ? '"'.(s/ /#/gr).'"' : $_ } split(',', $cmdArgList));
 			}
 			elsif ($parTypes[1] == 0 && $parTypes[2] == 0) {
 				$cmdDef .= ':noArg';
@@ -6871,72 +6816,6 @@ sub HMCCU_UpdateRoleCommands ($$)
 	$clHash->{hmccu}{cmdlist}{get} = join(' ', @cmdGetList);
 	
  	return;
-}
-
-######################################################################
-# Update additional commands which depend on device state
-######################################################################
-
-sub HMCCU_UpdateAdditionalCommands ($$;$$)
-{
-	my ($ioHash, $clHash, $cc, $cd) = @_;
-	$cc //= '';
-	$cd //= '';
-
-	# No controldatapoint available (read only device)
-	if ($cd eq '' || $cc eq '') {
-		HMCCU_Log ($clHash, 4, "No control datapoint. Maybe device is read only or attribute will be set later");
-		return;
-	}
-
-	my $s = exists($clHash->{hmccu}{cmdlist}{set}) && $clHash->{hmccu}{cmdlist}{set} ne '' ? ' ' : '';
-	my ($addr, $chn) = HMCCU_SplitChnAddr ($clHash->{ccuaddr});
-
-	# Check if role of control channel is supported by HMCCU
-	my $role = HMCCU_GetChannelRole ($clHash, $cc);
-	if ($role ne '' && exists($HMCCU_STATECONTROL->{$role}) &&
-		HMCCU_DetectSCDatapoint ($HMCCU_STATECONTROL->{$role}{C}, $clHash->{ccuif}) eq $cd) {
-		# Only add toggle command, ignore attribute statevals
-		my $stVals = $HMCCU_STATECONTROL->{$role}{V} eq '#' ?
-			HMCCU_GetEnumValues ($ioHash, HMCCU_GetChannelAddr ($clHash, $cc), $HMCCU_STATECONTROL->{$role}{C}, $role, '#') :
-			$HMCCU_STATECONTROL->{$role}{V};		
-		my %stateCmds = split (/[:,]/, $stVals);
-		my @states = keys %stateCmds;
-		$clHash->{hmccu}{cmdlist}{set} .= $s.'toggle:noArg' if (scalar(@states) > 1);
-		return;
-	}
-
-	my $sv = AttrVal ($clHash->{NAME}, 'statevals', '');
-	if ($sv ne '') {
-		my %stateCmds = split (/[:,]/, $sv);
-		my @states = keys %stateCmds;
-
-		my $paramDef = HMCCU_GetParamDef ($ioHash, "$addr:$cc", 'VALUES', $cd);
-		if (defined($paramDef)) {
-			foreach my $cmd (@states) {
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{channel}  = $cc;
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{role}     = $role;
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{subcount} = 1;
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{syntax}   = "V:$cd:".$stateCmds{$cmd};
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{usage}    = $cmd;
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{subcmd}{'000'}{partype} = 3;
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{subcmd}{'000'}{args}    = $stateCmds{$cmd};
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{subcmd}{'000'}{min}     = $paramDef->{MIN};
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{subcmd}{'000'}{max}     = $paramDef->{MAX};
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{subcmd}{'000'}{unit}    = $paramDef->{UNIT} // '';
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{subcmd}{'000'}{ps}      = 'VALUES';
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{subcmd}{'000'}{dpt}     = $cd;
-				$clHash->{hmccu}{roleCmds}{set}{$cmd}{subcmd}{'000'}{fnc}     = '';
-			}
-			$clHash->{hmccu}{cmdlist}{set} .= $s.join(' ', map { $_ . ':noArg' } @states)
-				if (scalar(@states) > 0);
-			$clHash->{hmccu}{cmdlist}{set} .= ' toggle:noArg'
-				if (scalar(@states) > 1);
-		}
-		else {
-			HMCCU_Log ($clHash, 3, "Can't get definition of datapoint $addr:$cc.$cd. Ignoring commands ".join(',',@states)." for device $clHash->{NAME}");
-		}
-	}
 }
 
 ######################################################################
@@ -6988,7 +6867,7 @@ sub HMCCU_ExecuteRoleCommand ($@)
 		my @par = ();
 		my $autoscale = 0;
 		
-		if ($cmd->{ps} ne 'INTERNAL' && !HMCCU_IsValidParameter ($clHash, $chnAddr, $cmd->{ps}, $cmd->{dpt})) {
+		if ($cmd->{ps} ne 'INTERNAL' && $cmd->{dpt} ne '_any_' && !HMCCU_IsValidParameter ($clHash, $chnAddr, $cmd->{ps}, $cmd->{dpt})) {
 			HMCCU_Trace ($clHash, 2, "Invalid parameter $cmd->{ps}.$cmd->{dpt} for command $command");
 			return HMCCU_SetError ($clHash, -8, "$cmd->{ps}.$cmd->{dpt}");
 		}
@@ -7100,6 +6979,7 @@ sub HMCCU_ExecuteRoleCommand ($@)
 		}
 
 		push @par, $value if (defined($value));
+		$cmdFnc{$cmdNo}{cmd} = $cmd;
 		$cmdFnc{$cmdNo}{fnc} = $cmd->{fnc};
 		$cmdFnc{$cmdNo}{par} = \@par;
 	}
@@ -7156,7 +7036,7 @@ sub HMCCU_ExecuteRoleCommand ($@)
 				if ($cmdFnc{$cmdNo}{fnc} ne '') {
 					# :(
 					no strict "refs";
-					$disp .= &{$cmdFnc{$cmdNo}{fnc}}($ioHash, $clHash, $resp, @{$cmdFnc{$cmdNo}{par}});
+					$disp .= &{$cmdFnc{$cmdNo}{fnc}}($ioHash, $clHash, $resp, $cmdFnc{$cmdNo}{cmd}, @{$cmdFnc{$cmdNo}{par}});
 					use strict "refs";
 				}
 			}
@@ -7653,28 +7533,35 @@ sub HMCCU_DisplayGetParameterResult ($$$)
 
 sub HMCCU_DisplayWeekProgram ($$$;$$)
 {
-	my ($ioHash, $clHash, $resp, $programName, $program) = @_;
+	my ($ioHash, $clHash, $resp, $cmd, $programName, $program) = @_;
 	$programName //= 'all';
 	$program //= 'all';
 	
 	my @weekDay = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday');
 	
 	my $convRes = HMCCU_UpdateParamsetReadings ($ioHash, $clHash, $resp);
-	
+
 	return "No data available for week program(s) $program"
 		if (!exists($clHash->{hmccu}{tt}) || ($program ne 'all' && !exists($clHash->{hmccu}{tt}{$program})));
+
+	if (defined($cmd->{min}) && HMCCU_IsIntNum($cmd->{min}) && $cmd->{min} > 0) {
+		$program -= $cmd->{min};
+	}
 
 	my $s = '<html>';
 	foreach my $w (sort keys %{$clHash->{hmccu}{tt}}) {
 		next if ("$w" ne "$program" && "$program" ne 'all');
+#		$w-- if ("$program" eq "$programName" && HMCCU_IsIntNum($program) && $w > 0);
 		my $p = $clHash->{hmccu}{tt}{$w};
 		my $pn = $programName ne 'all' ? $programName : $w+1;
 		$s .= '<p><b>Week Program '.$pn.'</b></p><br/><table border="1">';
 		foreach my $d (sort keys %{$p->{ENDTIME}}) {
-			$s .= '<tr><td><b>'.$weekDay[$d].'</b></td>';
+			my $beginTime = '00:00';
+			$s .= '<tr><td style="padding: 2px"><b>'.$weekDay[$d].'</b></td>';
 			foreach my $h (sort { $a <=> $b } keys %{$p->{ENDTIME}{$d}}) {
-				$s .= '<td>'.$p->{ENDTIME}{$d}{$h}.' / '.$p->{TEMPERATURE}{$d}{$h}.'</td>';
+				$s .= '<td style="padding: 2px">'.$beginTime.' - '.$p->{ENDTIME}{$d}{$h}.': '.$p->{TEMPERATURE}{$d}{$h}.'&deg;</td>';
 				last if ($p->{ENDTIME}{$d}{$h} eq '24:00');
+				$beginTime = $p->{ENDTIME}{$d}{$h};
 			}
 			$s .= '</tr>';
 		}
@@ -8799,6 +8686,82 @@ sub HMCCU_FormatScriptResponse ($)
 }
 
 ######################################################################
+# Login to JSON API
+######################################################################
+
+sub HMCCU_JSONLogin ($)
+{
+	my ($hash) = @_;
+
+	my ($username, $password) = HMCCU_GetCredentials ($hash, '_json_');
+	return 0 if ($username eq '' || $password eq '');
+
+	my $response = HMCCU_JSONRequest ($hash, qq(
+{
+	"method": "Session.login",
+	"params": {
+		"username": "$username",
+		"password": "$password"
+	}
+}
+	));
+
+	return 0 if (!defined($response));
+
+	if ($response->{error} eq '') {
+		$hash->{hmccu}{jsonAPI}{sessionId} = $response->{result};
+		return 1;
+	}
+
+	return 0;
+}
+
+######################################################################
+# Execute JSON API request
+######################################################################
+
+sub HMCCU_JSONRequest ($$)
+{
+	my ($hash, $data) = @_;
+
+	my $ccureqtimeout = AttrVal ($hash->{NAME}, 'ccuReqTimeout', $HMCCU_TIMEOUT_REQUEST);
+
+	my ($url, $auth) = HMCCU_BuildURL ($hash, 'json');
+	return undef if ($url eq '');
+
+	# Blocking request
+	my ($err, $response) = HttpUtils_BlockingGet ({
+		url => $url,
+		method => 'POST',
+		timeout => $ccureqtimeout,
+		sslargs => {
+			SSL_verify_mode => 0
+		},
+		header => {
+			'Content-Type' => 'application/json; charset=utf-8'
+		},
+		data => $data
+	});
+
+	if ($err eq '') {
+		my $jsonResp;
+		my $rc = eval { $jsonResp = decode_json ($response); 1; };
+		if ($rc && defined($jsonResp)) {
+			$jsonResp->{error} //= '';
+			return $jsonResp;
+		}
+		else {
+			HMCCU_LogError ($hash, 2, "Decoding JSON response failed");
+		}
+	}
+	else {
+		HMCCU_LogError ($hash, 2, "JSON API request failed. $err");
+	}
+
+	return undef;
+}
+
+######################################################################
 # Bulk update of reading considering attribute substexcl.
 ######################################################################
 
@@ -9680,21 +9643,15 @@ sub HMCCU_BuildURL ($$)
 	my $name = $hash->{NAME};
 
 	my $url = '';
-	
-	my $username = '';
-	my $password = '';
-	my $authorization = '';
-	my ($erruser, $encuser) = getKeyValue ($name.'_username');
-	my ($errpass, $encpass) = getKeyValue ($name.'_password');	
-	if (!defined($erruser) && !defined($errpass) && defined($encuser) && defined($encpass)) {
-		$username = HMCCU_Decrypt ($encuser);
-		$password = HMCCU_Decrypt ($encpass);
-		$authorization = encode_base64 ("$username:$password", '');
-	}
+
+	my ($username, $password) = HMCCU_GetCredentials ($hash);
+	my $authorization = $username ne '' && $password ne '' ? encode_base64 ("$username:$password", '') : '';
 
 	if ($backend eq 'rega') {
-		$url = $hash->{prot}."://".$hash->{host}.':'.
-			$HMCCU_REGA_PORT{$hash->{prot}}.'/tclrega.exe';
+		$url = $hash->{prot}."://".$hash->{host}.':'.$HMCCU_REGA_PORT{$hash->{prot}}.'/tclrega.exe';
+	}
+	elsif ($backend eq 'json') {
+		$url = $hash->{prot}."://".$hash->{host}.'/api/homematic.cgi';
 	}
 	else {
 		($url) = HMCCU_GetRPCServerInfo ($hash, $backend, 'url');
@@ -10303,6 +10260,68 @@ sub HMCCU_MaxHashEntries ($$)
 	return \%result;
 }
 
+######################################################################
+# Set or delete credentials
+#######################################################################
+
+sub HMCCU_SetCredentials ($@)
+{
+	my ($ioHashOrName, $key, $username, $password) = @_;
+	$key //= '_';
+
+	my $name = ref($ioHashOrName) eq 'HASH' ? $ioHashOrName->{NAME} : $ioHashOrName;
+	my $userkey = $name.$key.'username';
+	my $passkey = $name.$key.'password';
+	my $rc;
+
+	# Delete CCU credentials
+	if (!defined($username)) {
+		my ($erruser, $encuser) = getKeyValue ($userkey);
+		my ($errpass, $encpass) = getKeyValue ($passkey);
+		$rc = setKeyValue ($userkey, undef) if (!defined($erruser) && defined($encuser));
+		return $rc if (defined($rc));
+		$rc = setKeyValue ($passkey, undef) if (!defined($errpass) && defined($encpass));
+		return $rc if (defined($rc));
+	}
+	elsif (defined($password)) {
+		my $encuser = HMCCU_Encrypt ($username);
+		return 'Cannot encrypt username' if ($encuser eq '');
+		my $encpass = HMCCU_Encrypt ($password);
+		return 'Cannot encrypt password' if ($encpass eq '');
+		$rc = setKeyValue ($userkey, $encuser);
+		return $rc if (defined($rc));
+		$rc = setKeyValue ($passkey, $encpass);
+		return $rc if (defined($rc));
+	}
+	else {
+		return 'Missing password';
+	}
+
+	return undef;
+}
+
+######################################################################
+# Read credentials
+#######################################################################
+
+sub HMCCU_GetCredentials ($@)
+{
+	my ($ioHashOrName, $key) = @_;
+	$key //= '_';
+
+	my $name = ref($ioHashOrName) eq 'HASH' ? $ioHashOrName->{NAME} : $ioHashOrName;
+	my $userkey = $name.$key.'username';
+	my $passkey = $name.$key.'password';
+
+	my ($erruser, $encuser) = getKeyValue ($userkey);
+	my ($errpass, $encpass) = getKeyValue ($passkey);
+
+	my $username = defined($encuser) ? HMCCU_Decrypt ($encuser) : '';
+	my $password = defined($encpass) ? HMCCU_Decrypt ($encpass) : '';
+
+	return ($username, $password);
+}
+
 1;
 
 
@@ -10365,9 +10384,9 @@ sub HMCCU_MaxHashEntries ($$)
       <li><b>set &lt;name&gt; ackmessages</b><br/>
       	Acknowledge "device was unreachable" messages in CCU.
       </li><br/>
-      <li><b>set &lt;name&gt; authentication [&lt;username&gt; &lt;password&gt;]</b><br/>
-      	Set credentials for CCU authentication.<br/>
-      	When executing this command without arguments, the credentials are deleted.
+      <li><b>set &lt;name&gt; authentication ['json'] [&lt;username&gt; &lt;password&gt;]</b><br/>
+      	Set credentials for CCU authentication. With option 'json' the CCU JSON interface is used for syncing the CCU configuration.<br/>
+      	When executing this command without username and password, the credentials are deleted.
       </li><br/>
       <li><b>set &lt;name&gt; clear [&lt;reading-exp&gt;]</b><br/>
          Delete readings matching specified reading name expression. Default expression is '.*'.
@@ -10492,13 +10511,6 @@ sub HMCCU_MaxHashEntries ($$)
       <li><b>get &lt;name&gt; exportdefaults &lt;filename&gt; [all]</b><br/>
       	Export default attributes into file. If option <i>all</i> is specified, also defaults imported
       	by customer will be exported.
-      </li><br/>
-      <li><b>get &lt;name&gt; firmware [{&lt;type-expr&gt; | full}]</b><br/>
-      	Get available firmware downloads from eq-3.de. List FHEM devices with current and available
-      	firmware version. By default only firmware version of defined HMCCUDEV or HMCCUCHN
-      	devices are listet. With option 'full' all available firmware versions are listed.
-      	With parameter <i>type-expr</i> one can filter displayed firmware versions by 
-      	Homematic device type.
       </li><br/>
 	  <li><b>get &lt;name&gt; internal &lt;parameter&gt;</b><br/>
 	  	Show internal values. Valid <i>parameters</i> are:<br/>

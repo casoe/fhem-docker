@@ -9,7 +9,7 @@
 # Program skeleton (with some errors) by Arnold Barmettler 
 # http://lexikon.astronomie.info/java/sunmoon/
 #
-#  $Id: 95_Astro.pm 25198 2021-11-07 15:42:54Z phenning $
+#  $Id: 95_Astro.pm 29078 2024-08-17 17:47:08Z phenning $
 #
 ########################################################################################
 #
@@ -1861,7 +1861,7 @@ sub SunRise($$$$$$$$){
       }
     }elsif ($zone<0) {
       #rise time was yesterday local time -> calculate rise time for previous UTC day
-      if ($rise<-$zone || $transit<-zone || $set<-zone) {
+      if ($rise<-$zone || $transit<-$zone || $set<-$zone) {
         ($transittemp,$risetemp,$settemp) = SunRise($JD-1, $deltaT, $lon, $lat, $zone, $horM, $horE, 1);
       $transit = $transittemp
         if ($transit<-$zone);

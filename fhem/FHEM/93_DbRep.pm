@@ -1,5 +1,5 @@
 ﻿##########################################################################################################
-# $Id: 93_DbRep.pm 28714 2024-03-27 21:40:03Z DS_Starter $
+# $Id: 93_DbRep.pm 29081 2024-08-18 18:24:52Z DS_Starter $
 ##########################################################################################################
 #       93_DbRep.pm
 #
@@ -55,10 +55,14 @@ use FHEM::SynoModules::SMUtils qw( evalDecodeJSON );
 
 use IO::Compress::Gzip qw(gzip $GzipError);
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
-no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 # Version History intern
 my %DbRep_vNotesIntern = (
+  "8.53.15" => "18.08.2024  DbRep_diffvalDone: change loglevel to 2, Forum:#138986 ",
+  "8.53.14" => "29.05.2024  _DbRep_avgTimeWeightMean: accept if \$val1=0 (use looks_like_number) ",
+  "8.53.13" => "25.05.2024  replace Smartmatch Forum:#137776 ",
+  "8.53.12" => "09.05.2024  DbRep_dbConnect: change PRAGMA temp_store=MEMORY to FILE, Forum: https://forum.fhem.de/index.php?msg=1312722 ",
+  "8.53.11" => "08.05.2024  reduceLog: fix bug if EXCL/INCL-devices end with a digit ",  
   "8.53.10" => "27.03.2024  multicmd: add attr seqDoubletsVariance ",            
   "8.53.9"  => "18.03.2024  multicmd: add nextHop Keyword ",
   "8.53.8"  => "17.03.2024  sqlCmdBlocking able to use sql Keywords (§timestamp_end§ etc.) ",
@@ -1760,7 +1764,7 @@ sub DbRep_Attr {
                           previous_hour_end
                          );
 
-            if ($aVal ~~ @dtas) {
+            if (grep /^$aVal$/, @dtas) {      
                 delete($attr{$name}{timeDiffToNow});
                 delete($attr{$name}{timeOlderThan});
                 delete($attr{$name}{timeYearPeriod});
@@ -3693,7 +3697,7 @@ sub _DbRep_avgTimeWeightMean {
 
       my @twm_array = map { $_->[0]."_ESC_".$_->[1] } @{$sth->fetchall_arrayref()};
 
-      if ($bin_end && $val1) {                                                      # der letzte Datenwert aus dem vorherigen Bin wird dem aktuellen Bin vorangestellt,
+      if ($bin_end && looks_like_number ($val1)) {                                  # der letzte Datenwert aus dem vorherigen Bin wird dem aktuellen Bin vorangestellt, V. 8.53.14: looks_like_number
           unshift @twm_array, $bin_end.'_ESC_'.$val1;                               # wobei das vorherige $bin_end als Zeitstempel verwendet wird
       }
 
@@ -4843,7 +4847,7 @@ sub DbRep_diffvalDone {
   no warnings 'uninitialized';
 
   $rowsrej =~ s/_/ /g;
-  Log3 ($name, 3, "DbRep $name -> data ignored while calc diffValue due to threshold overrun (diffAccept = $difflimit): \n$rowsrej")
+  Log3 ($name, 2, "DbRep $name -> data ignored while calc diffValue due to threshold overrun (diffAccept = $difflimit): \n$rowsrej")
            if($rowsrej);
   $rowsrej =~ s/\n/ \|\| /g;
 
@@ -9739,13 +9743,14 @@ sub DbRep_reduceLog {
 
     my @b;
     for my $w (@a) {                                     # ausfiltern von optionalen Zeitangaben, z.B. 700:750
-        next if($w =~ /\b(\d+(:\d+)?)\b/);
+        $w = DbRep_trim ($w);
+        next if($w =~ /\d+(:\d+)?$/xs);                  # Forum: https://forum.fhem.de/index.php?topic=138082.0
         push @b, $w;
     }
 
     @a = @b;
 
-    my ($pa,$ph) = parseParams(join ' ', @a);
+    my ($pa,$ph) = parseParams (join ' ', @a);
 
     my $mode = (@$pa[1]        && @$pa[1] =~ /average/i)   ? 'average'     :
                ($ph->{average} && $ph->{average} eq "day") ? 'average=day' :
@@ -11790,7 +11795,7 @@ sub DbRep_dbConnect {
           return $err if ($err);          
       }
       
-      my @dos = ("PRAGMA temp_store=MEMORY",
+      my @dos = ("PRAGMA temp_store=FILE",                                                   # Forum: https://forum.fhem.de/index.php?msg=1312722
                  "PRAGMA synchronous=FULL",
                 );
 
@@ -14563,12 +14568,12 @@ sub DbRep_setVersionInfo {
   if($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {
       # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;              # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{SMAPortal}{META}}
-      if($modules{$type}{META}{x_version}) {                                                                             # {x_version} ( nur gesetzt wenn $Id: 93_DbRep.pm 28714 2024-03-27 21:40:03Z DS_Starter $ im Kopf komplett! vorhanden )
+      if($modules{$type}{META}{x_version}) {                                                                             # {x_version} ( nur gesetzt wenn $Id: 93_DbRep.pm 29081 2024-08-18 18:24:52Z DS_Starter $ im Kopf komplett! vorhanden )
           $modules{$type}{META}{x_version} =~ s/1.1.1/$v/g;
       } else {
           $modules{$type}{META}{x_version} = $v;
       }
-      return $@ unless (FHEM::Meta::SetInternals($hash));                                                                # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbRep.pm 28714 2024-03-27 21:40:03Z DS_Starter $ im Kopf komplett! vorhanden )
+      return $@ unless (FHEM::Meta::SetInternals($hash));                                                                # FVERSION wird gesetzt ( nur gesetzt wenn $Id: 93_DbRep.pm 29081 2024-08-18 18:24:52Z DS_Starter $ im Kopf komplett! vorhanden )
       if(__PACKAGE__ eq "FHEM::$type" || __PACKAGE__ eq $type) {
           # es wird mit Packages gearbeitet -> Perl übliche Modulversion setzen
           # mit {<Modul>->VERSION()} im FHEMWEB kann Modulversion abgefragt werden

@@ -1,5 +1,151 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
-# Do not insert empty lines here, update check depends on it.
+# Do not insert empty lines here, update check depends on it
+ - change:  74_XiaomiBTLESens: remove experimental switch
+ - change:  82_LGTV_WebOS: remove experimental switch
+ - change:  73_AutoShuttersControl: remove experimental switch
+ - bugfix:  59_Weather: fix forcast intervall, safe token count
+ - feature: 74_AutomowerConnect: new setter for synchronizing mower timestamp
+ - bufgix:  72_FRITZBOX: kleinere Fehler bei zu alten FritzOS Versionen 
+ - feature: 72_FRITZBOX: Neue Readings box_pwr_...
+            Aktivierbar über Attribut enableBoxReadings
+            nicht für Cable mit aktueller Labor oder FritzOS 8.00
+ - feature: 76_SolarForecast: FlowGrafic-some improvements and changes
+ - bugfix:  70_PylonLowVoltage: group/bat addr calc when higher addr is used
+ - feature: 76_SolarForecast: features and changes, see 
+                              https://forum.fhem.de/index.php?msg=1321556
+ - change:  74_AutomowerConnect: convert model to upper case due to changed
+            spelling
+ - bugfix:  76_SolarForecast: internal code change
+ - change:  76_SolarForecast: internal code change
+ - bufgix:  72_FRITZBOX: Blockade des Intervall-Timers durch 
+                         nonBlocking set/get Befehle
+ - feature: 72_FRITZBOX:
+            attr <device> enableLogReadings <liste>, Achtung das
+                 standardmäßige Abholen wurde deaktiviert
+            set <device> wlanGuestParams <param:value> [<param:value> ...]
+ - bugfix:  76_SolarForecast: calculation of consumption forecast
+ - bugfix:  36_Shelly: removed irrelevant log-entries for dimmer
+ - bugfix:  36_Shelly: removed package command: use Sub::Util
+ - bugfix:  36_Shelly: added package command: use Sub::Util
+ - bugfix:  38_netatmo: changed token refresh to internal reading
+ - feature: 70_PylonLowVoltage: new attr waitTimeBetweenRS485Cmd
+ - feature: 70_PylonLowVoltage: implement pylon groups
+ - bugfix:  36_Shelly.pm: reading 'ble' (bluetooth) fixed
+ - change:  70_PylonLowVoltage: internal code changes
+ - feature: 70_PylonLowVoltage: extend battery addresses up to 16
+ - change:  76_SolarForecast: attr ctrlWeatherDevX to setupWeatherDevX, 
+ - bufgix:  76_SMAInverter: fix PW Lengs Bug
+ - bugfix:  10_KNX: prevent set/get-cmd during fhem start
+                    add sub dpts for dpt14, enfoce gadname rules 
+ - bugfix:  00_KNXIO: fix error msg when mode S fails to open
+ - feature: 76_SolarForecast: new attribute flowGraphicShift, 
+                              Forum:https://forum.fhem.de/index.php?msg=1318597
+ - change:  93_DbRep: message data ignored change loglevel to 2, Forum:#138986
+ - bufgix:  76_SMAInverter: fix IDC2 bug 3MPP
+ - bufgix:  76_SMAInverter: fix IDC3 bug
+ - redesign:36_Shelly.pm: Überarbeitung der HTTP-Kommunikation
+             zahlreiche Änderungen und Ergänzungen
+             siehe Forum ../Sonstige Systeme/Support-Thread Modul 36_Shelly.pm
+ - feature: 31_HUEDevice.pm: added addlight and removelight command for groups
+ - bufgix:  72_FRITZBOX: Fehler behoben bei FritzOS >= 6.69 und < 7.00
+ - feature: 76_SolarForecast: improve manual setting of pvCorrectionFactor_XX
+ - feature: 98_RandomTimer:   add recomputeTimes setter
+ - change:  38_netatmo: new token refresh handling and fallback reading
+ - bugfix:  76_SolarForecast: fix Warnings
+ - change:  76_SolarForecast: set moduleAzimuth to attr setupStringAzimuth
+                              set moduleDeclination to setupStringDeclination
+                              set moduleRoofTops to attr setupRoofTops 
+                              !NOTE! save FHEM config after restart
+ - feature: 76_SolarForecast: new consumer key exconfc
+ - change:  76_SolarForecast: set modulePeakString to attr setupStringPeak
+                              !NOTE! save FHEM config after restart
+ - change:  76_SolarForecast: set currentRadiationAPI to attr setupRadiationAPI
+                              !NOTE! save FHEM config after restart
+ - feature: 74_AutomowerConnect: new events for errors related to the APIs
+ - bugfix:  76_SolarForecast: Illegal division by zero
+ - bufgix:  32_withings: improved token refresh timing
+ - change:  38_netatmo: improved disconnect handling on auth failure
+ - change:  76_SolarForecast: set inverterStrings to attr setupInverterStrings
+                              !NOTE! save FHEM config after restart
+ - bufgix:  72_FRITZBOX: Ändern OffSet DECT Heizkörper Termostate Sommerzeit
+ - change:  76_SolarForecast: set currentInverterDev to attr setupInverterDev
+                              !NOTE! save FHEM config after restart
+ - bugfix:  73_PRESENCE2: entfernt BlockingCall loglevel = GetVerbose($name)
+ - bugfix:  73_PRESENCE:  entfernt BlockingCall loglevel = GetVerbose($name)
+ - bugfix:  98_CDCOpenData:  entfernt BlockingCall loglevel = GetVerbose($name)
+ - bufgix:  72_FRITZBOX:   entfernt BlockingCall loglevel = GetVerbose($name)
+ - change:  76_SolarForecast: set currentBatteryDev to attr setupBatteryDev
+                              !NOTE! save FHEM configs after restart,
+                              minor other changes
+ - change:  76_SolarForecast: change set currentMeterDev to attr setupMeterDev
+ - feature: 76_SolarForecast: ctrlStatisticReadings: new runTimeAvgDayConsumer
+ - change:  76_SolarForecast: ctrlDebug consumerSwitching splitted into 
+                              separated consumers, minor bug fix
+ - feature: 74_AutomowerConnect: new design attribute hideSchedulerButton
+ - change:  76_SolarForecast: VictronVRM - API request start time adopted
+ - change:  73_GardenaSmartBridge: fix: api call,rate limit
+ - change:  49_SSCAM: NOTE! set enable/disable renamed to enableCam/disableCam
+                      switch commandref to ID tags
+ - change:  74_AutomowerConnect: minor changes
+ - feature: 76_SolarForecast: currentMeterDev: contotal and feedtotal can be 
+                              reset at day begin (day meter)
+ - feature: 76_SolarForecast: graphicBeamXContent: gridfeedin available, 
+                              beamGraphic: Mouse-Over shows beamcontent text
+ - feature: 74_AutomowerConnect.pm: Common.pm, automoverconnect.js
+            include rev. 28836,39,44 from contrib/, hull.js loaded if
+            needed for calculation only
+ - feature: 76_SolarForecast: graphicBeamXContent: keys energycosts, feedincome 
+ - change:  49_SSCam(STRM): optimize memory consumption
+ - change:  93_DbRep: SQLITE: change PRAGMA temp_store=MEMORY to FILE
+ - bugfix:  93_DbRep: reduceLog: fix bug if EXCL/INCL-devices end with a digit
+ - feature: 76_SolarForecast: add secondary level of the bar chart
+ - change:  76_SolarForecast: attr ctrlInterval: immediate impact when set
+ - bugfix:  74_GardenaSmartDevice: fix patch code scheduling by hhhdg
+ - feature: 74_AutomowerConnect.pm: new mower schedule editor
+ - bugfix:  76_SolarForecast: possible Illegal division by zero if Attr
+                              ctrlGenPVdeviation is set to continuously
+ - feature: 74_AutomowerConnect.pm: new attribute mowerPanel
+ - bugfix:  76_SolarForecast: possible Illegal division by zero if Battery SOC
+                              management is activated 
+ - change:  76_SolarForecast: minor change calculation Today PV deviation
+ - change:  49_SSCam: change internal logic for sending data and their Saving
+ - change: 10_SOMFY.pm: Signalduino modif and doc cleanup - msg1298875
+ - feature: 74_AutomowerConnect.pm: reduce spikes in border region after a hull
+              polygon is set to attribut.
+ - feature: 14_CUL_TCM97001.pm: NX7674, Kuehl- & Gefrierschrank-Thermometer
+                (Rosenstein & Söhne), zugefügt
+                Bei einem modify der DEF wird nun die alte DEF gelöscht
+ - change:  14_CUL_TCM97001.pm: commandref
+ - bugfix:  14_CUL_TCM97001.pm: Kanal beim Auriol_IAN
+ - bugfix:  10_IT: Attribut ITfrequency
+ - feature: 74_AutomowerConnect.pm: use widgetList for stayOutZones
+            and workAreas setter, update commandref, some default values
+            changed regarding design attributes
+ - bugfix: 72_FRITZBOX: commandRef
+               perl Warnung beim Fhem Start
+ - feature: 72_FRITZBOX: Info statische/dynamische IP Adresse Lan Device
+ - feature: 76_SolarForecast: possible export pvHistory to CSV, 
+                              making attr affectMaxDayVariance obsolete 
+ - feature: 72_FRITZBOX: attr <name> lanDeviceReading <mac|ip>
+               Legt fest, ob der Reading Name aus der IP-Adresse mit Präfix
+               ip_ oder der MAC-Adresse mit Präfix mac_ für Netzwerk Geräte
+               gebildet werden soll. Standard ist mac.
+ - feature: 74_AutomowerConnect.pm: calculation of mowing area hull polygon,
+               some more info in InternalData and StatisticsData,
+               downloading of third party library for hull calculation
+ - feature: 76_SolarForecast: options for conprice, feedprice and more
+ - change:  49_SSCam: check SSChatBot/TelegramBot is disabled before send data
+ - feature: 70_PylonLowVoltage: add specific Alarm readings, support of US5000
+ - bugfix:  73_PRESENCE2: BlockingCall loglevel = GetVerbose($name)
+ - bugfix:  73_PRESENCE:  BlockingCall loglevel = GetVerbose($name)
+ - bugfix:  98_CDCOpenData:  BlockingCall loglevel = GetVerbose($name)
+ - bufgix:  72_FRITZBOX:   BlockingCall loglevel = GetVerbose($name)
+ - bugfix:  50_SSChatbot: 'disabled' is not working when receiving data
+ - bugfix:  76_SolarForecast: ctrlWeatherDev1 Drop-Down if no DWD Device exists
+ - feature: 76_SolarForecast: integrate OpenMeteoDWDEnsemble-API
+ - change:  70_PylonLowVoltage: avoid possible Illegal division by zero
+ - feature: 76_SolarForecast: integrate the Open-Meteo API
+ - change:  50_Signalbot: Improved registration procedure for Voice
  - feature: 93_DbRep: multicmd: add attr seqDoubletsVariance
  - feature: 93_DbRep: multicmd: add nextHop Keyword
  - bugfix:  73_PRESENCE2: Fehlerbereinigungen

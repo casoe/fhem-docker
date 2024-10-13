@@ -1,6 +1,6 @@
 "use strict";
 var FW_version={};
-FW_version["fhemweb.js"] = "$Id: fhemweb.js 28198 2023-11-22 16:22:22Z rudolfkoenig $";
+FW_version["fhemweb.js"] = "$Id: fhemweb.js 29073 2024-08-16 16:33:42Z rudolfkoenig $";
 
 var FW_serverGenerated;
 var FW_jsLog;
@@ -456,7 +456,8 @@ FW_filterIcons()
 function
 FW_delete(cmd, fCmd)
 {
-  if($("body").attr("data-hiddenroom").match(/\binput\b/))
+  var hr = $("body").attr("data-hiddenroom"); // #138962
+  if(hr && hr.match(/\binput\b/))
     return FW_okDialog("Disabled");
 
   if(!fCmd)

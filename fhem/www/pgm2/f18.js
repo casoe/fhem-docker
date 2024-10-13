@@ -1,5 +1,5 @@
 "use strict";
-FW_version["f18.js"] = "$Id: f18.js 27573 2023-05-15 08:39:17Z rudolfkoenig $";
+FW_version["f18.js"] = "$Id: f18.js 28896 2024-05-22 09:01:58Z rudolfkoenig $";
 
 // TODO: hierMenu+Pin,SVGcolors,floorplan
 // Known bugs: AbsSize is wrong for ColorSlider
@@ -59,7 +59,7 @@ $(document).ready(function(){
     f18_attr["Pinned.menu"] = false;
   }
 
-  var f18_aCol = "rgb(39, 135, 39)";
+  var f18_aCol = "rgb(39, 135, 39)"; // green
   if($("a").length)
     f18_aCol = getComputedStyle($("a").get(0),null).getPropertyValue('color');
   f18_loadIcons();
@@ -789,6 +789,12 @@ f18_setCss(why)
   style += "div.ui-dialog { border:1px solid #"+col("link")+"; }";
   style += "button.ui-button { background:#"+col("oddrow")+"!important; "+
                             "border:1px solid #"+col("link")+"!important; }\n";
+
+  // uzsu, #138294
+  style += ".ui-state-default "+bg(col("bg")+"!important");
+  style += ".ui-state-active { border:1px solid #"+col("link")+"}\n";
+  style += ".ui-state-active>.ui-button-text "+fg(col("link")+"!important");
+  style += ".ui-selectmenu-text "+fg(col("fg"));
 
   if(typeof DashboardDraggable  != "undefined") {
     var db = "#dashboard ";

@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_MQTT2_DEVICE.pm 27935 2023-09-05 11:48:14Z rudolfkoenig $
+# $Id: 10_MQTT2_DEVICE.pm 29153 2024-09-19 17:58:21Z rudolfkoenig $
 package main;
 
 use strict;
@@ -32,7 +32,7 @@ MQTT2_DEVICE_Initialize($)
     IODev
     autocreate:0,1
     bridgeRegexp:textField-long
-    devicetopic
+    devicetopic:textField-long
     devPos
     disable:0,1
     disabledForIntervals
@@ -739,17 +739,29 @@ MQTT2_DEVICE_nlData($)
 
   my (%img,%h,%n2n);
   my $fo="";
-  #my $pref = "https://koenkk.github.io/zigbee2mqtt/images/devices/";
-  my $pref = "https://www.zigbee2mqtt.io/images/devices/";
 
-  # Needed for the image links {
+  # Needed for the image links
   my $dv = ReadingsVal($d, ".devices", ReadingsVal($d, "devices", ""));
-  $dv =~ s@ieeeAddr":"([^"]+)"[^}]+model":"([^"]+)"@
+  if($dv =~ m/ieeeAddr":/) { # {
+    $dv =~ s@ieeeAddr":"([^"]+)"[^}]+model":"([^"]+)"@
             my $ieeeAddr = $1;
             my $img = $2;
             $img =~ s+[/: ]+-+g; # Forum #91394: supported-devices.js
             $img{$ieeeAddr} = "$img.jpg";
           @xeg;
+
+  } elsif($dv =~ m/^\[\{/) { #139205
+    my $h = json2nameValue($dv);
+    my $dm;
+    foreach my $key (sort keys %{$h}) {
+      $dm = $h->{$key}
+        if($key =~ m/^\d+_definition_model$/);
+      if($key =~ m/^\d+_ieee_address$/ && $dm) {
+        $img{$h->{$key}} = $dm;
+        $dm = "";
+      }
+    }
+  }
 
   # Name translation
   for my $n (devspec2array("TYPE=MQTT2_DEVICE")) {
@@ -763,7 +775,31 @@ MQTT2_DEVICE_nlData($)
     }
   }
 
-  my $div = ($FW_userAgent =~ m/WebKit/ ? "<br>" : " ");
+  sub
+  getImg($$$)
+  {
+    my ($imgName, $suffix, $fileName) = @_;
+
+    #my $pref = "https://koenkk.github.io/zigbee2mqtt/images/devices";
+    my $pref = "https://www.zigbee2mqtt.io/images/devices/";
+    my $url = $pref . urlEncode($imgName) . $suffix;
+
+    Log 3, "MQTT2_DEVICE: trying $url";
+    my $data = GetFileFromURL($url);
+    if($data && $data !~ m/<html/ && open(FH, ">$fileName")) {
+      Log 3, "Got data, writing $fileName, length: ".length($data);
+      binmode(FH);
+      print FH $data;
+      close(FH);
+      return 1;
+    } else {
+      Log 3, "No result";
+      return 0;
+    }
+  }
+
+  my $fPref = "$attr{global}{modpath}/www/deviceimages/mqtt2";
+  my $div = ($FW_userAgent =~ m/WebKit/ ? "&#xA;" : " ");
   my $gv = ReadingsVal($d, ".graphviz", ReadingsVal($d, "graphviz", ""));
   $gv =~ s/\\n/\n/g; #126970
   $gv =~ s/\\"/"/g;
@@ -778,20 +814,33 @@ MQTT2_DEVICE_nlData($)
       if($v =~ m/{(.*)\|(.*)\|(.*)\|(.*)}/) {
         my ($x1,$x2,$x3,$x4) = ($1,$2,$3,$4);
         $nv = $n2n{$x1} if($n2n{$x1});
+
         if($img{$n}) {
-          my $fn = $attr{global}{modpath}."/www/deviceimages/mqtt2/$img{$n}";
-          if(!-f $fn) {      # Cache the picture
-            my $url = "$pref/$img{$n}";
-            Log 3, "MQTT2_DEVICE: downloading $url to $fn";
-            my $data = GetFileFromURL($url);
-            if($data && open(FH,">$fn")) {
-              binmode(FH);
-              print FH $data;
-              close(FH)
+          $img{$n} =~ s,[ /],-,g;
+          my $fJpg = "$fPref/$img{$n}.jpg";
+          my $fPng = "$fPref/$img{$n}.png";
+          my $fn;
+
+          if(-e $fJpg) {
+            $fn = (-z $fJpg ? "" : "$img{$n}.jpg");
+
+          } elsif (-e $fPng) {
+            $fn = "$img{$n}.png";
+
+          } elsif (getImg($img{$n}, ".jpg", $fJpg)) {
+            $fn = "$img{$n}.jpg";
+
+          } elsif (getImg($img{$n}, ".png", $fPng)) {
+            $fn = "$img{$n}.png";
+
+          } else {
+            if(open(FH, ">$fJpg")) { # empty file: dont try it again
+              close(FH);
             }
           }
-          $h{$n}{img} = "$FW_ME/deviceimages/mqtt2/$img{$n}";
+          $h{$n}{img} = "$FW_ME/deviceimages/mqtt2/$fn" if($fn);
         }
+
         if($img{$n} && $n2n{$x1} && !AttrVal($n2n{$x1}, "imageLink", "")) {
           CommandAttr(undef, "$nv imageLink $h{$n}{img}");
         }

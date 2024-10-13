@@ -1,4 +1,4 @@
-# $Id: 98_dewpoint.pm 18846 2019-03-10 11:45:58Z hotbso $
+# $Id: 98_dewpoint.pm 28949 2024-06-06 05:54:04Z betateilchen $
 ##############################################
 #
 # Dewpoint computing 
@@ -599,7 +599,7 @@ dewpoint_absFeuchte ($$)
   </ul>
 
   <ul>
-    <code>define &lt;name&gt; dewpoint fan &lt;devicename-regex&gt; &lt;devicename-outside&gt; &lt;min-temp&gt; [&lt;diff_temp&gt;]</code><br>
+    <code>define &lt;name&gt; dewpoint fan &lt;devicename&gt; &lt;devicename-outside&gt; &lt;min-temp&gt; [&lt;diff_temp&gt;]</code><br>
     <br>
     <ul>
       	May be used to turn an fan on or off if the outside air has less water.
@@ -626,7 +626,7 @@ dewpoint_absFeuchte ($$)
   </ul>
 
   <ul>
-    <code>define &lt;name&gt; dewpoint alarm &lt;devicename-regex&gt; &lt;devicename-reference&gt; &lt;diff-temp&gt;</code><br>
+    <code>define &lt;name&gt; dewpoint alarm &lt;devicename&gt; &lt;devicename-reference&gt; &lt;diff-temp&gt;</code><br>
     <br>
     <ul>
         Generate a mold alarm if a reference temperature is lower than the current dewpoint.
@@ -755,7 +755,7 @@ dewpoint_absFeuchte ($$)
 
     <br/>
     <br/>
-    <code>define &lt;name&gt; dewpoint fan &lt;devicename-regex&gt; &lt;devicename-outside&gt; &lt;min-temp&gt; [&lt;diff_temp&gt;]</code><br>
+    <code>define &lt;name&gt; dewpoint fan &lt;devicename&gt; &lt;devicename-outside&gt; &lt;min-temp&gt; [&lt;diff_temp&gt;]</code><br>
     <br>
     <ul>
       <li>Erzeugt ein Ereignis, um einen L&uuml;fter einzuschalten, wenn die Au&szlig;enluft 
@@ -780,7 +780,7 @@ dewpoint_absFeuchte ($$)
     define dew_fan1_off notify basement_tempsensor.*fan:.*off set fan_switch off
     </pre>
 
-    <code>define &lt;name&gt; dewpoint alarm &lt;devicename-regex&gt; &lt;devicename-reference&gt; &lt;diff-temp&gt;</code><br>
+    <code>define &lt;name&gt; dewpoint alarm &lt;devicename&gt; &lt;devicename-reference&gt; &lt;diff-temp&gt;</code><br>
     <br>
     <ul>
       <li>Erzeugt einen Schimmel-Alarm, wenn eine Referenz-Temperatur unter den Taupunkt f&auml;llt.</li>

@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 28666 2024-03-16 12:11:51Z rudolfkoenig $
+# $Id: fhem.pl 29222 2024-10-11 16:25:05Z rudolfkoenig $
 
 
 use strict;
@@ -281,7 +281,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 28666 2024-03-16 12:11:51Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 29222 2024-10-11 16:25:05Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -4946,8 +4946,14 @@ readingsEndUpdate($$)
       #Debug "Evaluating " . $reading;
       $cmdFromAnalyze = $perlCode;      # For the __WARN__ sub
       my $NAME = $name; # no exceptions, #53069
+
+      my $stopRecursion = ".evalUserReading_$reading";
+      next if($hash->{$stopRecursion}); # No warning / #138149
+      $hash->{$stopRecursion} = 1;
       my $value= eval $perlCode;
+      delete($hash->{$stopRecursion});
       $cmdFromAnalyze = undef;
+
       my $result;
       # store result
       if($@) {
@@ -5486,7 +5492,7 @@ json2nameValue($;$$$$)
       setVal($ret, $prefix, $name, $1);
       $in = $2;
 
-    } elsif($val =~ m/^(null)(.*)$/s) {
+    } elsif($val =~ m/^(null|none)(.*)$/is) { # 139411
       setVal($ret, $prefix, $name, undef);
       $in = $2;
 

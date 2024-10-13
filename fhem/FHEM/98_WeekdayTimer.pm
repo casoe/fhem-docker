@@ -1,4 +1,4 @@
-# $Id: 98_WeekdayTimer.pm 27586 2023-05-17 13:43:31Z Beta-User $we Beta-User $
+# $Id: 98_WeekdayTimer.pm 29184 2024-10-03 06:26:03Z Beta-User $
 #############################################################################
 #
 #     98_WeekdayTimer.pm
@@ -1146,6 +1146,7 @@ sub checkDelayedExecution {
                     EnOcean      => { READING => 'state',           STATUS => '(open)',               MODEL => 'r' },
                     ZWave        => { READING => 'state',           STATUS => '(open)',               MODEL => 'r' },
                     MAX          => { READING => 'state',           STATUS => '(open.*)',             MODEL => 'r' },
+                    HUEDevice    => { READING => 'state',           STATUS => '(open)',               MODEL => 'r' },
                     dummy        => { READING => 'state',           STATUS => '(([Oo]pen|[Tt]ilt).*)',MODEL => 'r' },
                     HMCCUDEV     => { READING => 'state',           STATUS => "(open|tilted)",        MODEL => 'r' },
                     WeekdayTimer => { READING => 'delayedExecution',STATUS => '^1\$',                 MODEL => 'a' }

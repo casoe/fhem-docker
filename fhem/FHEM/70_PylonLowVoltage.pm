@@ -1,5 +1,5 @@
 #########################################################################################################################
-# $Id: 70_PylonLowVoltage.pm 28685 2024-03-19 20:55:49Z DS_Starter $
+# $Id: 70_PylonLowVoltage.pm 29212 2024-10-08 06:27:22Z DS_Starter $
 #########################################################################################################################
 #
 # 70_PylonLowVoltage.pm
@@ -52,7 +52,7 @@ package FHEM::PylonLowVoltage;                                     ## no critic 
 use strict;
 use warnings;
 use GPUtils qw(GP_Import GP_Export);                               # wird für den Import der FHEM Funktionen aus der fhem.pl benötigt
-use Time::HiRes qw(gettimeofday ualarm);
+use Time::HiRes qw(gettimeofday ualarm sleep);
 use IO::Socket::INET;
 use Errno qw(ETIMEDOUT EWOULDBLOCK);
 use Scalar::Util qw(looks_like_number);
@@ -61,13 +61,11 @@ use Blocking;
 use MIME::Base64;
 
 eval "use FHEM::Meta;1"                or my $modMetaAbsent = 1;                             ## no critic 'eval'
-eval "use IO::Socket::Timeout;1"       or my $iostAbsent    = 'IO::Socket::Timeout';         ## no critic 'eval'
+eval "use IO::Socket::Timeout;1"       or my $iostabs       = 'IO::Socket::Timeout';         ## no critic 'eval'
 eval "use Storable qw(freeze thaw);1;" or my $storabs       = 'Storable';                    ## no critic 'eval'
 
 use FHEM::SynoModules::SMUtils qw(moduleVersion);                                            # Hilfsroutinen Modul
-#use Data::Dumper;
-
-no if $] >= 5.017011, warnings => 'experimental::smartmatch';
+# use Data::Dumper;
 
 # Run before module compilation
 BEGIN {
@@ -78,6 +76,7 @@ BEGIN {
           AttrNum
           BlockingCall
           BlockingKill
+          devspec2array
           data
           defs
           fhemTimeLocal
@@ -122,6 +121,15 @@ BEGIN {
 
 # Versions History intern (Versions history by Heiko Maaz)
 my %vNotesIntern = (
+  "1.2.0"  => "05.10.2024 _composeAddr: bugfix of effective battaery addressing ",
+  "1.1.0"  => "25.08.2024 manage time shift for active gateway connections of all defined  devices ",
+  "1.0.0"  => "24.08.2024 implement pylon groups ",
+  "0.4.0"  => "23.08.2024 Log output for timeout changed, automatic calculation of checksum, preparation for pylon groups ",
+  "0.3.0"  => "22.08.2024 extend battery addresses up to 16 ",
+  "0.2.6"  => "25.05.2024 replace Smartmatch Forum:#137776 ",
+  "0.2.5"  => "02.04.2024 _callAnalogValue / _callAlarmInfo: integrate a Cell and Temperature Position counter ".
+                          "add specific Alarm readings ",
+  "0.2.4"  => "29.03.2024 avoid possible Illegal division by zero at line 1438 ",
   "0.2.3"  => "19.03.2024 edit commandref ",
   "0.2.2"  => "20.02.2024 correct commandref ",
   "0.2.1"  => "18.02.2024 doOnError: print out faulty response, Forum:https://forum.fhem.de/index.php?msg=1303912 ",
@@ -150,6 +158,9 @@ my $definterval = 30;                                                # default A
 my $defto       = 0.5;                                               # default connection Timeout zum RS485 Gateway
 my @blackl      = qw(state nextCycletime);                           # Ausnahmeliste deleteReadingspec
 my $age1def     = 60;                                                # default Zyklus Abrufklasse statische Werte (s)
+my $wtbRS485cmd = 0.1;                                               # default Wartezeit zwischen RS485 Kommandos
+my $pfx         = "~";                                               # KommandoPräfix
+my $sfx         = "\x{0d}";                                          # Kommandosuffix
 
 # Steuerhashes
 ###############
@@ -167,19 +178,22 @@ my %hrtnc = (                                                        # RTN Codes
   '99' => { desc => 'invalid data received ... discarded'                                                },
 );
 
-my %fns1 = (                                                                  # Abrufklasse statische Werte:
-  1 => { fn => \&_callSerialNumber     },                                     #   serialNumber
-  2 => { fn => \&_callManufacturerInfo },                                     #   manufacturerInfo
-  3 => { fn => \&_callProtocolVersion  },                                     #   protocolVersion
-  4 => { fn => \&_callSoftwareVersion  },                                     #   softwareVersion
-  5 => { fn => \&_callSystemParameters },                                     #   systemParameters
+my %fncls = (                                                                 # Funktionsklassen
+  1 => { class => 'sta', fn => \&_callSerialNumber        },                  #   statisch - serialNumber
+  2 => { class => 'sta', fn => \&_callManufacturerInfo    },                  #   statisch - manufacturerInfo
+  3 => { class => 'sta', fn => \&_callProtocolVersion     },                  #   statisch - protocolVersion
+  4 => { class => 'sta', fn => \&_callSoftwareVersion     },                  #   statisch - softwareVersion
+  5 => { class => 'sta', fn => \&_callSystemParameters    },                  #   statisch - systemParameters
+  6 => { class => 'dyn', fn => \&_callAnalogValue         },                  #   dynamisch - analogValue
+  7 => { class => 'dyn', fn => \&_callAlarmInfo           },                  #   dynamisch - alarmInfo
+  8 => { class => 'dyn', fn => \&_callChargeManagmentInfo },                  #   dynamisch - chargeManagmentInfo  
 );
 
-my %fns2 = (                                                                  # Abrufklasse dynamische Werte:
-  1 => { fn => \&_callAlarmInfo           },                                  #   alarmInfo
-  2 => { fn => \&_callChargeManagmentInfo },                                  #   chargeManagmentInfo
-  3 => { fn => \&_callAnalogValue         },                                  #   analogValue
-  
+my %halm = (                                                                  # Codierung Alarme
+  '00' => { alm => 'normal'            },
+  '01' => { alm => 'below lower limit' },
+  '02' => { alm => 'above higher limit'},
+  'F0' => { alm => 'other error'       },
 );
 
 ##################################################################################################################################################################
@@ -191,8 +205,10 @@ my %fns2 = (                                                                  # 
 # HEX-ASCII converter: https://www.rapidtables.com/convert/number/ascii-hex-bin-dec-converter.html
 # Modulo Rechner: https://miniwebtool.com/de/modulo-calculator/
 # Pylontech Dokus: https://github.com/Interster/PylonTechBattery
-##################################################################################################################################################################
 #
+# '--'  -> Platzhalter für Batterieadresse, wird ersetzt durch berechnete Adresse (Bat + Group in _composeAddr)
+##################################################################################################################################################################
+# Codierung Abruf serialNumber, mlen = Mindestlänge Antwortstring
 # ADR: n=Batterienummer (2-x), m=Group Nr. (0-8), ADR = 0x0n + (0x10 * m) -> f. Batterie 1 = 0x02 + (0x10 * 0) = 0x02
 # CID1: Kommando spezifisch, hier 46H
 # CID2: Kommando spezifisch, hier 93H
@@ -201,27 +217,15 @@ my %fns2 = (                                                                  # 
 # CHKSUM (als HEX! addieren): 32+30+30+41+34+36+39+33+45+30+30+32+30+41 = 02F1H -> modulo 65536 = 02F1H -> bitweise invert = 1111 1101 0000 1110 -> +1 = 1111 1101 0000 1111 -> FD0FH
 #
 # SOI  VER    ADR   CID1  CID2      LENGTH     INFO    CHKSUM
-#  ~    20    0A      46    93     E0    02    0A      FD   0F
-# 7E  32 30  30 41  34 36 39 33  45 30 30 32  30 41  
-#
-my %hrsnb = (                                                        # Codierung Abruf serialNumber, mlen = Mindestlänge Antwortstring
-  1 => { cmd => "~20024693E00202FD2D\x{0d}", mlen => 52 },
-  2 => { cmd => "~20034693E00203FD2B\x{0d}", mlen => 52 },
-  3 => { cmd => "~20044693E00204FD29\x{0d}", mlen => 52 },
-  4 => { cmd => "~20054693E00205FD27\x{0d}", mlen => 52 },
-  5 => { cmd => "~20064693E00206FD25\x{0d}", mlen => 52 },
-  6 => { cmd => "~20074693E00207FD23\x{0d}", mlen => 52 },
-  7 => { cmd => "~20084693E00208FD21\x{0d}", mlen => 52 },
-  8 => { cmd => "~20094693E00209FD1F\x{0d}", mlen => 52 },           
-  9 => { cmd => "~200A4693E0020AFD0F\x{0d}", mlen => 52 },
- 10 => { cmd => "~200B4693E0020BFD0D\x{0d}", mlen => 52 },
- 11 => { cmd => "~200C4693E0020CFD0B\x{0d}", mlen => 52 },
- 12 => { cmd => "~200D4693E0020DFD09\x{0d}", mlen => 52 },
- 13 => { cmd => "~200E4693E0020EFD07\x{0d}", mlen => 52 },
- 14 => { cmd => "~200F4693E0020FFD05\x{0d}", mlen => 52 },
- 
+#  ~    20    10      46    93     E0    02    10      
+# 7E  32 30  31 30  34 36 39 33  45 30 30 32  31 30                  = 02D1H -> bitweise invert = 1111 1101 0010 1110 -> +1 = 1111 1101 0010 1111 -> FD2FH
+##################################################################################################################################################################
+my %hrsnb = (                                                              
+  1 => { cmd => '20--4693E002--', fnclsnr => 1, fname => 'serialNumber', mlen => 52 },
 );
 
+##################################################################################################################################################################
+# Codierung Abruf manufacturerInfo, mlen = Mindestlänge Antwortstring
 # ADR: n=Batterienummer (2-x), m=Group Nr. (0-8), ADR = 0x0n + (0x10 * m) -> f. Batterie 1 = 0x02 + (0x10 * 0) = 0x02
 # CID1: Kommando spezifisch, hier 46H
 # CID2: Kommando spezifisch, hier 51H
@@ -231,26 +235,15 @@ my %hrsnb = (                                                        # Codierung
 # CHKSUM (als HEX! addieren): 32+30+30+41+34+36+35+31+30+30+30+30 = 0263H -> modulo 65536 = 0263H -> bitweise invert = 1111 1101 1001 1100 -> +1 = 1111 1101 1001 1101  = FD9DH
 #
 # SOI  VER    ADR   CID1  CID2      LENGTH    INFO     CHKSUM
-#  ~    20    0A      46    51     00    00   empty    FD  9D
-# 7E  32 30  30 41  34 36 35 31  30 30 30 30   - -   
-#
-my %hrmfi = (                                                        # Codierung Abruf manufacturerInfo, mlen = Mindestlänge Antwortstring
-  1 => { cmd => "~200246510000FDAC\x{0d}", mlen => 82 },
-  2 => { cmd => "~200346510000FDAB\x{0d}", mlen => 82 },
-  3 => { cmd => "~200446510000FDAA\x{0d}", mlen => 82 },
-  4 => { cmd => "~200546510000FDA9\x{0d}", mlen => 82 },
-  5 => { cmd => "~200646510000FDA8\x{0d}", mlen => 82 },
-  6 => { cmd => "~200746510000FDA7\x{0d}", mlen => 82 },
-  7 => { cmd => "~200846510000FDA6\x{0d}", mlen => 82 },
-  8 => { cmd => "~200946510000FDA5\x{0d}", mlen => 82 },
-  9 => { cmd => "~200A46510000FD9D\x{0d}", mlen => 82 },
- 10 => { cmd => "~200B46510000FD9C\x{0d}", mlen => 82 },
- 11 => { cmd => "~200C46510000FD9B\x{0d}", mlen => 82 },
- 12 => { cmd => "~200D46510000FD9A\x{0d}", mlen => 82 },
- 13 => { cmd => "~200E46510000FD8F\x{0d}", mlen => 82 },
- 14 => { cmd => "~200F46510000FD8E\x{0d}", mlen => 82 },
+#  ~    20    10      46    51     00    00   empty    
+# 7E  32 20  31 30  34 36 35 31  30 30 30 30   - -     FD  BD        = 0243H -> bitweise invert = 1111 1101 1011 1100 -> +1 = 1111 1101 1011 1101 = FDBDH
+##################################################################################################################################################################
+my %hrmfi = (                                                                    
+  1 => { cmd => '20--46510000', fnclsnr => 2, fname => 'manufacturerInfo', mlen => 82 },
 );
 
+##################################################################################################################################################################
+# Codierung Abruf protocolVersion, mlen = Mindestlänge Antwortstring
 # ADR: n=Batterienummer (2-x), m=Group Nr. (0-8), ADR = 0x0n + (0x10 * m) -> f. Batterie 1 = 0x02 + (0x10 * 0) = 0x02
 # CID1: Kommando spezifisch, hier 46H
 # CID2: Kommando spezifisch, hier 4FH
@@ -260,122 +253,38 @@ my %hrmfi = (                                                        # Codierung
 # CHKSUM (als HEX! addieren): 30+30+30+41+34+36+34+46+30+30+30+30 = 0275H -> modulo 65536 = 0275H -> bitweise invert = 1111 1101 1000 1010 -> +1 = 1111 1101 1000 1011 -> FD8BH
 #
 # SOI  VER    ADR   CID1   CID2      LENGTH    INFO     CHKSUM
-#  ~    00    0A      46    4F      00    00   empty    FD  8B
-# 7E  30 30  30 41  34 36  34 46  30 30 30 30   - -   
-#
-my %hrprt = (                                                        # Codierung Abruf protocolVersion, mlen = Mindestlänge Antwortstring
-  1 => { cmd => "~0002464F0000FD9A\x{0d}", mlen => 18 },
-  2 => { cmd => "~0003464F0000FD99\x{0d}", mlen => 18 },
-  3 => { cmd => "~0004464F0000FD98\x{0d}", mlen => 18 },
-  4 => { cmd => "~0005464F0000FD97\x{0d}", mlen => 18 },
-  5 => { cmd => "~0006464F0000FD96\x{0d}", mlen => 18 },
-  6 => { cmd => "~0007464F0000FD95\x{0d}", mlen => 18 },
-  7 => { cmd => "~0008464F0000FD94\x{0d}", mlen => 18 },
-  8 => { cmd => "~0009464F0000FD93\x{0d}", mlen => 18 },
-  9 => { cmd => "~000A464F0000FD8B\x{0d}", mlen => 18 },
- 10 => { cmd => "~000B464F0000FD8A\x{0d}", mlen => 18 },
- 11 => { cmd => "~000C464F0000FD89\x{0d}", mlen => 18 },
- 12 => { cmd => "~000D464F0000FD88\x{0d}", mlen => 18 },
- 13 => { cmd => "~000E464F0000FD87\x{0d}", mlen => 18 },
- 14 => { cmd => "~000F464F0000FD86\x{0d}", mlen => 18 },
+#  ~    00    0A      46    4F      00    00   empty    
+##################################################################################################################################################################
+my %hrprt = (                                                        
+  1 => { cmd => '00--464F0000', fnclsnr => 3, fname => 'protocolVersion', mlen => 18 },
 );
 
+##################################################################################################################################################################
+# Codierung Abruf softwareVersion
 # CHKSUM (als HEX! addieren): 32+30+30+41+34+36+39+36+45+30+30+32+30+41 = 02F4H -> modulo 65536 = 02F4H -> bitweise invert = 1111 1101 0000 1011 -> +1 1111 1101 0000 1100 = FD0CH
 #
 # SOI  VER    ADR   CID1  CID2      LENGTH     INFO    CHKSUM
-#  ~    20    0A      46    96     E0    02    0A      FD  0C
-# 7E  32 30  30 41  34 36 39 36  45 30 30 32  30 41  
-#
-
-my %hrswv = (                                                        # Codierung Abruf softwareVersion
-  1 => { cmd => "~20024696E00202FD2A\x{0d}", mlen => 30 },
-  2 => { cmd => "~20034696E00203FD28\x{0d}", mlen => 30 },
-  3 => { cmd => "~20044696E00204FD26\x{0d}", mlen => 30 },
-  4 => { cmd => "~20054696E00205FD24\x{0d}", mlen => 30 },
-  5 => { cmd => "~20064696E00206FD22\x{0d}", mlen => 30 },
-  6 => { cmd => "~20074696E00207FD20\x{0d}", mlen => 30 },
-  7 => { cmd => "~20084696E00208FD1E\x{0d}", mlen => 30 },
-  8 => { cmd => "~20094696E00209FD1C\x{0d}", mlen => 30 },
-  9 => { cmd => "~200A4696E0020AFD0C\x{0d}", mlen => 30 },
- 10 => { cmd => "~200B4696E0020BFD0A\x{0d}", mlen => 30 },
- 11 => { cmd => "~200C4696E0020CFD08\x{0d}", mlen => 30 },
- 12 => { cmd => "~200D4696E0020DFD06\x{0d}", mlen => 30 },
- 13 => { cmd => "~200E4696E0020EFD04\x{0d}", mlen => 30 },
- 14 => { cmd => "~200F4696E0020FFD02\x{0d}", mlen => 30 },
+#  ~    20    11      46    96     E0    02    11     
+# 7E  32 30  31 31  34 36 39 36  45 30 30 32  31 31    
+##################################################################################################################################################################
+my %hrswv = (                                                        
+  1 => { cmd => '20--4696E002--', fnclsnr => 4, fname => 'softwareVersion', mlen => 30 },
 );
 
-# CHKSUM (als HEX! addieren): 32+30+30+41+34+36+34+34+45+30+30+32+30+41 = 02EDH -> modulo 65536 = 02EDH -> bitweise invert = 1111 1101 0001 0010 -> +1 1111 1101 0001 0011 = FD13H
-#
-# SOI  VER    ADR   CID1  CID2      LENGTH     INFO    CHKSUM
-#  ~    20    0A      46    44     E0    02    0A      FD  13
-# 7E  32 30  30 41  34 36 34 34  45 30 30 32  30 41  
-#
-
-my %hralm = (                                                        # Codierung Abruf alarmInfo
-  1 => { cmd => "~20024644E00202FD31\x{0d}", mlen => 82 },
-  2 => { cmd => "~20034644E00203FD2F\x{0d}", mlen => 82 },
-  3 => { cmd => "~20044644E00204FD2D\x{0d}", mlen => 82 },
-  4 => { cmd => "~20054644E00205FD2B\x{0d}", mlen => 82 },
-  5 => { cmd => "~20064644E00206FD29\x{0d}", mlen => 82 },
-  6 => { cmd => "~20074644E00207FD27\x{0d}", mlen => 82 },
-  7 => { cmd => "~20084644E00208FD25\x{0d}", mlen => 82 },
-  8 => { cmd => "~20094644E00209FD23\x{0d}", mlen => 82 },
-  9 => { cmd => "~200A4644E0020AFD13\x{0d}", mlen => 82 },
- 10 => { cmd => "~200B4644E0020BFD11\x{0d}", mlen => 82 },
- 11 => { cmd => "~200C4644E0020CFD0F\x{0d}", mlen => 82 },
- 12 => { cmd => "~200D4644E0020DFD0D\x{0d}", mlen => 82 },
- 13 => { cmd => "~200E4644E0020EFD0B\x{0d}", mlen => 82 },
- 14 => { cmd => "~200F4644E0020FFCFE\x{0d}", mlen => 82 },
-);
-
+##################################################################################################################################################################
+# Codierung Abruf Systemparameter
 # CHKSUM (als HEX! addieren): 32+30+30+41+34+36+34+37+45+30+30+32+30+41 = 02F0H -> modulo 65536 = 02F0H -> bitweise invert = 1111 1101 0000 1111 -> +1 1111 1101 0001 0000 = FD10H
 #
 # SOI  VER    ADR   CID1  CID2      LENGTH     INFO    CHKSUM
 #  ~    20    0A      46    47     E0    02    0A      FD  10
 # 7E  32 30  30 41  34 36 34 37  45 30 30 32  30 41  
-#
-
-my %hrspm = (                                                        # Codierung Abruf Systemparameter
-  1 => { cmd => "~20024647E00202FD2E\x{0d}", mlen => 68 },
-  2 => { cmd => "~20034647E00203FD2C\x{0d}", mlen => 68 },
-  3 => { cmd => "~20044647E00204FD2A\x{0d}", mlen => 68 },
-  4 => { cmd => "~20054647E00205FD28\x{0d}", mlen => 68 },
-  5 => { cmd => "~20064647E00206FD26\x{0d}", mlen => 68 },
-  6 => { cmd => "~20074647E00207FD24\x{0d}", mlen => 68 },
-  7 => { cmd => "~20084647E00208FD22\x{0d}", mlen => 68 },
-  8 => { cmd => "~20094647E00209FD20\x{0d}", mlen => 68 },
-  9 => { cmd => "~200A4647E0020AFD10\x{0d}", mlen => 68 },
- 10 => { cmd => "~200B4647E0020BFD0E\x{0d}", mlen => 68 },
- 11 => { cmd => "~200C4647E0020CFD0C\x{0d}", mlen => 68 },
- 12 => { cmd => "~200D4647E0020DFD0A\x{0d}", mlen => 68 },
- 13 => { cmd => "~200E4647E0020EFD08\x{0d}", mlen => 68 },
- 14 => { cmd => "~200F4647E0020FFD06\x{0d}", mlen => 68 },
+##################################################################################################################################################################
+my %hrspm = (                                                        
+  1 => { cmd => '20--4647E002--', fnclsnr => 5, fname => 'systemParameter', mlen => 68 },
 );
 
-# CHKSUM (als HEX! addieren): 32+30+30+41+34+36+39+32+45+30+30+32+30+41 = 02F0H -> modulo 65536 = 02F0H -> bitweise invert = 1111 1101 0000 1111 -> +1 1111 1101 0001 0000 = FD10H
-#
-# SOI  VER    ADR   CID1  CID2      LENGTH     INFO    CHKSUM
-#  ~    20    0A      46    92     E0    02    0A      FD  10
-# 7E  32 30  30 41  34 36 39 32  45 30 30 32  30 41  
-#
-
-my %hrcmi = (                                                        # Codierung Abruf chargeManagmentInfo
-  1 => { cmd => "~20024692E00202FD2E\x{0d}", mlen => 38 },
-  2 => { cmd => "~20034692E00203FD2C\x{0d}", mlen => 38 },
-  3 => { cmd => "~20044692E00204FD2A\x{0d}", mlen => 38 },
-  4 => { cmd => "~20054692E00205FD28\x{0d}", mlen => 38 },
-  5 => { cmd => "~20064692E00206FD26\x{0d}", mlen => 38 },
-  6 => { cmd => "~20074692E00207FD24\x{0d}", mlen => 38 },
-  7 => { cmd => "~20084692E00208FD22\x{0d}", mlen => 38 },
-  8 => { cmd => "~20094692E00209FD20\x{0d}", mlen => 38 },
-  9 => { cmd => "~200A4692E0020AFD10\x{0d}", mlen => 38 },
- 10 => { cmd => "~200B4692E0020BFD0E\x{0d}", mlen => 38 },
- 11 => { cmd => "~200C4692E0020CFD0C\x{0d}", mlen => 38 },
- 12 => { cmd => "~200D4692E0020DFD0A\x{0d}", mlen => 38 },
- 13 => { cmd => "~200E4692E0020EFD08\x{0d}", mlen => 38 },
- 14 => { cmd => "~200F4692E0020FFD06\x{0d}", mlen => 38 },
-);
-
+##################################################################################################################################################################
+# Codierung Abruf analogValue
 # ADR: n=Batterienummer (2-x), m=Group Nr. (0-8), ADR = 0x0n + (0x10 * m) -> f. Batterie 1 = 0x02 + (0x10 * 0) = 0x02
 # CID1: Kommando spezifisch, hier 46H
 # CID2: Kommando spezifisch, hier 42H                                                                                                              LCHK|    LENID
@@ -385,25 +294,37 @@ my %hrcmi = (                                                        # Codierung
 # CHKSUM (als HEX! addieren): 32+30+30+41+34+36+34+32+45+30+30+32+30+41 = 02EBH -> modulo 65536 = 02EBH -> bitweise invert = 1111 1101 0001 0100 -> +1 1111 1101 0001 0101 = FD15H
 #
 # SOI  VER    ADR   CID1   CID2      LENGTH    INFO     CHKSUM
-#  ~    20    0A     46     42      E0    02    0A      FD  15
-# 7E  32 30  30 41  34 36  34 32  45 30 30 32  30 41  
-#
-my %hrcmn = (                                                        # Codierung Abruf analogValue
-  1 => { cmd => "~20024642E00202FD33\x{0d}", mlen => 128 },
-  2 => { cmd => "~20034642E00203FD31\x{0d}", mlen => 128 },
-  3 => { cmd => "~20044642E00204FD2F\x{0d}", mlen => 128 },
-  4 => { cmd => "~20054642E00205FD2D\x{0d}", mlen => 128 },
-  5 => { cmd => "~20064642E00206FD2B\x{0d}", mlen => 128 },
-  6 => { cmd => "~20074642E00207FD29\x{0d}", mlen => 128 },
-  7 => { cmd => "~20084642E00208FD27\x{0d}", mlen => 128 },
-  8 => { cmd => "~20094642E00209FD25\x{0d}", mlen => 128 },
-  9 => { cmd => "~200A4642E0020AFD15\x{0d}", mlen => 128 },
- 10 => { cmd => "~200B4642E0020BFD13\x{0d}", mlen => 128 },
- 11 => { cmd => "~200C4642E0020CFD11\x{0d}", mlen => 128 },
- 12 => { cmd => "~200D4642E0020DFD0F\x{0d}", mlen => 128 },
- 13 => { cmd => "~200E4642E0020EFD0D\x{0d}", mlen => 128 },
- 14 => { cmd => "~200F4642E0020FFD0B\x{0d}", mlen => 128 },
+#  ~    20    10     46     42      E0    02    10      
+# 7E  32 30  31 30  34 36  34 32  45 30 30 32  31 30              
+##################################################################################################################################################################
+my %hrcmn = (                                                       
+  1 => { cmd => '20--4642E002--', fnclsnr => 6, fname => 'analogValue', mlen => 128 },
 );
+
+##################################################################################################################################################################
+# Codierung Abruf alarmInfo
+# CHKSUM (als HEX! addieren): 32+30+30+41+34+36+34+34+45+30+30+32+30+41 = 02EDH -> modulo 65536 = 02EDH -> bitweise invert = 1111 1101 0001 0010 -> +1 1111 1101 0001 0011 = FD13H
+#
+# SOI  VER    ADR   CID1  CID2      LENGTH     INFO    CHKSUM
+#  ~    20    10      46    44     E0    02    10      FD  33
+# 7E  32 30  31 30  34 36 34 34  45 30 30 32  31 30                  1111 1101 0011 0010
+##################################################################################################################################################################
+my %hralm = (                                                        
+  1 => { cmd => '20--4644E002--', fnclsnr => 7, fname => 'alarmInfo', mlen => 82 },
+);
+
+##################################################################################################################################################################
+# Codierung Abruf chargeManagmentInfo
+# CHKSUM (als HEX! addieren): 32+30+30+41+34+36+39+32+45+30+30+32+30+41 = 02F0H -> modulo 65536 = 02F0H -> bitweise invert = 1111 1101 0000 1111 -> +1 1111 1101 0001 0000 = FD10H
+#
+# SOI  VER    ADR   CID1  CID2      LENGTH     INFO    CHKSUM
+#  ~    20    0A      46    92     E0    02    0A      FD  10
+# 7E  32 30  30 41  34 36 39 32  45 30 30 32  30 41  
+##################################################################################################################################################################
+my %hrcmi = (                                                        
+  1 => { cmd => '20--4692E002--', fnclsnr => 8, fname => 'chargeManagmentInfo', mlen => 38 },
+);
+
 
 
 ###############################################################
@@ -421,6 +342,7 @@ sub Initialize {
                         "interval ".
                         "timeout ".
                         "userBatterytype ".
+                        "waitTimeBetweenRS485Cmd:slider,0.1,0.1,2.0,1 ".
                         $readingFnAttributes;
 
   eval { FHEM::Meta::InitMod( __FILE__, $hash ) };     ## no critic 'eval'
@@ -442,8 +364,8 @@ sub Define {
 
   my $name = $hash->{NAME};
 
-  if ($iostAbsent) {
-      my $err = "Perl module >$iostAbsent< is missing. You have to install this perl module.";
+  if ($iostabs) {
+      my $err = "Perl module >$iostabs< is missing. You have to install this perl module.";
       Log3 ($name, 1, "$name - ERROR - $err");
       return "Error: $err";
   }
@@ -455,12 +377,25 @@ sub Define {
   }
 
   $hash->{HELPER}{MODMETAABSENT} = 1 if($modMetaAbsent);                           # Modul Meta.pm nicht vorhanden
-  ($hash->{HOST}, $hash->{PORT}) = split ":", $args[2];
-  $hash->{BATADDRESS}            = $args[3] // 1;
-
-  if ($hash->{BATADDRESS} !~ /^([1-9]{1}|1[0-4])$/xs) {
-      return "Define: bataddress must be a value between 1 and 14";
+  
+  my ($a,$h)                     = parseParams (join ' ', @args);  
+  ($hash->{HOST}, $hash->{PORT}) = split ":", $$a[2];
+  
+  if (!$hash->{HOST} || !$hash->{PORT}) {
+      return "The <hostname/ip>:<port> must be specified.";
   }
+  
+  if (defined $$a[3] && $$a[3] !~ /^([1-9]{1}|1[0-6])$/xs) {
+      return "The bataddress must be an integer from 1 to 16";
+  }
+  
+  if (defined $h->{group} && $h->{group} !~ /^([0-7]{1})$/xs) {
+      return "The group number must be an integer from 0 to 7";
+  }
+  
+  $hash->{HELPER}{BATADDRESS} = $$a[3]      // 1;
+  $hash->{HELPER}{GROUP}      = $h->{group} // 0;
+  $hash->{HELPER}{AGE1}       = 0;
 
   my $params = {
       hash        => $hash,
@@ -538,23 +473,25 @@ sub Attr {
       }
   }
 
-  if ($aName eq 'interval') {
-      if (!looks_like_number($aVal)) {
-          return qq{The value for $aName is invalid, it must be numeric!};
-      }
+  if ($cmd eq 'set') {
+      if ($aName eq 'interval') {
+          if (!looks_like_number($aVal)) {
+              return qq{The value for $aName is invalid, it must be numeric!};
+          }
 
-      InternalTimer(gettimeofday()+1.0, "FHEM::PylonLowVoltage::manageUpdate", $hash, 0);
+          InternalTimer(gettimeofday()+1.0, "FHEM::PylonLowVoltage::manageUpdate", $hash, 0);
+      }
+      
+      if ($aName =~ /timeout|waitTimeBetweenRS485Cmd/xs) {
+          if (!looks_like_number($aVal)) {
+              return qq{The value for $aName is invalid, it must be numeric!};
+          }
+      }
   }
 
   if ($aName eq 'userBatterytype') {
       $hash->{HELPER}{AGE1} = 0;
       InternalTimer(gettimeofday()+1.0, "FHEM::PylonLowVoltage::manageUpdate", $hash, 0);
-  }
-
-  if ($aName eq 'timeout') {
-      if (!looks_like_number($aVal)) {
-          return qq{The value for $aName is invalid, it must be numeric!};
-      }
   }
 
 return;
@@ -565,52 +502,68 @@ return;
 ###############################################################
 sub manageUpdate {
   my $hash = shift;
-
   my $name = $hash->{NAME};
   my $age1 = delete $hash->{HELPER}{AGE1} // $age1def;
 
   RemoveInternalTimer ($hash);
 
-  if(!$init_done) {
+  if (!$init_done) {
       InternalTimer(gettimeofday() + 2, "FHEM::PylonLowVoltage::manageUpdate", $hash, 0);
       return;
   }
 
   return if(IsDisabled ($name));
 
-  my $interval  = AttrVal ($name, 'interval', $definterval);                                 # 0 -> manuell gesteuert
-  my $timeout   = AttrVal ($name, 'timeout',        $defto);
-  my $readings;
+  my $interval = AttrVal ($name, 'interval', $definterval);                                 # 0 -> manuell gesteuert
+  my $timeout  = AttrVal ($name, 'timeout',        $defto);
+  my ($readings, $new);
 
-  if(!$interval) {
+  if (!$interval) {
       $hash->{OPMODE}            = 'Manual';
       $readings->{nextCycletime} = 'Manual';
   }
   else {
-      my $new = gettimeofday() + $interval;
-      InternalTimer ($new, "FHEM::PylonLowVoltage::manageUpdate", $hash, 0);                             # Wiederholungsintervall
+      $new = gettimeofday() + $interval;
+      InternalTimer ($new, "FHEM::PylonLowVoltage::manageUpdate", $hash, 0);                # Wiederholungsintervall
 
       $hash->{OPMODE}            = 'Automatic';
       $readings->{nextCycletime} = FmtTime($new);
   }
+  
+  delete $hash->{HELPER}{BKRUNNING} if(defined $hash->{HELPER}{BKRUNNING} && $hash->{HELPER}{BKRUNNING}{pid} =~ /DEAD/xs);
+ 
+  for my $dev ( devspec2array ('TYPE=PylonLowVoltage') ) {
+      if (defined $defs{$dev}->{HELPER}{BKRUNNING} || defined $defs{$dev}->{HELPER}{GWSESSION}) {
+          $hash->{POSTPONED} += 1;
+          
+          RemoveInternalTimer ($hash);
+          $new = gettimeofday() + 1;
+          InternalTimer (gettimeofday() + 1, "FHEM::PylonLowVoltage::manageUpdate", $hash, 0); 
+          
+          $readings->{nextCycletime} = FmtTime ($new);
+          $readings->{state}         = "cycle postponed due to active gateway connection of $dev";
+          createReadings ($hash, 1, $readings);                                             
+          
+          if (defined $defs{$dev}->{HELPER}{BKRUNNING}) {
+              Log3 ($name, 4, qq{$name - another Gateway Call from $dev with PID "$defs{$dev}->{HELPER}{BKRUNNING}{pid}" is already running ... start Update postponed});
+          }
+          else {
+              Log3 ($name, 4, qq{$name - another Gateway Call from $dev is already running ... start Update postponed});
+          }
+          
+          return;
+      }
+  }
 
-  Log3 ($name, 4, "$name - start request cycle to battery number >$hash->{BATADDRESS}< at host:port $hash->{HOST}:$hash->{PORT}");
+  Log3 ($name, 4, "$name - START request cycle to battery number >$hash->{HELPER}{BATADDRESS}<, group >$hash->{HELPER}{GROUP}< at host:port $hash->{HOST}:$hash->{PORT}");
 
   if ($timeout < 1.0) {
-      BlockingKill ($hash->{HELPER}{BKRUNNING}) if(defined $hash->{HELPER}{BKRUNNING});
-      Log3 ($name, 4, qq{$name - Cycle started in main process});
+      $hash->{HELPER}{GWSESSION} = 1;
+      Log3 ($name, 4, qq{$name - Cycle started in main process with battery read timeout: >$timeout<});
       startUpdate  ({name => $name, timeout => $timeout, readings => $readings, age1 => $age1});
   }
   else {
-     delete $hash->{HELPER}{BKRUNNING} if(defined $hash->{HELPER}{BKRUNNING} && $hash->{HELPER}{BKRUNNING}{pid} =~ /DEAD/xs);
-
-     if (defined $hash->{HELPER}{BKRUNNING}) {
-         Log3 ($name, 3, qq{$name - another BlockingCall PID "$hash->{HELPER}{BKRUNNING}{pid}" is already running ... start Update aborted});
-
-         return;
-     }
-
-     my $blto = sprintf "%.0f", ($timeout + 10);
+     my $blto = sprintf "%.0f", ($timeout + (AttrVal ($name, 'waitTimeBetweenRS485Cmd', $wtbRS485cmd) * 15));
 
      $hash->{HELPER}{BKRUNNING} = BlockingCall ( "FHEM::PylonLowVoltage::startUpdate",
                                                  {name => $name, timeout => $timeout, readings => $readings, age1 => $age1, block => 1},
@@ -624,7 +577,7 @@ sub manageUpdate {
      if (defined $hash->{HELPER}{BKRUNNING}) {
          $hash->{HELPER}{BKRUNNING}{loglevel} = 3;                                                       # Forum https://forum.fhem.de/index.php/topic,77057.msg689918.html#msg689918
 
-         Log3 ($name, 4, qq{$name - Cycle BlockingCall PID "$hash->{HELPER}{BKRUNNING}{pid}" with timeout "$blto" started});
+         Log3 ($name, 4, qq{$name - Cycle BlockingCall PID "$hash->{HELPER}{BKRUNNING}{pid}" started with battery read timeout: >$timeout<, blocking timeout >$blto<});
      }
   }
 
@@ -645,12 +598,16 @@ sub startUpdate {
 
   my $hash     = $defs{$name};
   my $success  = 0;
+  my $wtb      = AttrVal ($name, 'waitTimeBetweenRS485Cmd', $wtbRS485cmd);                            # Wartezeit zwischen RS485 Kommandos
+  my $uat      = $block ? $timeout * 1000000 + $wtb * 1000000 : $timeout * 1000000; 
+
+  Log3 ($name, 4, "$name - used wait time between RS485 commands: ".($block ? $wtb : 0)." seconds");  
 
   my ($socket, $serial);
 
   eval {                                                                                              ## no critic 'eval'
       local $SIG{ALRM} = sub { croak 'gatewaytimeout' };
-      ualarm ($timeout * 1000000);                                                                    # ualarm in Mikrosekunden
+      ualarm ($timeout * 1000000);                                                                    # ualarm in Mikrosekunden -> 1s
 
       $socket = _openSocket ($hash, $timeout, $readings);
 
@@ -658,21 +615,21 @@ sub startUpdate {
           $serial = encode_base64 (Serialize ( {name => $name, readings => $readings} ), "");
           $block ? return ($serial) : return \&finishUpdate ($serial);
       }
-
-      if (ReadingsAge ($name, "serialNumber", 6000) >= $age1) {                                       # Abrufklasse statische Werte
-          for my $idx (sort keys %fns1) {
-              if (&{$fns1{$idx}{fn}} ($hash, $socket, $readings)) {
-                  $serial = encode_base64 (Serialize ( {name => $name, readings => $readings} ), "");
-                  $block ? return ($serial) : return \&finishUpdate ($serial);
-              }
-          }
-      }
-
-      for my $idx (sort keys %fns2) {                                                                 # Abrufklasse dynamische Werte
-          if (&{$fns2{$idx}{fn}} ($hash, $socket, $readings)) {
+      
+      local $SIG{ALRM} = sub { croak 'batterytimeout' };
+      
+      for my $idx (sort keys %fncls) {                                                                 
+          next if($fncls{$idx}{class} eq 'sta' && ReadingsAge ($name, "serialNumber", 6000) < $age1);    # Funktionsklasse statische Werte seltener abrufen
+          
+          ualarm ($uat);   
+          
+          if (&{$fncls{$idx}{fn}} ($hash, $socket, $readings)) {
               $serial = encode_base64 (Serialize ( {name => $name, readings => $readings} ), "");
               $block ? return ($serial) : return \&finishUpdate ($serial);
           }
+          
+          ualarm(0);
+          sleep $wtb if($block); 
       }
 
       $success = 1;
@@ -681,7 +638,10 @@ sub startUpdate {
   if ($@) {
       my $errtxt;
       if ($@ =~ /gatewaytimeout/xs) {
-          $errtxt = 'Timeout in communication to RS485 gateway';
+          $errtxt = 'Timeout while establish RS485 gateway connection';
+      }
+      elsif ($@ =~ /batterytimeout/xs) {
+          $errtxt = 'Timeout reading battery';
       }
       else {
           $errtxt = $@;
@@ -724,10 +684,11 @@ sub finishUpdate {
   my $readings = $paref->{readings};
   my $hash     = $defs{$name};
 
-  delete($hash->{HELPER}{BKRUNNING}) if(defined $hash->{HELPER}{BKRUNNING});
+  delete $hash->{HELPER}{BKRUNNING};
+  delete $hash->{HELPER}{GWSESSION};
 
   if ($success) {
-      Log3 ($name, 4, "$name - got data from battery number >$hash->{BATADDRESS}< successfully");
+      Log3 ($name, 4, "$name - got data from battery number >$hash->{HELPER}{BATADDRESS}<, group >$hash->{HELPER}{GROUP}< successfully");
 
       additionalReadings ($readings);                                                 # zusätzliche eigene Readings erstellen
       $readings->{state} = 'connected';
@@ -736,7 +697,7 @@ sub finishUpdate {
       deleteReadingspec ($hash);
   }
 
-  createReadings ($hash, $success, $readings);                                                  # Readings erstellen
+  createReadings ($hash, $success, $readings);                                        # Readings erstellen
 
 return;
 }
@@ -751,7 +712,8 @@ sub abortUpdate {
 
   Log3 ($name, 1, "$name -> BlockingCall $hash->{HELPER}{BKRUNNING}{fn} pid:$hash->{HELPER}{BKRUNNING}{pid} aborted: $cause");
 
-  delete($hash->{HELPER}{BKRUNNING});
+  delete $hash->{HELPER}{BKRUNNING};
+  delete $hash->{HELPER}{GWSESSION};
 
   deleteReadingspec    ($hash);
   readingsSingleUpdate ($hash, 'state', 'Update (Child) process timed out', 1);
@@ -836,15 +798,15 @@ sub _callSerialNumber {
   my $hash     = shift;
   my $socket   = shift;
   my $readings = shift;                # Referenz auf das Hash der zu erstellenden Readings
-
+  
   my $res = Request ({ hash   => $hash,
                        socket => $socket,
-                       cmd    => $hrsnb{$hash->{BATADDRESS}}{cmd},
+                       cmd    => getCmdString ($hash, $hrsnb{1}{cmd}),
                        cmdtxt => 'serialNumber'
                      }
                     );
 
-  my $rtnerr = responseCheck ($res, $hrsnb{$hash->{BATADDRESS}}{mlen});
+  my $rtnerr = responseCheck ($res, $hrsnb{1}{mlen});
 
   if ($rtnerr) {
       doOnError ({ hash     => $hash,
@@ -875,12 +837,12 @@ sub _callManufacturerInfo {
 
   my $res = Request ({ hash   => $hash,
                        socket => $socket,
-                       cmd    => $hrmfi{$hash->{BATADDRESS}}{cmd},
+                       cmd    => getCmdString ($hash, $hrmfi{1}{cmd}),
                        cmdtxt => 'manufacturerInfo'
                      }
                     );
 
-  my $rtnerr = responseCheck ($res, $hrmfi{$hash->{BATADDRESS}}{mlen});
+  my $rtnerr = responseCheck ($res, $hrmfi{1}{mlen});
 
   if ($rtnerr) {
       doOnError ({ hash     => $hash,
@@ -917,12 +879,12 @@ sub _callProtocolVersion {
 
   my $res = Request ({ hash   => $hash,
                        socket => $socket,
-                       cmd    => $hrprt{$hash->{BATADDRESS}}{cmd},
+                       cmd    => getCmdString ($hash, $hrprt{1}{cmd}),
                        cmdtxt => 'protocolVersion'
                      }
                     );
 
-  my $rtnerr = responseCheck ($res, $hrprt{$hash->{BATADDRESS}}{mlen});
+  my $rtnerr = responseCheck ($res, $hrprt{1}{mlen});
 
   if ($rtnerr) {
       doOnError ({ hash     => $hash,
@@ -952,12 +914,12 @@ sub _callSoftwareVersion {
 
   my $res = Request ({ hash   => $hash,
                        socket => $socket,
-                       cmd    => $hrswv{$hash->{BATADDRESS}}{cmd},
+                       cmd    => getCmdString ($hash, $hrswv{1}{cmd}),
                        cmdtxt => 'softwareVersion'
                      }
                     );
 
-  my $rtnerr = responseCheck ($res, $hrswv{$hash->{BATADDRESS}}{mlen});
+  my $rtnerr = responseCheck ($res, $hrswv{1}{mlen});
 
   if ($rtnerr) {
       doOnError ({ hash     => $hash,
@@ -988,12 +950,12 @@ sub _callSystemParameters {
 
   my $res = Request ({ hash   => $hash,
                        socket => $socket,
-                       cmd    => $hrspm{$hash->{BATADDRESS}}{cmd},
+                       cmd    => getCmdString ($hash, $hrspm{1}{cmd}),
                        cmdtxt => 'systemParameters'
                      }
                     );
 
-  my $rtnerr = responseCheck ($res, $hrspm{$hash->{BATADDRESS}}{mlen});
+  my $rtnerr = responseCheck ($res, $hrspm{1}{mlen});
 
   if ($rtnerr) {
       doOnError ({ hash     => $hash,
@@ -1024,96 +986,6 @@ sub _callSystemParameters {
 return;
 }
 
-###############################################################
-#       Abruf alarmInfo
-###############################################################
-sub _callAlarmInfo {
-  my $hash     = shift;
-  my $socket   = shift;
-  my $readings = shift;                # Referenz auf das Hash der zu erstellenden Readings
-
-  my $res = Request ({ hash   => $hash,
-                       socket => $socket,
-                       cmd    => $hralm{$hash->{BATADDRESS}}{cmd},
-                       cmdtxt => 'alarmInfo'
-                     }
-                    );
-
-  my $rtnerr = responseCheck ($res, $hralm{$hash->{BATADDRESS}}{mlen});
-
-  if ($rtnerr) {
-      doOnError ({ hash     => $hash,
-                   readings => $readings,
-                   sock     => $socket,
-                   res      => $res,
-                   state    => $rtnerr
-                 }
-                );
-      return $rtnerr;
-  }
-
-  __resultLog ($hash, $res);
-
-  $readings->{packCellcount} = hex (substr($res, 17, 2));
-
-  if (substr($res, 19, 30) eq "000000000000000000000000000000" &&
-      substr($res, 51, 10) eq "0000000000"                     &&
-      substr($res, 67, 2)  eq "00"                             &&
-      substr($res, 73, 4)  eq "0000") {
-      $readings->{packAlarmInfo} = "ok";
-  }
-  else {
-      $readings->{packAlarmInfo} = "failure";
-  }
-
-return;
-}
-
-###############################################################
-#       Abruf chargeManagmentInfo
-###############################################################
-sub _callChargeManagmentInfo {
-  my $hash     = shift;
-  my $socket   = shift;
-  my $readings = shift;                # Referenz auf das Hash der zu erstellenden Readings
-
-  my $res = Request ({ hash   => $hash,
-                       socket => $socket,
-                       cmd    => $hrcmi{$hash->{BATADDRESS}}{cmd},
-                       cmdtxt => 'chargeManagmentInfo'
-                     }
-                    );
-
-  my $rtnerr = responseCheck ($res, $hrcmi{$hash->{BATADDRESS}}{mlen});
-
-  if ($rtnerr) {
-      doOnError ({ hash     => $hash,
-                   readings => $readings,
-                   sock     => $socket,
-                   res      => $res,
-                   state    => $rtnerr
-                 }
-                );
-      return $rtnerr;
-  }
-
-  __resultLog ($hash, $res);
-
-  $readings->{chargeVoltageLimit}     = sprintf "%.3f", hex (substr ($res, 15, 4)) / 1000;        # Genauigkeit 3
-  $readings->{dischargeVoltageLimit}  = sprintf "%.3f", hex (substr ($res, 19, 4)) / 1000;        # Genauigkeit 3
-  $readings->{chargeCurrentLimit}     = sprintf "%.1f", hex (substr ($res, 23, 4)) / 10;          # Genauigkeit 1
-  $readings->{dischargeCurrentLimit}  = sprintf "%.1f", (65536 - hex substr ($res, 27, 4)) / 10;  # Genauigkeit 1, Fixed point, unsigned integer
-
-  my $cdstat                          = sprintf "%08b", hex substr ($res, 31, 2);                 # Rohstatus
-  $readings->{chargeEnable}           = substr ($cdstat, 0, 1) == 1 ? 'yes' : 'no';               # Bit 7
-  $readings->{dischargeEnable}        = substr ($cdstat, 1, 1) == 1 ? 'yes' : 'no';               # Bit 6
-  $readings->{chargeImmediatelySOC05} = substr ($cdstat, 2, 1) == 1 ? 'yes' : 'no';               # Bit 5 - SOC 5~9%  -> für Wechselrichter, die aktives Batteriemanagement bei gegebener DC-Spannungsfunktion haben oder Wechselrichter, der von sich aus einen niedrigen SOC/Spannungsgrenzwert hat
-  $readings->{chargeImmediatelySOC09} = substr ($cdstat, 3, 1) == 1 ? 'yes' : 'no';               # Bit 4 - SOC 9~13% -> für Wechselrichter hat keine aktive Batterieabschaltung haben
-  $readings->{chargeFullRequest}      = substr ($cdstat, 4, 1) == 1 ? 'yes' : 'no';               # Bit 3 - wenn SOC in 30 Tagen nie höher als 97% -> Flag = 1, wenn SOC-Wert ≥ 97% -> Flag = 0
-
-return;
-}
-
 #################################################################################
 #       Abruf analogValue
 # Answer from US2000 = 128 Bytes, from US3000 = 140 Bytes
@@ -1128,12 +1000,12 @@ sub _callAnalogValue {
 
   my $res = Request ({ hash   => $hash,
                        socket => $socket,
-                       cmd    => $hrcmn{$hash->{BATADDRESS}}{cmd},
+                       cmd    => getCmdString ($hash, $hrcmn{1}{cmd}),
                        cmdtxt => 'analogValue'
                      }
                     );
 
-  my $rtnerr = responseCheck ($res, $hrcmn{$hash->{BATADDRESS}}{mlen});
+  my $rtnerr = responseCheck ($res, $hrcmn{1}{mlen});
 
   if ($rtnerr) {
       doOnError ({ hash     => $hash,
@@ -1154,11 +1026,11 @@ sub _callAnalogValue {
 
   for my $z (1..$pcc) {
       my $fz                          = sprintf "%02d", $z;                                      # formatierter Zähler
-      $readings->{'cellVoltage_'.$fz} = sprintf "%.3f", hex(substr($res, $bpos, 4)) / 1000;      # Pos 19 - 75 bei 15 Zellen
+      $readings->{'cellVoltage_'.$fz} = sprintf "%.3f", hex(substr($res, $bpos, 4)) / 1000;      # Pos 19 -> 75 bei 15 Zellen
       $bpos += 4;                                                                                # letzter Durchlauf: Pos 79 bei 15 Zellen, Pos 83 bei 16 Zellen
   }
-
-  $readings->{numberTempPos}             = hex(substr($res, $bpos, 2));                          # Anzahl der jetzt folgenden Teperaturpositionen -> 5
+  
+  $readings->{numberTempPos}             = hex(substr($res, $bpos, 2));                          # Anzahl der jetzt folgenden Temperaturpositionen -> 5 oder mehr (US5000: 6)
   $bpos += 2;
 
   $readings->{bmsTemperature}            = (hex (substr($res, $bpos, 4)) - 2731) / 10;           # Pos 81 bei 15 Zellen
@@ -1176,28 +1048,34 @@ sub _callAnalogValue {
   $readings->{'cellTemperature_13'.$pcc} = (hex (substr($res, $bpos, 4)) - 2731) / 10;           # Pos 97
   $bpos += 4;
 
-  my $current                            =  hex (substr($res, $bpos, 4));                        # Pos 101
+  for my $t (6..$readings->{numberTempPos}) {
+      $t = 'Pos_'.sprintf "%02d", $t;
+      $readings->{'cellTemperature_'.$t} = (hex (substr($res, $bpos, 4)) - 2731) / 10;           # mehr als 5 Temperaturpositionen (z.B. US5000)
+      $bpos += 4;                                                                                # Position bei 5 Temp.Angaben (bei 6 Temperaturen)
+  }
+
+  my $current                            =  hex (substr($res, $bpos, 4));                        # Pos 101 (105)
   $bpos += 4;
 
-  $readings->{packVolt}                  = sprintf "%.3f", hex (substr($res, $bpos, 4)) / 1000;  # Pos 105
+  $readings->{packVolt}                  = sprintf "%.3f", hex (substr($res, $bpos, 4)) / 1000;  # Pos 105 (109)
   $bpos += 4;
 
-  my $remcap1                            = sprintf "%.3f", hex (substr($res, $bpos, 4)) / 1000;  # Pos 109
+  my $remcap1                            = sprintf "%.3f", hex (substr($res, $bpos, 4)) / 1000;  # Pos 109 (113)
   $bpos += 4;
 
-  my $udi                                = hex substr($res, $bpos, 2);                           # Pos 113, user defined item=Entscheidungskriterium -> 2: Batterien <= 65Ah, 4: Batterien > 65Ah
+  my $udi                                = hex substr($res, $bpos, 2);                           # Pos 113 (117)  user defined item=Entscheidungskriterium -> 2: Batterien <= 65Ah, 4: Batterien > 65Ah
   $bpos += 2;
 
-  my $totcap1                            = sprintf "%.3f", hex (substr($res, $bpos, 4)) / 1000;  # Pos 115
+  my $totcap1                            = sprintf "%.3f", hex (substr($res, $bpos, 4)) / 1000;  # Pos 115 (119)
   $bpos += 4;
 
-  $readings->{packCycles}                = hex substr($res, $bpos, 4);                           # Pos 119
+  $readings->{packCycles}                = hex substr($res, $bpos, 4);                           # Pos 119 (123)
   $bpos += 4;
 
-  my $remcap2                            = sprintf "%.3f", hex (substr($res, $bpos, 6)) / 1000;  # Pos 123
+  my $remcap2                            = sprintf "%.3f", hex (substr($res, $bpos, 6)) / 1000;  # Pos 123 (127)
   $bpos += 6;
 
-  my $totcap2                            = sprintf "%.3f", hex (substr($res, $bpos, 6)) / 1000;  # Pos 129
+  my $totcap2                            = sprintf "%.3f", hex (substr($res, $bpos, 6)) / 1000;  # Pos 129 (133)
   $bpos += 6;
 
   # kalkulierte Werte generieren
@@ -1228,6 +1106,154 @@ sub _callAnalogValue {
 
   $readings->{packCellcount} = $pcc;
   $readings->{packCurrent}   = sprintf "%.3f", $current / 10;
+
+return;
+}
+
+###############################################################
+#       Abruf alarmInfo
+###############################################################
+sub _callAlarmInfo {
+  my $hash     = shift;
+  my $socket   = shift;
+  my $readings = shift;                # Referenz auf das Hash der zu erstellenden Readings
+
+  my $res = Request ({ hash   => $hash,
+                       socket => $socket,
+                       cmd    => getCmdString ($hash, $hralm{1}{cmd}),
+                       cmdtxt => 'alarmInfo'
+                     }
+                    );
+
+  my $rtnerr = responseCheck ($res, $hralm{1}{mlen});
+
+  if ($rtnerr) {
+      doOnError ({ hash     => $hash,
+                   readings => $readings,
+                   sock     => $socket,
+                   res      => $res,
+                   state    => $rtnerr
+                 }
+                );
+      return $rtnerr;
+  }
+
+  __resultLog ($hash, $res);
+  
+  my ($alm, $aval);
+  
+  my $bpos = 17;                                                                  # Startposition 
+  $readings->{packCellcount} = hex (substr($res, $bpos, 2));                      # Pos. 17
+  $bpos += 2;
+  
+  for my $cnt (1..$readings->{packCellcount}) {                                   # Start Pos. 19
+      $cnt                                = sprintf "%02d", $cnt;                       
+      $aval                               = substr ($res, $bpos, 2);
+      $readings->{'almCellVoltage_'.$cnt} = $halm{$aval}{alm}; 
+      $alm   = 1 if(int $aval);
+      $bpos += 2;      
+  }
+  
+  my $ntp = hex (substr($res, $bpos, 2));                                         # Pos. 49 bei 15 Zellen (Anzahl der Temperaturpositionen)
+  $bpos += 2;
+
+  for my $nt (1..$ntp) {                                                          # Start Pos. 51 bei 15 Zellen
+      $nt                                = sprintf "%02d", $nt; 
+      $aval                              = substr ($res, $bpos, 2);
+      $readings->{'almTemperature_'.$nt} = $halm{$aval}{alm}; 
+      $alm   = 1 if(int $aval);
+      $bpos += 2;      
+  }  
+  
+  $aval                         = substr ($res, $bpos, 2);                        # Pos. 61 b. 15 Zellen u. 5 Temp.positionen
+  $readings->{almChargeCurrent} = $halm{$aval}{alm};
+  $alm   = 1 if(int $aval);
+  $bpos += 2;
+  
+  $aval                         = substr ($res, $bpos, 2);                        # Pos. 63 b. 15 Zellen u. 5 Temp.positionen
+  $readings->{almModuleVoltage} = $halm{$aval}{alm};
+  $alm   = 1 if(int $aval);
+  $bpos += 2;
+  
+  $aval                            = substr ($res, $bpos, 2);                     # Pos. 65 b. 15 Zellen u. 5 Temp.positionen
+  $readings->{almDischargeCurrent} = $halm{$aval}{alm};
+  $alm   = 1 if(int $aval);
+  $bpos += 2;
+  
+  my $stat1alm = substr ($res, $bpos, 2);                                         # Pos. 67 b. 15 Zellen u. 5 Temp.positionen
+  $bpos += 2;
+  
+  my $stat2alm = substr ($res, $bpos, 2);                                         # Pos. 69 b. 15 Zellen u. 5 Temp.positionen
+  $bpos += 2;
+  
+  my $stat3alm = substr ($res, $bpos, 2);                                         # Pos. 71 b. 15 Zellen u. 5 Temp.positionen
+  $bpos += 2;
+  
+  my $stat4alm = substr ($res, $bpos, 2);                                         # Pos. 73 b. 15 Zellen u. 5 Temp.positionen
+  $bpos += 2;
+  
+  my $stat5alm = substr ($res, $bpos, 2);                                         # Pos. 75 b. 15 Zellen u. 5 Temp.positionen
+  
+  if (!$alm) {
+      $readings->{packAlarmInfo} = "ok";
+  }
+  else {
+      $readings->{packAlarmInfo} = "failure";
+  }  
+    
+  my $name = $hash->{NAME};
+  
+  if (AttrVal ($name, 'verbose', 3) > 4) {
+      Log3 ($name, 5, "$name - Alarminfo - Status 1 alarm: $stat1alm");
+      Log3 ($name, 5, "$name - Alarminfo - Status 2 Info: $stat2alm");
+      Log3 ($name, 5, "$name - Alarminfo - Status 3 Info: $stat3alm");
+      Log3 ($name, 5, "$name - Alarminfo - Status 4 alarm: $stat4alm");
+      Log3 ($name, 5, "$name - Alarminfo - Status 5 alarm: $stat5alm \n");
+  }
+return;
+}
+
+###############################################################
+#       Abruf chargeManagmentInfo
+###############################################################
+sub _callChargeManagmentInfo {
+  my $hash     = shift;
+  my $socket   = shift;
+  my $readings = shift;                # Referenz auf das Hash der zu erstellenden Readings
+
+  my $res = Request ({ hash   => $hash,
+                       socket => $socket,
+                       cmd    => getCmdString ($hash, $hrcmi{1}{cmd}),
+                       cmdtxt => 'chargeManagmentInfo'
+                     }
+                    );
+
+  my $rtnerr = responseCheck ($res, $hrcmi{1}{mlen});
+
+  if ($rtnerr) {
+      doOnError ({ hash     => $hash,
+                   readings => $readings,
+                   sock     => $socket,
+                   res      => $res,
+                   state    => $rtnerr
+                 }
+                );
+      return $rtnerr;
+  }
+
+  __resultLog ($hash, $res);
+
+  $readings->{chargeVoltageLimit}     = sprintf "%.3f", hex (substr ($res, 15, 4)) / 1000;        # Genauigkeit 3
+  $readings->{dischargeVoltageLimit}  = sprintf "%.3f", hex (substr ($res, 19, 4)) / 1000;        # Genauigkeit 3
+  $readings->{chargeCurrentLimit}     = sprintf "%.1f", hex (substr ($res, 23, 4)) / 10;          # Genauigkeit 1
+  $readings->{dischargeCurrentLimit}  = sprintf "%.1f", (65536 - hex substr ($res, 27, 4)) / 10;  # Genauigkeit 1, Fixed point, unsigned integer
+
+  my $cdstat                          = sprintf "%08b", hex substr ($res, 31, 2);                 # Rohstatus
+  $readings->{chargeEnable}           = substr ($cdstat, 0, 1) == 1 ? 'yes' : 'no';               # Bit 7
+  $readings->{dischargeEnable}        = substr ($cdstat, 1, 1) == 1 ? 'yes' : 'no';               # Bit 6
+  $readings->{chargeImmediatelySOC05} = substr ($cdstat, 2, 1) == 1 ? 'yes' : 'no';               # Bit 5 - SOC 5~9%  -> für Wechselrichter, die aktives Batteriemanagement bei gegebener DC-Spannungsfunktion haben oder Wechselrichter, der von sich aus einen niedrigen SOC/Spannungsgrenzwert hat
+  $readings->{chargeImmediatelySOC09} = substr ($cdstat, 3, 1) == 1 ? 'yes' : 'no';               # Bit 4 - SOC 9~13% -> für Wechselrichter hat keine aktive Batterieabschaltung haben
+  $readings->{chargeFullRequest}      = substr ($cdstat, 4, 1) == 1 ? 'yes' : 'no';               # Bit 3 - wenn SOC in 30 Tagen nie höher als 97% -> Flag = 1, wenn SOC-Wert ≥ 97% -> Flag = 0
 
 return;
 }
@@ -1309,8 +1335,28 @@ sub Reread {
 return $res;
 }
 
+################################################################
+# Die Undef-Funktion wird aufgerufen wenn ein Gerät mit delete
+# gelöscht wird oder bei der Abarbeitung des Befehls rereadcfg,
+# der ebenfalls alle Geräte löscht und danach das
+# Konfigurationsfile neu einliest. Entsprechend müssen in der
+# Funktion typische Aufräumarbeiten durchgeführt werden wie das
+# saubere Schließen von Verbindungen oder das Entfernen von
+# internen Timern.
+################################################################
+sub Undef {
+ my $hash = shift;
+ my $name = shift;
+
+ RemoveInternalTimer ($hash);
+  _closeSocket       ($hash);
+  BlockingKill       ($hash->{HELPER}{BKRUNNING}) if(defined $hash->{HELPER}{BKRUNNING});
+
+return;
+}
+
 ###############################################################
-#                  PylonLowVoltage Undef
+#                  PylonLowVoltage Shutdown
 ###############################################################
 sub Shutdown {
   my ($hash, $args) = @_;
@@ -1384,7 +1430,7 @@ sub pseudoHexToText {
    my $charcode;
    my $text = '';
    
-   for (my $i = 0; $i < length($string); $i = $i + 2) {
+   for (my $i = 0; $i < length($string); $i += 2) {
       $charcode = hex substr ($string, $i, 2);                  # charcode = aquivalente Dezimalzahl der angegebenen Hexadezimalzahl
       next if($charcode == 45);                                 # Hyphen '-' ausblenden 
       
@@ -1392,6 +1438,79 @@ sub pseudoHexToText {
    }
    
 return $text;
+}
+
+###############################################################
+#          Kommandostring zusammenstellen
+#          Teilstring aus Kommandohash wird übergeben
+###############################################################
+sub getCmdString {
+  my $hash = shift;
+  my $cstr = shift;                        # Komamndoteilstring                 
+
+  my $addr = _composeAddr ($hash);         # effektive Batterieadresse berechnen
+  $cstr    =~ s/--/$addr/xg;               # Platzhalter Adresse ersetzen
+  
+  my $cmd  = $pfx;                         # Präfix
+  $cmd    .= $cstr;                        # Kommandostring
+  $cmd    .= _doChecksum ($cstr);          # Checksumme ergänzen
+  $cmd    .= $sfx;                         # Suffix 
+
+return $cmd;
+}
+
+###############################################################
+#  Adresse aus Batterie und Gruppe erstellen
+# 
+# 1) Single group battery 4:
+#    n = 5; m = 0
+#    ADR = 0x05 + 0x10*0 = 0x05; INFO of COMMAND = ADR = 0x05
+# 2) multi group, group 3, battery 6;
+#    n = 7; m = 3
+#    ADR = 0x07 + 0x10*3 = 0x37; INFO of COMMAND = ADR = 0x37
+###############################################################
+sub _composeAddr {
+   my $hash = shift;
+   
+   my $ba = sprintf "%02x", ($hash->{HELPER}{BATADDRESS} + 1);                          # Master startet mit "02"
+   my $ga = sprintf "%02x", $hash->{HELPER}{GROUP};                    
+   my $ad = sprintf "%02x", (hex ($ga) * hex (10) + hex ($ba));
+   
+   my $name  = $hash->{NAME};
+   Log3 ($name, 5, "$name - Addressing (HEX) - Bat: $ba, Group: $ga, effective Bat address: $ad");
+   
+return $ad;
+}
+
+###############################################################
+#  wandelt eine Zeichenkette aus HEX-Zahlen in eine 
+#  hexadecimal-ASCII Zeichenkette um und berechnet daraus die
+#  Checksumme (=Returnwert)
+###############################################################
+sub _doChecksum {
+   my $hstring = shift // return;
+   
+   my $dezsum    = 0;
+   my @asciivals = split //, $hstring;                           
+   
+   for my $v (@asciivals) {                                      # jedes einzelne Zeichen der HEX-Kette wird als ASCII Wert interpretiert 
+       my $hex  = unpack "H*", $v;                               # in einen HEX-Wert umgewandelt
+       $dezsum += hex $hex;                                      # und die Dezimalsumme gebildet
+   }
+   
+   my $bin = sprintf '%016b', $dezsum;
+
+   $bin    =~ s/1/x/g;                                           # invertieren
+   $bin    =~ s/0/1/g;  
+   $bin    =~ s/x/0/g;  
+   
+   $dezsum = oct("0b$bin");
+   $dezsum++;
+   $bin    = sprintf '%016b', $dezsum;
+
+   my $chksum = sprintf '%X', oct("0b$bin");
+   
+return $chksum;
 }
 
 ###############################################################
@@ -1434,8 +1553,8 @@ sub additionalReadings {
 
     my ($vmax, $vmin);
 
-    $readings->{averageCellVolt} = sprintf "%.3f", $readings->{packVolt} / $readings->{packCellcount}                  if(defined $readings->{packCellcount});
-    $readings->{packSOC}         = sprintf "%.2f", ($readings->{packCapacityRemain} / $readings->{packCapacity} * 100) if(defined $readings->{packCapacity});
+    $readings->{averageCellVolt} = sprintf "%.3f", $readings->{packVolt} / $readings->{packCellcount}                  if($readings->{packCellcount});
+    $readings->{packSOC}         = sprintf "%.2f", ($readings->{packCapacityRemain} / $readings->{packCapacity} * 100) if($readings->{packCapacity});
     $readings->{packPower}       = sprintf "%.2f", $readings->{packCurrent} * $readings->{packVolt};
 
     for (my $i=1; $i <= $readings->{packCellcount}; $i++) {
@@ -1468,10 +1587,10 @@ sub createReadings {
 
     for my $rdg (keys %{$readings}) {
         next if(!defined $readings->{$rdg});
-        readingsBulkUpdate ($hash, $rdg, $readings->{$rdg}) if($success || $rdg ~~ @blackl);
+        readingsBulkUpdate ($hash, $rdg, $readings->{$rdg}) if($success || grep /^$rdg$/, @blackl);  
     }
 
-    readingsEndUpdate  ($hash, 1);
+    readingsEndUpdate ($hash, 1);
 
 return;
 }
@@ -1488,7 +1607,7 @@ sub deleteReadingspec {
   my $readingspec = '^'.$spec.'$';
 
   for my $reading ( grep { /$readingspec/x } keys %{$hash->{READINGS}} ) {
-      next if($reading ~~ @blackl);
+      next if(grep /^$reading$/, @blackl);              
       readingsDelete ($hash, $reading);
   }
 
@@ -1519,6 +1638,7 @@ return;
   <li> US2000 Plus   </li>
   <li> US3000        </li>
   <li> US3000C       </li>
+  <li> US5000        </li>
  </ul>
 
  The following devices have been successfully used as RS485 Ethernet gateways to date: <br>
@@ -1586,7 +1706,9 @@ return;
 
  <b>Limitations</b>
  <br>
- The module currently supports a maximum of 14 batteries (master + 13 slaves) in one group.
+ The module currently supports a maximum of 16 batteries (1 master + 15 slaves) in up to 7 groups. <br>
+ The number of groups and batteries that can be realized depends on the products used. 
+ Please refer to the manufacturer's instructions.
  <br><br>
 
  <a id="PylonLowVoltage-define"></a>
@@ -1594,6 +1716,11 @@ return;
  <ul>
   <code><b>define &lt;name&gt; PylonLowVoltage &lt;hostname/ip&gt;:&lt;port&gt; [&lt;bataddress&gt;]</b></code><br>
   <br>
+  
+  <b>Example:</b> <br>
+  define Pylone1 PylonLowVoltage 192.168.2.86:9000 1 group=0 <br>
+  <br>
+  
   <li><b>hostname/ip:</b><br>
      Host name or IP address of the RS485/Ethernet gateway
   </li>
@@ -1608,6 +1735,11 @@ return;
      The master battery in the network (with open link port 0 or to which the RS485 connection is connected) has the
      address 1, the next battery then has address 2 and so on.
      If no device address is specified, address 1 is used.
+  </li>
+  
+  <li><b>group:</b><br>
+     Optional group number of the battery stack. If group=0 or is not specified, the default configuration 
+     “Single Group” is used. The group number can be 0 to 7.     
   </li>
   <br>
  </ul>
@@ -1664,6 +1796,15 @@ return;
      The automatically determined battery type (Reading batteryType) is replaced by the specified string.
    </li>
    <br>
+   
+   <a id="PylonLowVoltage-attr-waitTimeBetweenRS485Cmd"></a>
+   <li><b>waitTimeBetweenRS485Cmd &lt;Sekunden&gt;</b><br>
+     Waiting time between the execution of RS485 commands in seconds. <br>
+     This parameter only has an effect if the “timeout” attribute is set to a value >= 1. <br>
+     (default: 0.1)
+   </li>
+   <br>
+   
  </ul>
 
  <a id="PylonLowVoltage-readings"></a>
@@ -1675,6 +1816,7 @@ return;
  <li><b>cellTemperature_0508</b><br>   Temperature (°C) of cell packs 5 to 8                                              </li>
  <li><b>cellTemperature_0912</b><br>   Temperature (°C) of the cell packs 9 to 12                                         </li>
  <li><b>cellTemperature_1315</b><br>   Temperature (°C) of the cell packs 13 to 15                                        </li>
+ <li><b>cellTemperature_Pos_XX</b><br> Temperature (°C) of position XX (not further specified)                            </li>
  <li><b>cellVoltage_XX</b><br>         Cell voltage (V) of the cell pack XX. In the battery module "packCellcount"
                                        cell packs are connected in series. Each cell pack consists of single cells
                                        connected in parallel.                                                             </li>
@@ -1742,6 +1884,7 @@ return;
   <li> US2000 Plus   </li>
   <li> US3000        </li>
   <li> US3000C       </li>
+  <li> US5000        </li>
  </ul>
 
  Als RS485-Ethernet-Gateways wurden bisher folgende Geräte erfolgreich eingesetzt: <br>
@@ -1809,14 +1952,21 @@ return;
 
  <b>Einschränkungen</b>
  <br>
- Das Modul unterstützt zur Zeit maximal 14 Batterien (Master + 13 Slaves) in einer Gruppe.
+ Das Modul unterstützt zur Zeit maximal 16 Batterien (1 Master + 15 Slaves) in bis zu 7 Gruppen. <br>
+ Die realisierbare Gruppen- und Batterieanzahl ist von den eingesetzen Produkten abhängig. Dazu bitte die Hinweise des 
+ Herstellers beachten.
  <br><br>
 
  <a id="PylonLowVoltage-define"></a>
  <b>Definition</b>
  <ul>
-  <code><b>define &lt;name&gt; PylonLowVoltage &lt;hostname/ip&gt;:&lt;port&gt; [&lt;bataddress&gt;]</b></code><br>
+  <code><b>define &lt;name&gt; PylonLowVoltage &lt;hostname/ip&gt;:&lt;port&gt; [&lt;bataddress&gt;] [group=&lt;N&gt;]</b></code><br>
   <br>
+  
+  <b>Beispiel:</b> <br>
+  define Pylone1 PylonLowVoltage 192.168.2.86:9000 1 group=0 <br>
+  <br>
+  
   <li><b>hostname/ip:</b><br>
      Hostname oder IP-Adresse des RS485/Ethernet-Gateways
   </li>
@@ -1826,11 +1976,16 @@ return;
   </li>
 
   <li><b>bataddress:</b><br>
-     Geräteadresse der Pylontech Batterie. Es können mehrere Pylontech Batterien über eine Pylontech-spezifische
+     Optionale Geräteadresse der Pylontech Batterie. Es können mehrere Pylontech Batterien über eine Pylontech-spezifische
      Link-Verbindung verbunden werden. Die zulässige Anzahl ist der jeweiligen Pylontech Dokumentation zu entnehmen. <br>
      Die Master Batterie im Verbund (mit offenem Link Port 0 bzw. an der die RS485-Verbindung angeschlossen ist) hat die
      Adresse 1, die nächste Batterie hat dann die Adresse 2 und so weiter.
      Ist keine Geräteadresse angegeben, wird die Adresse 1 verwendet.
+  </li>
+  
+  <li><b>group:</b><br>
+     Optionale Gruppennummer des Batteriestacks. Ist group=0 oder nicht angegeben, wird die Standardkonfiguration 
+     "Single Group" verwendet. Die Gruppennummer kann 0 bis 7 sein.     
   </li>
   <br>
  </ul>
@@ -1888,6 +2043,15 @@ return;
      Der automatisch ermittelte Batterietyp (Reading batteryType) wird durch die angegebene Zeichenfolge ersetzt.
    </li>
    <br>
+   
+   <a id="PylonLowVoltage-attr-waitTimeBetweenRS485Cmd"></a>
+   <li><b>waitTimeBetweenRS485Cmd &lt;Sekunden&gt;</b><br>
+     Wartezeit zwischen der Ausführung von RS485 Befehlen in Sekunden. <br>
+     Dieser Parameter hat nur Auswirkung wenn das Attribut "timeout" auf einen Wert >= 1 gesetzt ist. <br>
+     (default: 0.1)
+   </li>
+   <br>
+   
  </ul>
 
  <a id="PylonLowVoltage-readings"></a>
@@ -1899,6 +2063,7 @@ return;
  <li><b>cellTemperature_0508</b><br>   Temperatur (°C) der Zellenpacks 5 bis 8                                            </li>
  <li><b>cellTemperature_0912</b><br>   Temperatur (°C) der Zellenpacks 9 bis 12                                           </li>
  <li><b>cellTemperature_1315</b><br>   Temperatur (°C) der Zellenpacks 13 bis 15                                          </li>
+ <li><b>cellTemperature_Pos_XX</b><br> Temperatur (°C) der Position XX (nicht näher spezifiziert)                         </li>
  <li><b>cellVoltage_XX</b><br>         Zellenspannung (V) des Zellenpacks XX. In dem Batteriemodul sind "packCellcount"
                                        Zellenpacks in Serie geschaltet verbaut. Jedes Zellenpack besteht aus parallel
                                        geschalten Einzelzellen.                                                           </li>

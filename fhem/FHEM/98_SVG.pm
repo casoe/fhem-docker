@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 98_SVG.pm 28617 2024-03-08 15:05:47Z rudolfkoenig $
+# $Id: 98_SVG.pm 29055 2024-08-05 18:37:21Z rudolfkoenig $
 package main;
 
 use strict;
@@ -960,12 +960,13 @@ SVG_calcOffsets($$)
   my $frx; #fixedrange with offset
   if($defs{$wl}) {
     $fr = AttrVal($wl, "fixedrange", undef);
+    $fr = AnalyzePerlCommand(undef,$1) if($fr && $fr =~ m/^{(.*)}$/); #137800
     if($fr) {
       if($fr =~ "^(hour|qday|day|week|month|year)" ||
-         $fr =~ m/^\d+hour/  || #fixedrange with offset
+         $fr =~ m/^\d+hour/  ||
          $fr =~ m/^\d+day/   ||
          $fr =~ m/^\d+year/ ) {
-        $frx=$fr; #fixedrange with offset
+        $frx = $fr;
 
       } else {
         my @range = split(" ", $fr);
@@ -978,6 +979,8 @@ SVG_calcOffsets($$)
     }
 
     $fo = AttrVal( $wl, "fixedoffset", undef);
+    $FW_pos{off} = 0 if(!defined($FW_pos{off}));
+    $fo = AnalyzePerlCommand(undef,$1) if($fo && $fo =~ m/^{(.*)}$/); #134615
   }
 
   my $off = 0;
@@ -996,8 +999,11 @@ SVG_calcOffsets($$)
   $zoom = "day" if(!$zoom);
   $zoom = $fr if(defined($fr)); 
   $zoom = $frx if ($frx); #fixedrange with offset  
-  my @zrange = split(" ", $zoom); #fixedrange with offset
-  if(defined($zrange[1])) { $off += $zrange[1]; $zoom=$zrange[0]; }  #fixedrange with offset
+  my @zrange = split(" ", $zoom);
+  if(defined($zrange[1])) {
+    $off += $zrange[1];
+    $zoom=$zrange[0];
+  }
 
   my $endPlotNow = (SVG_Attr($FW_wname, $wl, "endPlotNow", undef) && !$st);
   if($zoom =~ m/^(\d+)?hour/) {
@@ -2664,14 +2670,19 @@ plotAsPng(@)
 
         If given, the optional integer parameter offset refers to a different
         period (e.g. last year: fixedrange year -1, 2 days ago: fixedrange day
-        -2).
+        -2).<br>
 
+        If the attribute value is enclosed in {}, then it is evaluated first as
+        a perl expression.
         </li><br>
 
     <a id="SVG-attr-fixedoffset"></a>
     <li>fixedoffset &lt;offset&gt;<br>
         Set a fixed offset for the plot. The resolution is the currently
-        chosen zoom-level.
+        chosen zoom-level.<br>
+        Is evaluated as a perl expression, if enclosed in {}. If the current
+        resolution is day, fixedoffset with {$FW_pos{off}-1} will show the data
+        from the day before the current selection.
         </li><br>
 
     <a id="SVG-attr-label"></a>
@@ -2943,6 +2954,9 @@ plotAsPng(@)
     <li>fixedoffset &lt;offset&gt;<br>
       Verschiebt den Plot-Offset um einen festen Wert, die Einheit h&auml;ngt
       vom aktuellen Zoom-Level ab.
+      Wird als Perl-Ausdruck ausgewertet, falls der Wert in {} eingeschlossen
+      ist. Falls die aktuelle Aufl&ouml;sung Tag ist, dann zeigt
+      {$FW_pos{off}-1} den Tag vor den aktuell gew&auml;hlten an.
       </li><br>
 
     <a id="SVG-attr-fixedrange"></a>
@@ -2962,8 +2976,10 @@ plotAsPng(@)
       die anderen mit einem Zoom &uuml;ber eine Woche. Der optionale
       ganzzahlige Parameter [offset] setzt ein anderes Zeitintervall (z.B.
       letztes Jahr: <code>fixedrange year -1</code>, vorgestern: <code>
-      fixedrange day -2</code>).
+      fixedrange day -2</code>).<br>
 
+      Falls der Attributwert in {} eingeschlossen ist, dann wird er vor der
+      weiteren Verarbeitung als Perl-Ausdruck ausgewertet.
       </li><br>
 
     <a id="SVG-attr-label"></a>

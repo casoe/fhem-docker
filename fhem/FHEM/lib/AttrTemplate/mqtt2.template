@@ -1,5 +1,5 @@
 ###########################################
-# $Id: mqtt2.template 28418 2024-01-25 10:32:45Z Beta-User $
+# $Id: mqtt2.template 29184 2024-10-03 06:26:03Z Beta-User $
 #
 # Comments start with #. Empty lines are ignored.
 # Syntax of one entry: name: line, one optional filter: line, zero or more par: lines,  FHEM-Commands
@@ -36,11 +36,11 @@ attr DEVICE bridgeRegexp \
   (ebusd[^/]*)/global/.*:.* "$1"\
   [^/]+/(ems-esp[^/]+)/start:.* "$1"\
   (mygateway[\d]+)-(in|out)/.* "$1"\
-  (wallpanel|wled)/([^/]+)/.*:.* "$1_$2"\
+  (wallpanel|wled|instar)/([^/]+)/.*:.* "$1_$2"\
+  (nuki)/[^/]+/.* "$1"\
   go-eCharger/([^/]+)/.*:.* "go_eCharger_$1"\
   owntracks/[^/]+/([^/:]+).* "owntracks_$1"\
   home/(O[^/]*M[^/]*G[^/]*)/LWT:.* "$1"\
-  instar/([^/]+)/.*:.* "instar_$1"\
   homeassistant/.*/config:.* ""\
   tasmota/discovery/[^/:]+/(config|sensors):.* ""
 attr DEVICE setList clear_all:noArg {fhem("deleteattr $NAME readingList; deletereading -q $NAME (?!associatedWith|IODev).*");return undef}
@@ -49,7 +49,7 @@ attr DEVICE comment Do not use very open bridgeRegexp expressions! This might le
 attr DEVICE setStateList on off
 farewell:template has been applied successfully. Be carefull when extending the brigeRegexp!
 attr DEVICE model MQTT2_CLIENT_general_bridge
-setreading DEVICE attrTemplateVersion 20220110
+setreading DEVICE attrTemplateVersion 20240409
 
 ###############
 #MQTT2 IO ignoreRegexp
@@ -133,7 +133,7 @@ par:ICON;ICON as set, defaults to mqtt;{ AttrVal("DEVICE","icon","mqtt") }
 attr DEVICE icon ICON
 attr DEVICE devicetopic BASE_TOPIC
 attr DEVICE bridgeRegexp\
-  BASE_TOPIC/([A-Za-z0-9._]+)[/]?.*:.* "zigbee_$1"
+  BASE_TOPIC/((?!bridge)[A-Za-z0-9._]+)/?.*:.* "zigbee_$1"
 attr DEVICE getList\
   networkmap_raw:noArg raw $\DEVICETOPIC/bridge/request/networkmap raw\
   networkmap_graphviz:noArg graphviz $\DEVICETOPIC/bridge/request/networkmap graphviz
@@ -153,7 +153,8 @@ attr DEVICE readingList\
   $\DEVICETOPIC/bridge/groups:.* groups\
   $\DEVICETOPIC/bridge/event:.* { json2nameValue($EVENT) }\
   $\DEVICETOPIC/bridge/extensions:.* extensions\
-  $\DEVICETOPIC/bridge/response/permit_join:.* { json2nameValue($EVENT) }
+  $\DEVICETOPIC/bridge/response/permit_join:.* { json2nameValue($EVENT) }\
+  $\DEVICETOPIC/bridge/definitions:.* {}
 attr DEVICE setList\
   log_level:debug,info,warn,error $\DEVICETOPIC/bridge/config/log_level $EVTPART1\
   permit_join:true,false $\DEVICETOPIC/bridge/request/permit_join $EVTPART1\
@@ -179,7 +180,7 @@ attr DEVICE comment To check for new updates of the deamon software, you might w
 #set DEVICE attrTemplate do_general_mqtt_cleanup ADD_TO_IO_IGNOREREGEXP=BASE_TOPIC/[A-Za-z0-9._]+/set
 set DEVICE attrTemplate do_general_mqtt_cleanup
 attr DEVICE model zigbee2mqtt_bridge
-setreading DEVICE attrTemplateVersion 20231205
+setreading DEVICE attrTemplateVersion 20240628
 # Based on https://forum.fhem.de/index.php/topic,94060.msg872371.html#msg872371
 
 
@@ -1172,14 +1173,48 @@ attr DEVICE setList \
 attr DEVICE periodicCmd temperature:55
 attr DEVICE devStateIcon LOCKED:secur_lock:btnLock+UNLOCK UNLOCKED:secur_open:btnLock+LOCK
 attr DEVICE webCmd desired-temp
-attr DEVICE jsonMap current_heating_setpoint:desired-temp local_temperature:temperature Battery:batteryPercent system_mode:mode voltage:batterymV
+attr DEVICE jsonMap current_heating_setpoint:desired-temp local_temperature:temperature Battery:batteryPercent system_mode:mode voltage:batterymV child_lock:btnLock
 attr DEVICE stateFormat btnLock\
 Measured: temperature Battery: batteryPercent %
 attr DEVICE userReadings batteryState:battery_low.* {ReadingsVal($name,'battery_low','false') eq 'false'?'ok':'low'}, batteryVoltage:batterymV.* {ReadingsNum($name,'batterymV',0)/1000}
 attr DEVICE model zigbee2mqtt_thermostat_without_weekrofile
 set DEVICE attrTemplate speechcontrol_type_thermostat
 deletereading -q DEVICE (?!associatedWith|IODev).*
-setreading DEVICE attrTemplateVersion 20240108
+setreading DEVICE attrTemplateVersion 20240402
+
+
+#contributed by clumsy via pm
+name:zigbee2mqtt_thermostat_with_weekrofile_5_1_1
+desc: Developed for <a href="https://www.zigbee2mqtt.io/devices/BHT-002_BHT-006.html#moes-bht-002%252Fbht-006">Models Moes BHT-002/BHT-006</a> via zigbee2mqtt <br>
+filter:TYPE=MQTT2_DEVICE:FILTER=CID~zigbee.*
+order:L_17b1
+par:BASE_TOPIC;base topic set in configuration.yaml of the zigbee2mqtt bridge;{ AttrVal("DEVICE","devicetopic",AttrVal("DEVICE","readingList","")) =~ m,[\b]?([^/:]+)[/].+, ? $1 : undef }
+par:DEV_ID;name of the device in the zigbee2mqtt bridge;{ AttrVal("DEVICE","devicetopic",AttrVal("DEVICE","readingList","")) =~ m,[^/]+[/]([^/:]+).*, ? $1 : undef }
+par:ICON;ICON as set, defaults to temp_control;{ AttrVal("DEVICE","icon","temp_control") }
+attr DEVICE icon ICON
+attr DEVICE devicetopic BASE_TOPIC/DEV_ID
+attr DEVICE readingList $\DEVICETOPIC:.* { json2nameValue($EVENT,'',$JSONMAP) }
+attr DEVICE setList \
+  desired-temp:slider,5.0,0.5,30.0,1 $\DEVICETOPIC/set {"current_heating_setpoint": $EVTPART1}\
+  btnLock:LOCK,UNLOCK $\DEVICETOPIC/set {"child_lock": "$EVTPART1"}\
+  mode:heat,off $\DEVICETOPIC/set {"system_mode": "$EVTPART1"}\
+  preset:hold,program $\DEVICETOPIC/set {"preset": "$EVTPART1"}\
+  saturday $\DEVICETOPIC/set/schedule { "saturday":[$EVTPART1] }\
+  sunday $\DEVICETOPIC/set/schedule { "sunday":[$EVTPART1] }\
+  weekdays $\DEVICETOPIC/set/schedule { "weekdays":[$EVTPART1] }\
+  weekprofile { no strict 'vars';;  FHEM::attrT_z2m_thermostat_Utils::z2t_send_BHT($NAME, $EVTPART1, $EVTPART2) }\
+  x_send_set_payload:textField { my $payload = $EVENT;;$payload =~ s/$EVTPART0 //;; qq($\DEVICETOPIC/set $payload)}
+attr DEVICE devStateIcon LOCKED:secur_lock:btnLock+UNLOCK UNLOCKED:secur_open:btnLock+LOCK
+attr DEVICE webCmd desired-temp
+attr DEVICE jsonMap current_heating_setpoint:desired-temp local_temperature:temperature Battery:batteryPercent system_mode:mode voltage:batterymV child_lock:btnLock
+attr DEVICE stateFormat btnLock\
+Measured: temperature Battery: batteryPercent %
+attr DEVICE userReadings batteryState:battery_low.* {ReadingsVal($name,'battery_low','false') eq 'false'?'ok':'low'}, batteryVoltage:batterymV.* {ReadingsNum($name,'batterymV',0)/1000}
+attr DEVICE model zigbee2mqtt_thermostat_with_weekrofile_5_1_1
+set DEVICE attrTemplate speechcontrol_type_thermostat
+deletereading -q DEVICE (?!associatedWith|IODev).*
+setreading DEVICE attrTemplateVersion 20240402
+
 
 ###########################################
 # TASMOTA
@@ -3694,7 +3729,7 @@ setreading DEVICE attrTemplateVersion 20220404
 name:shellyPlus_1
 filter:TYPE=MQTT2_DEVICE
 desc:Early version of a base template for second generation shelly devices (names with "plus", without power measurement). NOTE: requires to activate generic status update in firmware settings (if not available: reset device to factory defaults).<br>NOTE: Please wait some seconds to allow Shelly device to complete reboot.
-par:DEV_TPC;Shelly name in the topic;{ AttrVal('DEVICE','devicetopic',AttrVal('DEVICE','readingList','')) =~ m<(shellies/[^/]+|shellyp(lus|ro4pm)[^/:_]{4,}+)> ? $1 : undef }
+par:DEV_TPC;Shelly name in the topic;{ AttrVal('DEVICE','devicetopic',AttrVal('DEVICE','readingList','')) =~ m<(shellies/[^/]+|shelly(plus|pro4pm|1pmmini-)[^/:_]{4,}+)> ? $1 : undef }
 par:CALLSPEECHRECOGN;Set this to 0 to not set any speech recogn. related attributes;{ 1 }
 order:A_20
 par:ICON;ICON as set, defaults to message_socket;{ AttrVal('DEVICE','icon','message_socket') }
@@ -3727,7 +3762,7 @@ attr DEVICE jsonMap switch_state:state switch_temperature_tC:temperature switch_
 attr DEVICE setStateList on off toggle on-for-timer off-for-timer
 attr DEVICE webCmd :
 attr DEVICE model shellyPlus_1
-setreading DEVICE attrTemplateVersion 20220304
+setreading DEVICE attrTemplateVersion 20240627
 set DEVICE x_reboot
 option:{ CALLSPEECHRECOGN }
 set DEVICE attrTemplate speechcontrol_type_switch
@@ -4740,13 +4775,14 @@ attr DEVICE readingList\
   homeassistant/.+?/config:.* {}
 attr DEVICE setList\
   restart:noArg $\DEVICETOPIC/commands/MQTTtoSYS/config {"cmd":"restart"}\
-  update { my $payload = $EVENT; $payload =~ s/$EVTPART0 //; qq($\DEVICETOPIC/commands/firmware_update $payload) }\
+  update { my $payload = $EVENT; $payload =~ s/$EVTPART0 //; qq($\DEVICETOPIC/commands/MQTTtoSYS/firmware_update $payload) }\
   BT_config { my $payload = $EVENT; $payload =~ s/$EVTPART0 //; qq($\DEVICETOPIC/commands/MQTTtoBT/config $payload) }\
   BT_scan_now:noArg $\DEVICETOPIC/commands/MQTTtoBT/config {"interval":0}\
   BT_scan_interval:textField $\DEVICETOPIC/commands/MQTTtoBT/config {"interval":$EVTPART1}\
   BT_blacklist:textField $\DEVICETOPIC/commands/MQTTtoBT/config {"black-list":[$EVTPART1]}\
   BT_whitelist:textField $\DEVICETOPIC/commands/MQTTtoBT/config {"white-list":[$EVTPART1]}\
-  BT_minrssi:slider,-110,1,0 $\DEVICETOPIC/commands/MQTTtoBT/config {"minrssi":$EVTPART1}}\
+  BT_minrssi:slider,-110,1,0 $\DEVICETOPIC/commands/MQTTtoBT/config {"minrssi":$EVTPART1}\
+  BT_hasspresence:true,false $\DEVICETOPIC/commands/MQTTtoBT/config {"hasspresence":$EVTPART1}
   deleteReadings:noArg {fhem "deletereading -q $NAME (?!associatedWith|attrTemplateVersion|last|LWT|version|Sys_).* 86400"}
 attr DEVICE periodicCmd deleteReadings:1440
 attr DEVICE comment For syntax wrt. update and BT commands see https://github.com/1technophile/OpenMQTTGateway/releases/tag/v0.9.7
@@ -4765,7 +4801,7 @@ attr DEVICE readingList\
   homeassistant/.+?/config:.* {}
 attr DEVICE setList\
   restart:noArg $\DEVICETOPIC/commands/MQTTtoSYS/config {"cmd":"restart"}\
-  update { my $payload = $EVENT; $payload =~ s/$EVTPART0 //; qq($\DEVICETOPIC/commands/firmware_update $payload) }
+  update { my $payload = $EVENT; $payload =~ s/$EVTPART0 //; qq($\DEVICETOPIC/commands/MQTTtoSYS/firmware_update $payload) }
 option:global
 attr DEVICE stateFormat <a href="http://Sys_ip" target="_blank">\
 LWT\
@@ -4774,7 +4810,7 @@ attr DEVICE icon ICON
 attr DEVICE comment For syntax wrt. update and BT commands see https://github.com/1technophile/OpenMQTTGateway/releases/tag/v0.9.7
 attr DEVICE devStateIcon online:10px-kreis-gruen offline.*:10px-kreis-rot
 attr DEVICE model OpenMQTTGateway_MCU
-setreading DEVICE attrTemplateVersion 20220307
+setreading DEVICE attrTemplateVersion 20240409
 { AttrTemplate_Initialize() }
 
 name:OpenMQTTGateway_BT_scanner
@@ -5659,7 +5695,7 @@ par:BASE_ID;BASE_ID as set on the esp;{ AttrVal('DEVICE','readingList','') =~ m,
 par:ICON;ICON as set, defaults to solar;{ AttrVal('DEVICE','icon','solar') }
 attr DEVICE icon ICON
 attr DEVICE bridgeRegexp BASE_ID/([^/]+)/ch[0-9]+/.*:.* "BASE_ID_$1"\
-  BASE_ID/([^/]+)/(available|last_success|ack_pwr_limit|alarm/\d+|radio_stat|dis_night_comm):.* "BASE_ID_$1"
+  BASE_ID/([^/]+)/(available|last_success|ack_pwr_limit|alarm/\d+|radio_stat|dis_night_comm|firmware|hardware):.* "BASE_ID_$1"
 attr DEVICE autocreate 1
 attr DEVICE readingList BASE_ID/version:.* version\
   BASE_ID/free_heap:.* free_heap\
@@ -5670,19 +5706,18 @@ attr DEVICE readingList BASE_ID/version:.* version\
   BASE_ID/wifi_rssi:.* wifi_rssi\
   BASE_ID/comm_start:.* comm_start\
   BASE_ID/comm_stop:.* comm_stop\
-  BASE_ID/dis_night_comm:.* dis_night_comm\
   BASE_ID/comm_disabled:.* comm_disabled\
-  BASE_ID/comm_dis_ts:.* comm_dis_ts\
   BASE_ID/sunrise:.* sunrise\
   BASE_ID/sunset:.* sunset\
   BASE_ID/status:.* status\
   BASE_ID/total/P_AC:.* P_AC\
   BASE_ID/total/P_DC:.* P_DC\
   BASE_ID/total/YieldDay:.* YieldDay\
-  BASE_ID/total/YieldTotal:.* YieldTotal
+  BASE_ID/total/YieldTotal:.* YieldTotal\
+  BASE_ID/total/MaxPower:.* MaxPower
 attr DEVICE setStateList on off
 attr DEVICE model hoymiles_microinverter_hub_bridge
-setreading DEVICE attrTemplateVersion 20240108
+setreading DEVICE attrTemplateVersion 20240421
 { AttrTemplate_Initialize() }
 #   "setup/set_time",
 #   "setup/sync_ntp
@@ -5711,6 +5746,9 @@ attr DEVICE readingList INVERTERLONG_ID/available:.* available\
   INVERTERLONG_ID/last_success:.* last_success\
   INVERTERLONG_ID/radio_stat:.* { json2nameValue($EVENT,'',$JSONMAP) }\
   INVERTERLONG_ID/dis_night_comm:.* dis_night_comm\
+  INVERTERLONG_ID/ack_pwr_limit:.* ack_pwr_limit\
+  INVERTERLONG_ID/firmware:.* { json2nameValue($EVENT) }\
+  INVERTERLONG_ID/hardware:.* { json2nameValue($EVENT) }\
   INVERTERLONG_ID/ch0/active_PowerLimit:.* active_PowerLimit\
   INVERTERLONG_ID/ch0/U_AC:.* U_AC\
   INVERTERLONG_ID/ch0/I_AC:.* I_AC\
@@ -5726,16 +5764,6 @@ attr DEVICE readingList INVERTERLONG_ID/available:.* available\
   INVERTERLONG_ID/ch0/Efficiency:.* Efficiency\
   INVERTERLONG_ID/ch0/YieldDay:.* {}\
   INVERTERLONG_ID/ch0/YieldTotal:.* {}\
-  INVERTERLONG_ID/ch0/BootloaderVersion:.* BootloaderVersion\
-  INVERTERLONG_ID/ch0/FWVersion:.* FWVersion\
-  INVERTERLONG_ID/ch0/FWBuildYear:.* FWBuildYear\
-  INVERTERLONG_ID/ch0/FWBuildMonthDay:.* FWBuildMonthDay\
-  INVERTERLONG_ID/ch0/FWBuildHourMinute:.* FWBuildHourMinute\
-  INVERTERLONG_ID/ch0/BootloaderVersion:.* BootloaderVersion\
-  INVERTERLONG_ID/ch0/HWPartNumber:.* HWPartNumber\
-  INVERTERLONG_ID/ch0/HWVersion:.* HWVersion\
-  INVERTERLONG_ID/ch0/GridProfileCode:.* GridProfileCode\
-  INVERTERLONG_ID/ch0/GridProfileVersion:.* GridProfileVersion\
   INVERTERLONG_ID/ch0/active_PowerLimit:.* limit\
   INVERTERLONG_ID/ch1/I_DC:.* I_DC\
   INVERTERLONG_ID/ch1/P_DC:.* P_DC\
@@ -5745,7 +5773,7 @@ attr DEVICE readingList INVERTERLONG_ID/available:.* available\
   INVERTERLONG_ID/ch1/YieldTotal:.* YieldTotal\
   INVERTERLONG_ID/ch0/MaxPower:.* MaxPower\
   INVERTERLONG_ID/alarm/cnt:.* alarmCnt\
-  INVERTERLONG_ID/alarm/[\d]+:.* { $TOPIC =~ m,alarm/([\d]+),; { "alarm_${1}_$2"=>$EVENT } }
+  INVERTERLONG_ID/alarm/[\d]+:.* { $TOPIC =~ m,alarm/([\d]+),; { "alarm_${1}"=>$EVENT } }
 option:{ RADIO_DOUBLE }
 attr DEVICE devStateIcon {FHEM::attrT_Ahoy_Utils::devStateIcon($name,2)}
 attr DEVICE readingList \
@@ -5753,6 +5781,9 @@ attr DEVICE readingList \
   INVERTERLONG_ID/last_success:.* last_success\
   INVERTERLONG_ID/radio_stat:.* { json2nameValue($EVENT,'',$JSONMAP) }\
   INVERTERLONG_ID/dis_night_comm:.* dis_night_comm\
+  INVERTERLONG_ID/ack_pwr_limit:.* ack_pwr_limit\
+  INVERTERLONG_ID/firmware:.* { json2nameValue($EVENT) }\
+  INVERTERLONG_ID/hardware:.* { json2nameValue($EVENT) }\
   INVERTERLONG_ID/ch0/active_PowerLimit:.* active_PowerLimit\
   INVERTERLONG_ID/ch0/U_AC:.* U_AC\
   INVERTERLONG_ID/ch0/I_AC:.* I_AC\
@@ -5768,16 +5799,6 @@ attr DEVICE readingList \
   INVERTERLONG_ID/ch0/Efficiency:.* Efficiency\
   INVERTERLONG_ID/ch0/YieldDay:.* YieldDay\
   INVERTERLONG_ID/ch0/YieldTotal:.* YieldTotal\
-  INVERTERLONG_ID/ch0/BootloaderVersion:.* BootloaderVersion\
-  INVERTERLONG_ID/ch0/FWVersion:.* FWVersion\
-  INVERTERLONG_ID/ch0/FWBuildYear:.* FWBuildYear\
-  INVERTERLONG_ID/ch0/FWBuildMonthDay:.* FWBuildMonthDay\
-  INVERTERLONG_ID/ch0/FWBuildHourMinute:.* FWBuildHourMinute\
-  INVERTERLONG_ID/ch0/HWPartNumber:.* HWPartNumber\
-  INVERTERLONG_ID/ch0/HWVersion:.* HWVersion\
-  INVERTERLONG_ID/ch0/GridProfileCode:.* GridProfileCode\
-  INVERTERLONG_ID/ch0/GridProfileVersion:.* GridProfileVersion\
-  INVERTERLONG_ID/ch0/active_PowerLimit:.* limit\
   INVERTERLONG_ID/ch1/I_DC:.* I_DC1\
   INVERTERLONG_ID/ch1/P_DC:.* P_DC1\
   INVERTERLONG_ID/ch1/U_DC:.* U_DC1\
@@ -5794,7 +5815,7 @@ attr DEVICE readingList \
   INVERTERLONG_ID/ch1/MaxPower:.* MaxPower1\
   INVERTERLONG_ID/ch2/MaxPower:.* MaxPower2\
   INVERTERLONG_ID/alarm/cnt:.* alarmCnt\
-  INVERTERLONG_ID/alarm/[\d]+:.* { $TOPIC =~ m,alarm/([\d]+),; { "alarm_${1}_$2"=>$EVENT } }
+  INVERTERLONG_ID/alarm/[\d]+:.* { $TOPIC =~ m,alarm/([\d]+),; { "alarm_${1}"=>$EVENT } }
 option:{ RADIO_QUATTRO }
 attr DEVICE devStateIcon {FHEM::attrT_Ahoy_Utils::devStateIcon($name)}
 attr DEVICE readingList \
@@ -5802,6 +5823,9 @@ attr DEVICE readingList \
   INVERTERLONG_ID/last_success:.* last_success\
   INVERTERLONG_ID/radio_stat:.* { json2nameValue($EVENT,'',$JSONMAP) }\
   INVERTERLONG_ID/dis_night_comm:.* dis_night_comm\
+  INVERTERLONG_ID/ack_pwr_limit:.* ack_pwr_limit\
+  INVERTERLONG_ID/firmware:.* { json2nameValue($EVENT) }\
+  INVERTERLONG_ID/hardware:.* { json2nameValue($EVENT) }\
   INVERTERLONG_ID/ch0/active_PowerLimit:.* active_PowerLimit\
   INVERTERLONG_ID/ch0/U_AC:.* U_AC\
   INVERTERLONG_ID/ch0/I_AC:.* I_AC\
@@ -5820,16 +5844,6 @@ attr DEVICE readingList \
   INVERTERLONG_ID/ch0/Temp:.* temperature\
   INVERTERLONG_ID/ch0/YieldDay:.* YieldDay\
   INVERTERLONG_ID/ch0/YieldTotal:.* YieldTotal\
-  INVERTERLONG_ID/ch0/BootloaderVersion:.* BootloaderVersion\
-  INVERTERLONG_ID/ch0/FWVersion:.* FWVersion\
-  INVERTERLONG_ID/ch0/FWBuildYear:.* FWBuildYear\
-  INVERTERLONG_ID/ch0/FWBuildMonthDay:.* FWBuildMonthDay\
-  INVERTERLONG_ID/ch0/FWBuildHourMinute:.* FWBuildHourMinute\
-  INVERTERLONG_ID/ch0/HWPartNumber:.* HWPartNumber\
-  INVERTERLONG_ID/ch0/HWVersion:.* HWVersion\
-  INVERTERLONG_ID/ch0/GridProfileCode:.* GridProfileCode\
-  INVERTERLONG_ID/ch0/GridProfileVersion:.* GridProfileVersion\
-  INVERTERLONG_ID/ch0/active_PowerLimit:.* limit\
   INVERTERLONG_ID/ch1/I_DC:.* I_DC1\
   INVERTERLONG_ID/ch1/P_DC:.* P_DC1\
   INVERTERLONG_ID/ch1/P_DC:.* P_DC1\
@@ -5861,7 +5875,7 @@ attr DEVICE readingList \
   INVERTERLONG_ID/ch3/MaxPower:.* MaxPower3\
   INVERTERLONG_ID/ch4/MaxPower:.* MaxPower4\
   INVERTERLONG_ID/alarm/cnt:.* alarmCnt\
-  INVERTERLONG_ID/alarm/[\d]+:.* { $TOPIC =~ m,alarm/([\d]+),; { "alarm_${1}_$2"=>$EVENT } }
+  INVERTERLONG_ID/alarm/[\d]+:.* { $TOPIC =~ m,alarm/([\d]+),; { "alarm_${1}"=>$EVENT } }
 option:{ RADIO_SIXCH }
 attr DEVICE devStateIcon {FHEM::attrT_Ahoy_Utils::devStateIcon($name,6)}
 attr DEVICE readingList \
@@ -5869,6 +5883,9 @@ attr DEVICE readingList \
   INVERTERLONG_ID/last_success:.* last_success\
   INVERTERLONG_ID/radio_stat:.* { json2nameValue($EVENT,'',$JSONMAP) }\
   INVERTERLONG_ID/dis_night_comm:.* dis_night_comm\
+  INVERTERLONG_ID/ack_pwr_limit:.* ack_pwr_limit\
+  INVERTERLONG_ID/firmware:.* { json2nameValue($EVENT) }\
+  INVERTERLONG_ID/hardware:.* { json2nameValue($EVENT) }\
   INVERTERLONG_ID/ch0/active_PowerLimit:.* active_PowerLimit\
   INVERTERLONG_ID/ch0/U_AC:.* U_AC\
   INVERTERLONG_ID/ch0/I_AC:.* I_AC\
@@ -5887,16 +5904,6 @@ attr DEVICE readingList \
   INVERTERLONG_ID/ch0/Temp:.* temperature\
   INVERTERLONG_ID/ch0/YieldDay:.* YieldDay\
   INVERTERLONG_ID/ch0/YieldTotal:.* YieldTotal\
-  INVERTERLONG_ID/ch0/BootloaderVersion:.* BootloaderVersion\
-  INVERTERLONG_ID/ch0/FWVersion:.* FWVersion\
-  INVERTERLONG_ID/ch0/FWBuildYear:.* FWBuildYear\
-  INVERTERLONG_ID/ch0/FWBuildMonthDay:.* FWBuildMonthDay\
-  INVERTERLONG_ID/ch0/FWBuildHourMinute:.* FWBuildHourMinute\
-  INVERTERLONG_ID/ch0/HWPartNumber:.* HWPartNumber\
-  INVERTERLONG_ID/ch0/HWVersion:.* HWVersion\
-  INVERTERLONG_ID/ch0/GridProfileCode:.* GridProfileCode\
-  INVERTERLONG_ID/ch0/GridProfileVersion:.* GridProfileVersion\
-  INVERTERLONG_ID/ch0/active_PowerLimit:.* limit\
   INVERTERLONG_ID/ch1/I_DC:.* I_DC1\
   INVERTERLONG_ID/ch1/P_DC:.* P_DC1\
   INVERTERLONG_ID/ch1/P_DC:.* P_DC1\
@@ -5942,7 +5949,7 @@ attr DEVICE readingList \
   INVERTERLONG_ID/ch4/MaxPower:.* MaxPower5\
   INVERTERLONG_ID/ch5/MaxPower:.* MaxPower6\
   INVERTERLONG_ID/alarm/cnt:.* alarmCnt\
-  INVERTERLONG_ID/alarm/[\d]+:.* { $TOPIC =~ m,alarm/([\d]+),; { "alarm_${1}_$2"=>$EVENT } }
+  INVERTERLONG_ID/alarm/[\d]+:.* { $TOPIC =~ m,alarm/([\d]+),; { "alarm_${1}"=>$EVENT } }
 option:global
 attr DEVICE setList \
   reboot:noArg BASE_ID/ctrl/restart/INVERTER_NR\
@@ -5950,7 +5957,7 @@ attr DEVICE setList \
   limit_pct:slider,2,1,100 BASE_ID/ctrl/limit/INVERTER_NR $EVTPART1
 attr DEVICE setStateList on off
 attr DEVICE model hoymiles_microinverter_inverter
-setreading DEVICE attrTemplateVersion 20240108
+setreading DEVICE attrTemplateVersion 20240421
 
 # contributed by tpm88, https://forum.fhem.de/index.php/topic,94495.msg1251265.html#msg1251265
 name:hoymiles_opendtu_hub_bridge
@@ -5962,17 +5969,24 @@ par:BASE_ID;Base topic as set in OpenDTU MQTT settings;{ AttrVal('DEVICE','readi
 par:ICON;ICON as set, defaults to solar;{ AttrVal('DEVICE','icon','solar') }
 #par:BR_REG_NAME;Bridge RegEx Name for target inverter device;{ my $r1 = AttrVal('DEVICE','readingList','') =~ m,([^:]+)/([^:]+)/name:, ? $1 : "xxx";; my $r2 = AttrVal('DEVICE','readingList','') =~ m,([^:]+)/([^:]+)/name:, ? $2 : "yyy";; my $rn = $r1 . "_" . $r2 ."_name";; return ReadingsVal('DEVICE',"$rn",undef) }
 attr DEVICE icon ICON
-attr DEVICE bridgeRegexp BASE_ID/([0-9]+)/.*/.*:.* "BASE_ID_$1"
+attr DEVICE bridgeRegexp BASE_ID/([[:xdigit:]]+)/.*:.*  "BASE_ID_$1"
 #attr DEVICE bridgeRegexp BASE_ID/[0-9]+/.*/.*:.* "BR_REG_NAME"
 attr DEVICE autocreate 1
 attr DEVICE readingList BASE_ID/dtu/uptime:.* uptime\
   BASE_ID/dtu/status:.* status\
   BASE_ID/dtu/ip:.* ip\
   BASE_ID/dtu/rssi:.' rssi\
-  BASE_ID/dtu/hostname:.* hostname
+  BASE_ID/dtu/hostname:.* hostname\
+  BASE_ID/ac/power:.* power\
+  BASE_ID/ac/yieldtotal:.* yieldtotal\
+  BASE_ID/ac/yieldday:.* yieldday\
+  BASE_ID/ac/is_valid:.* is_valid\
+  BASE_ID/dc/power:.* powerdc\
+  BASE_ID/dc/irradiation:.* irradiation\
+  BASE_ID/dc/is_valid:.* is_validdc
 attr DEVICE setStateList on off
 attr DEVICE model hoymiles_opendtu_hub_bridge
-setreading DEVICE attrTemplateVersion 20221215
+setreading DEVICE attrTemplateVersion 20240513
 { AttrTemplate_Initialize() }
 
 name:hoymiles_opendtu_microinverter
@@ -5989,6 +6003,17 @@ attr DEVICE icon ICON
 deletereading -q DEVICE .*_.*
 option:{ RADIO_SINGLE }
 attr DEVICE readingList \
+  INVERTERLONG_ID/name:.* name\
+  INVERTERLONG_ID/status/reachable:.* reachable\
+  INVERTERLONG_ID/status/producing:.* producing\
+  INVERTERLONG_ID/status/last_update:.* last_update\
+  INVERTERLONG_ID/device/bootloaderversion:.* bootloaderversion\
+  INVERTERLONG_ID/device/fwbuildversion:.* fwbuildversion\
+  INVERTERLONG_ID/device/fwbuilddatetime:.* fwbuilddatetime\
+  INVERTERLONG_ID/device/hwpartnumber:.* hwpartnumber\
+  INVERTERLONG_ID/device/hwversion:.* hwversion\
+  INVERTERLONG_ID/status/limit_relative:.* limit_relative\
+  INVERTERLONG_ID/status/limit_absolute:.* limit_absolute\
   INVERTERLONG_ID/0/powerdc:.* powerdc\
   INVERTERLONG_ID/0/yieldday:.* {}\
   INVERTERLONG_ID/0/yieldtotal:.* {}\
@@ -6006,15 +6031,23 @@ attr DEVICE readingList \
   INVERTERLONG_ID/1/irradiation:.* irradiation1\
   INVERTERLONG_ID/1/yieldday:.* yieldday\
   INVERTERLONG_ID/1/yieldtotal:.* yieldtotal\
+  INVERTERLONG_ID/1/name:.* name1
+option:{ RADIO_DOUBLE }
+attr DEVICE readingList \
   INVERTERLONG_ID/name:.* name\
   INVERTERLONG_ID/status/reachable:.* reachable\
   INVERTERLONG_ID/status/producing:.* producing\
-  INVERTERLONG_ID/status/last_update:.* last_update
-option:{ RADIO_DOUBLE }
-attr DEVICE readingList \
+  INVERTERLONG_ID/status/last_update:.* last_update\
+  INVERTERLONG_ID/device/bootloaderversion:.* bootloaderversion\
+  INVERTERLONG_ID/device/fwbuildversion:.* fwbuildversion\
+  INVERTERLONG_ID/device/fwbuilddatetime:.* fwbuilddatetime\
+  INVERTERLONG_ID/device/hwpartnumber:.* hwpartnumber\
+  INVERTERLONG_ID/device/hwversion:.* hwversion\
+  INVERTERLONG_ID/status/limit_relative:.* limit_relative\
+  INVERTERLONG_ID/status/limit_absolute:.* limit_absolute\
   INVERTERLONG_ID/0/powerdc:.* powerdc\
-  INVERTERLONG_ID/0/yieldday:.* yieldday\
-  INVERTERLONG_ID/0/yieldtotal:.* yieldtotal\
+  INVERTERLONG_ID/0/yieldday:.* {}\
+  INVERTERLONG_ID/0/yieldtotal:.* {}\
   INVERTERLONG_ID/0/voltage:.* voltage\
   INVERTERLONG_ID/0/current:.* current\
   INVERTERLONG_ID/0/power:.* power\
@@ -6029,21 +6062,30 @@ attr DEVICE readingList \
   INVERTERLONG_ID/1/irradiation:.* irradiation1\
   INVERTERLONG_ID/1/yieldday:.* yieldday1\
   INVERTERLONG_ID/1/yieldtotal:.* yieldtotal1\
+  INVERTERLONG_ID/1/name:.* name1\
   INVERTERLONG_ID/2/voltage:.* voltage2\
   INVERTERLONG_ID/2/current:.* current2\
   INVERTERLONG_ID/2/power:.* power2\
   INVERTERLONG_ID/2/irradiation:.* irradiation2\
   INVERTERLONG_ID/2/yieldday:.* yieldday2\
   INVERTERLONG_ID/2/yieldtotal:.* yieldtotal2\
+  INVERTERLONG_ID/2/name:.* name2
+option:{ RADIO_QUATTRO }
+attr DEVICE readingList \
   INVERTERLONG_ID/name:.* name\
   INVERTERLONG_ID/status/reachable:.* reachable\
   INVERTERLONG_ID/status/producing:.* producing\
-  INVERTERLONG_ID/status/last_update:.* last_update
-option:{ RADIO_QUATTRO }
-attr DEVICE readingList \
+  INVERTERLONG_ID/status/last_update:.* last_update\
+  INVERTERLONG_ID/device/bootloaderversion:.* bootloaderversion\
+  INVERTERLONG_ID/device/fwbuildversion:.* fwbuildversion\
+  INVERTERLONG_ID/device/fwbuilddatetime:.* fwbuilddatetime\
+  INVERTERLONG_ID/device/hwpartnumber:.* hwpartnumber\
+  INVERTERLONG_ID/device/hwversion:.* hwversion\
+  INVERTERLONG_ID/status/limit_relative:.* limit_relative\
+  INVERTERLONG_ID/status/limit_absolute:.* limit_absolute\
   INVERTERLONG_ID/0/powerdc:.* powerdc\
-  INVERTERLONG_ID/0/yieldday:.* yieldday\
-  INVERTERLONG_ID/0/yieldtotal:.* yieldtotal\
+  INVERTERLONG_ID/0/yieldday:.* {}\
+  INVERTERLONG_ID/0/yieldtotal:.* {}\
   INVERTERLONG_ID/0/voltage:.* voltage\
   INVERTERLONG_ID/0/current:.* current\
   INVERTERLONG_ID/0/power:.* power\
@@ -6057,23 +6099,29 @@ attr DEVICE readingList \
   INVERTERLONG_ID/1/power:.* power1\
   INVERTERLONG_ID/1/irradiation:.* irradiation1\
   INVERTERLONG_ID/1/yieldday:.* yieldday1\
+  INVERTERLONG_ID/1/yieldtotal:.* yieldtotal1\
+  INVERTERLONG_ID/1/name:.* name1\
+  INVERTERLONG_ID/2/voltage:.* voltage2\
+  INVERTERLONG_ID/2/current:.* current2\
+  INVERTERLONG_ID/2/power:.* power2\
+  INVERTERLONG_ID/2/irradiation:.* irradiation2\
+  INVERTERLONG_ID/2/yieldday:.* yieldday2\
   INVERTERLONG_ID/2/yieldtotal:.* yieldtotal2\
+  INVERTERLONG_ID/2/name:.* name2\
   INVERTERLONG_ID/3/voltage:.* voltage3\
   INVERTERLONG_ID/3/current:.* current3\
   INVERTERLONG_ID/3/power:.* power3\
   INVERTERLONG_ID/3/irradiation:.* irradiation3\
   INVERTERLONG_ID/3/yieldday:.* yieldday3\
   INVERTERLONG_ID/3/yieldtotal:.* yieldtotal3\
+  INVERTERLONG_ID/3/name:.* name3\
   INVERTERLONG_ID/4/voltage:.* voltage4\
   INVERTERLONG_ID/4/current:.* current4\
   INVERTERLONG_ID/4/power:.* power4\
   INVERTERLONG_ID/4/irradiation:.* irradiation4\
   INVERTERLONG_ID/4/yieldday:.* yieldday4\
   INVERTERLONG_ID/4/yieldtotal:.* yieldtotal4\
-  INVERTERLONG_ID/name:.* name\
-  INVERTERLONG_ID/status/reachable:.* reachable\
-  INVERTERLONG_ID/status/producing:.* producing\
-  INVERTERLONG_ID/status/last_update:.* last_update
+  INVERTERLONG_ID/4/name:.* name4
 option:global
 attr DEVICE setList \
   on:noArg INVERTERLONG_ID/cmd/power 1\
@@ -6085,7 +6133,7 @@ attr DEVICE setList \
   limit_persistent_pct:slider,2,1,100 INVERTERLONG_ID/cmd/limit_nonpersistent_relative $EVTPART1
 attr DEVICE setStateList on off
 attr DEVICE model hoymiles_opendtu_microinverter
-setreading DEVICE attrTemplateVersion 20221215
+setreading DEVICE attrTemplateVersion 20240513
 
 
 ###########################################
@@ -6112,3 +6160,51 @@ ring $\DEVICETOPIC/exec $EVTPART0_$EVTPART1\
 playAudio $\DEVICETOPIC/playAudio $EVTPART1
 attr DEVICE model SiedleGateway
 setreading DEVICE attrTemplateVersion 20210515
+
+####################################
+# provided by Tueftler1983, see https://forum.fhem.de/index.php?msg=1313868
+#Use this for the WLAN Module RelaxAndSpa for Bestway Lay Z Spar Wirlpools. The Wlan module ist Selled and #Supportet from Michael Krenner https://www.mk-innovations.de/smartandrelax-modul/
+name:LayZSpa
+filter:TYPE=MQTT2_DEVICE
+order:W_743354
+par:BASE_TOPIC;base topic set in SmarAndRelax MQTT Konfiguration;{ AttrVal('DEVICE','readingList','') =~ m,([^:]+)/Status:, ? $1 : undef }
+desc:Use this for the WiFi Module RelaxAndSpa for Bestway Lay Z Spar Wirlpools. The WiFi module ist selled and supportet by Michael Krenner https://www.mk-innovations.de/smartandrelax-modul/. Note: in case Client-ID and Basic-Topic include SPACE letters, you will have to change that fist in the settings of the WiFi module!
+attr DEVICE readingList BASE_TOPIC/button:.* button\
+  BASE_TOPIC/message:.* { $EVENT =~ s/"(FLT|AIR|RED|GRN)":1/"$1":"on"/g; $EVENT =~ s/"(FLT|AIR|RED|GRN)":0/"$1":"off"/g; $EVENT =~ s/"(UNT)":1/"$1":"Celsius"/g; $EVENT =~ s/"(UNT)":0/"$1":"Fahrenheit"/g; json2nameValue($EVENT,'',$JSONMAP) }\
+  BASE_TOPIC/times:.* { json2nameValue($EVENT, 'times_', $JSONMAP) }\
+  BASE_TOPIC/other:.* { json2nameValue($EVENT, 'other_', $JSONMAP) }\
+  BASE_TOPIC/Status:.* { $EVENT eq 'Alive' ? {LWT=>'online'} : {LWT=>'offline'} }\
+  BASE_TOPIC/MAC_Address:.* MAC_Address\
+  BASE_TOPIC/MQTT_Connect_Count:.* MQTT_Connect_Count\
+  BASE_TOPIC/reboot_time:.* reboot_time\
+  BASE_TOPIC/reboot_reason:.* reboot_reason
+attr DEVICE devStateIcon 2.on:water-heat@orange:heater+off\
+2.off:water-heat@red:heater+on\
+3.off:water-heat@red:heater+on\
+3.on:water-heat@green:heater+off\
+1.on:sani_domestic_waterworks@green:pump+off\
+1.off:sani_domestic_waterworks@red:pump+on\
+4.off:vent_ventilation_level_0@red:air+on\
+4.on:vent_ventilation_level_3@green:air+off
+attr DEVICE jsonMap TGT:desired-temp TMP:temperature FLT:pump AIR:air RED:heater GRN:hot UNT:unit AMB:ambiant-temp
+attr DEVICE setList pump:on,off { my $on = $EVTPART1 eq 'on'?1:0; qq(BASE_TOPIC/command { "CMD":4, "VALUE":$on, "XTIME":0, "INTERVAL":0 }) }\
+  desired-temp:slider,20,1,40 BASE_TOPIC/command {CMD:0,VALUE:$EVTPART1,XTIME:0,INTERVAL:0}\
+  air:on,off { my $on = $EVTPART1 eq 'on'?1:0; qq(BASE_TOPIC/command { "CMD":2, "VALUE":$on, "XTIME":0, "INTERVAL":0 }) }\
+  unit:Celsius,Fahrenheit { my $Celsius = $EVTPART1 eq 'Celsius'?1:0; qq(BASE_TOPIC/command  { "CMD":1, "VALUE":$Celsius, "XTIME":0, "INTERVAL":0 }) }\
+  heater:on,off { my $on = $EVTPART1 eq 'on'?1:0; qq(BASE_TOPIC/command { "CMD":3, "VALUE":$on, "XTIME":0, "INTERVAL":0 }) }\
+  reset_chlorid BASE_TOPIC/command {"CMD":9,"VALUE":,"XTIME":0,"INTERVAL":0}\
+  reset_filter BASE_TOPIC/command {"CMD":10,"VALUE":,"XTIME":0,"INTERVAL":0}
+attr DEVICE stateFormat 1:pump\
+2:heater\
+3:hot\
+4:air\
+temperature Grad C\
+<br>\
+Letzter Filter Wechsel last_filter_change Tage\
+<br>\
+Letzte Chlorung last_add_chlorid Tage
+attr DEVICE userReadings last_add_chlorid:times_CLTIME.* {return int((time()-ReadingsVal($name, 'times_CLTIME', 0))/DAYSECONDS);}, last_filter_change:times_FTIME.* {return int((time()-ReadingsVal($name, 'times_FTIME', 0))/DAYSECONDS);}
+attr DEVICE webCmd desired-temp:reset_filter:reset_chlorid
+attr DEVICE setStateList on off
+attr DEVICE model LayZSpa
+setreading DEVICE attrTemplateVersion 20240524

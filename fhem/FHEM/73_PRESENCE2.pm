@@ -1,4 +1,4 @@
-# $Id: 73_PRESENCE2.pm 28695 2024-03-22 08:17:46Z jowiemann $
+# $Id: 73_PRESENCE2.pm 28940 2024-06-03 07:29:41Z jowiemann $
 ##############################################################################
 #
 #     73_PRESENCE2.pm
@@ -33,7 +33,7 @@ use Blocking;
 use Time::HiRes qw(gettimeofday usleep sleep);
 use DevIo;
 
-my $ModulVersion = "01.03";
+my $ModulVersion = "01.03b";
 my %LOG_Text = (
    0 => "SERVER:",
    1 => "ERROR:",
@@ -1183,6 +1183,7 @@ sub PRESENCE2_daemonScanScheduler($;$) {
                                                           , $nonBlockingTimeout
                                                           , "PRESENCE2_daemonAbortedScan"
                                                           , $hash);
+#                $hash->{helper}{RUNNING_PID}->{loglevel} = GetVerbose($name);
             }
         }
     }

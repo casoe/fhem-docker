@@ -4,11 +4,11 @@
 # Copyright (C)
 # Olaf Droegehorn / DHS-Computertechnik GmbH
 # Björn Hempel
-# 2023 Ralf9
+# 2023- Ralf9
 # 
 # Published under GNU GPL License
 #
-# $Id: 10_IT.pm 28339 2024-01-03 15:33:41Z Ralf9 $
+# $Id: 10_IT.pm 28786 2024-04-12 16:54:20Z Ralf9 $
 #
 ######################################################
 package main;
@@ -627,7 +627,7 @@ IT_Set($@)
       }
 
       ## Do we need to change ITfrequency back??	
-      if (defined(AttrVal($name, 'ITrepetition', undef))) {
+      if (defined(AttrVal($name, 'ITfrequency', undef))) {
         Log3 $hash,4 ,'Setting ITfrequency back to 433.92 MHz';
         CallFn($io->{NAME}, 'GetFn', $io, (' ', 'raw', 'if0'));
       }
