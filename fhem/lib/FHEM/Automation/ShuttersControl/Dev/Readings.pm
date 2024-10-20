@@ -2,7 +2,7 @@
 #
 # Developed with VSCodium and richterger perl plugin
 #
-#  (c) 2018-2023 Copyright: Marko Oldenburg (fhemdevelopment at cooltux dot net)
+#  (c) 2018-2025 Copyright: Marko Oldenburg (fhemdevelopment at cooltux dot net)
 #  All rights reserved
 #
 #   Special thanks goes to:
@@ -33,7 +33,7 @@
 #  GNU General Public License for more details.
 #
 #
-# $Id: Readings.pm 26950 2023-01-03 07:09:44Z CoolTux $
+# $Id: Readings.pm 29226 2024-10-12 07:15:41Z CoolTux $
 #
 ###############################################################################
 

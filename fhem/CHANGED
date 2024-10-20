@@ -1,5 +1,23 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it
+ - bufgix:  72_FRITZBOX: reconnect Fehler nach offline Device 
+ - bufgix:  72_FRITZBOX: kleinere Schönheits-Fehler 
+ - feature: 72_FRITZBOX: Neue Readings box_usb...
+            Aktivierbar über Attribut enableBoxReadings
+ - feature: 82_LGTV_WebOS: add Support for JellyFin App
+ - feature: 74_AutomowerConnect: attribute controlled automatic syncronizing
+                                 the mower time if DST changes
+ - feature: 76_SolarForecast: new attr affectConsForecastLastDays and more
+                              features, changes in Flowgraphic
+ - change:  74_XiaomiBTLESens: remove experimental switch
+ - change:  82_LGTV_WebOS: remove experimental switch
+ - change:  73_AutoShuttersControl: remove experimental switch
+ - bugfix:  59_Weather: fix forcast intervall, safe token count
+ - feature: 74_AutomowerConnect: new setter for synchronizing mower timestamp
+ - bufgix:  72_FRITZBOX: kleinere Fehler bei zu alten FritzOS Versionen 
+ - feature: 72_FRITZBOX: Neue Readings box_pwr_...
+            Aktivierbar über Attribut enableBoxReadings
+            nicht für Cable mit aktueller Labor oder FritzOS 8.00
  - feature: 76_SolarForecast: FlowGrafic-some improvements and changes
  - bugfix:  70_PylonLowVoltage: group/bat addr calc when higher addr is used
  - feature: 76_SolarForecast: features and changes, see 

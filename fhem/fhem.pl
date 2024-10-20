@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 28849 2024-05-07 08:54:34Z rudolfkoenig $
+# $Id: fhem.pl 29222 2024-10-11 16:25:05Z rudolfkoenig $
 
 
 use strict;
@@ -281,7 +281,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 28849 2024-05-07 08:54:34Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 29222 2024-10-11 16:25:05Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -5492,7 +5492,7 @@ json2nameValue($;$$$$)
       setVal($ret, $prefix, $name, $1);
       $in = $2;
 
-    } elsif($val =~ m/^(null)(.*)$/s) {
+    } elsif($val =~ m/^(null|none)(.*)$/is) { # 139411
       setVal($ret, $prefix, $name, undef);
       $in = $2;
 
