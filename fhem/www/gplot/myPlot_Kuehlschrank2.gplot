@@ -13,6 +13,6 @@ set y2label ""
 set yrange [0:2]
 set y2range [0:2]
 
-#dblog MQTT2_DVES_0371A9:ENERGY_Today:::
+#dblog MQTT2_DVES_14833C:ENERGY_Today:::
 
 plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch in kWh' ls l0fill lw 1 with steps

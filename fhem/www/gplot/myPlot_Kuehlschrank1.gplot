@@ -13,6 +13,6 @@ set y2label ""
 set yrange [0:200]
 set y2range [0:200]
 
-#dblog MQTT2_DVES_0371A9:power:::
+#dblog MQTT2_DVES_14833C:power:::
 
 plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch in Watt' ls l0 lw 1 with steps
