@@ -1,10 +1,10 @@
 ########################################################################################################################
-# $Id: 76_SolarForecast.pm 29240 2024-10-14 17:14:14Z DS_Starter $
+# $Id: 76_SolarForecast.pm 29323 2024-10-31 23:09:55Z DS_Starter $
 #########################################################################################################################
 #       76_SolarForecast.pm
 #
 #       (c) 2020-2024 by Heiko Maaz  e-mail: Heiko dot Maaz at t-online dot de
-#       with credits to: kask, Prof. Dr. Peter Henning, Wzut (and much more FHEM users)
+#       with credits to: kask, Prof. Dr. Peter Henning, Wzut, ch.eick (and much more FHEM users)
 #
 #       This script is part of fhem.
 #
@@ -156,6 +156,20 @@ BEGIN {
 
 # Versions History intern
 my %vNotesIntern = (
+  "1.37.5" => "31.10.2024  attr setupInverterDevXX: new key 'limit', the key 'capacity' is now mandatory ".
+                           "Attr affect70percentRule, ctrlAutoRefresh, ctrlAutoRefreshFW deleted ",
+  "1.37.4" => "29.10.2024  both attr graphicStartHtml, graphicEndHtml removed, fix flowGraphic when device name contains '.' ",
+  "1.37.3" => "25.10.2024  _flowGraphic: grid, dummy and battery displacement by kask ".
+                           "Attr flowGraphicControl: new key h2consumerdist, animate=1 is default now ",
+  "1.37.2" => "24.10.2024  _flowGraphic: show Producer Row only if more than one Producer is defined ",
+  "1.37.1" => "23.10.2024  state: 'The setup routine is still incomplete' if setup is incomplete ".
+                           "change: 'trackFlex' && \$wcc >= 80 to \$wcc >= 70, implement Rename function ".
+                           "_flowGraphic: eliminate numbers in device name - Forum: https://forum.fhem.de/index.php?msg=1323229 ",
+  "1.37.0" => "22.10.2024  attr setupInverterDevXX up to 03 inverters with accorded strings, setupInverterDevXX: keys strings and feed ".
+                           "_flowGraphic: controlhash for producer, new attr flowGraphicControl and replace the attributes: ".
+                           "flowGraphicAnimate flowGraphicConsumerDistance flowGraphicShowConsumer flowGraphicShowConsumerDummy ".
+                           "flowGraphicShowConsumerPower flowGraphicShowConsumerRemainTime flowGraphicShift flowGraphicCss ".
+                           "flowGraphicControl: new keys strokecolina, strokecolsig, strokecolstd, strokewidth ",
   "1.36.1" => "14.10.2024  _flowGraphic: consumer distance modified by kask, Coloring of icons corrected when creating 0 ",
   "1.36.0" => "13.10.2024  new Getter valInverter, valStrings and valProducer, preparation for multiple inverters ".
                            "rename setupInverterDev to setupInverterDev01, new attr affectConsForecastLastDays ".
@@ -325,55 +339,6 @@ my %vNotesIntern = (
   "1.1.1"  => "19.11.2023  graphicHeaderOwnspec: fix ignoring the last element of allsets/allattr ",
   "1.1.0"  => "14.11.2023  graphicHeaderOwnspec: possible add set/attr commands, new setter consumerNewPlanning ",
   "1.0.10" => "31.10.2023  fix warnings, edit comref ",
-  "1.0.9"  => "29.10.2023  _aiGetSpread: set spread from 50 to 20 ",
-  "1.0.8"  => "22.10.2023  codechange: add central readings store array, new function storeReading, writeCacheToFile ".
-                           "solcastapi in sub __delObsoleteAPIData, save freespace if flowGraphicShowConsumer=0 is set ".
-                           "pay attention to attr graphicEnergyUnit in __createOwnSpec ",
-  "1.0.7"  => "21.10.2023  more design options for graphicHeaderOwnspec and a possible line title ",
-  "1.0.6"  => "19.10.2023  new attr ctrlGenPVdeviation ",
-  "1.0.5"  => "11.10.2023  new sub _aiGetSpread for estimate AI results stepwise, allow key 'noshow' values 0,1,2,3 ".
-                           "calculate conForecastTillNextSunrise accurate to the minute ",
-  "1.0.4"  => "10.10.2023  fix: print always Log in _calcCaQ* subroutines even if calaculated factors are equal ".
-                           "new consumer attr key 'noshow' ",
-  "1.0.3"  => "08.10.2023  change graphic header PV/CO detail, new attr graphicHeaderOwnspec, internal code changes ".
-                           "fix isAddSwitchOffCond 0 Forum: https://forum.fhem.de/index.php?msg=1288877 ".
-                           "change _calcValueImproves and subroutines ",
-  "1.0.2"  => "05.10.2023  replace calcRange by cloud2bin ",
-  "1.0.1"  => "03.10.2023  fixes in comRef, bug fix Forum: https://forum.fhem.de/index.php?msg=1288637 ",
-  "1.0.0"  => "01.10.2023  preparation for check in ",
-  "0.83.3" => "28.09.2023  fix Illegal division by zero, Forum: https://forum.fhem.de/index.php?msg=1288032 ".
-                           "delete AllPVforecastsToEvent after event generation ",
-  "0.83.2" => "26.09.2023  setter reset consumption ",
-  "0.83.1" => "26.09.2023  change currentRadiationDev to currentRadiationAPI, new attr ctrlAIdataStorageDuration ".
-                           "new elements todayConsumptionForecast, conForecastTillNextSunrise for attr ctrlStatisticReadings ".
-                           "add entry text in guided procedure ",
-  "0.83.0" => "19.09.2023  add manageTrain for AI Training in parallel process ",
-  "0.82.4" => "16.09.2023  generate DWD API graphics header information and extend plant check for DWD API errors, minor fixes ",
-  "0.82.3" => "14.09.2023  more mouse over information in graphic header, ai support in autocorrection selectable ".
-                           "substitute use of Test2::Suite ",
-  "0.82.2" => "11.09.2023  activate implementation of DWD AI support, add runTimeTrainAI ",
-  "0.82.1" => "08.09.2023  rebuild implementation of DWD AI support, some error fixing (FHEM restarts between 0 and 1) ",
-  "0.82.0" => "02.09.2023  first implementation of DWD AI support, new ctrlDebug aiProcess aiData, reset aiData ",
-  "0.81.1" => "30.08.2023  show forecast qualities when pressing quality icon in forecast grafic, store rad1h (model DWD) in ".
-                           "pvhistory, removed: affectCloudfactorDamping, affectRainfactorDamping ",
-  "0.81.0" => "27.08.2023  development version for Victron VRM API, __PvFcSimpleDnumHist changed, available setter ".
-                           "are now API specific, switch currentForecastDev to currentWeatherDev ".
-                           "affectCloudfactorDamping default 0, affectRainfactorDamping default 0 ".
-                           "call consumption forecast from Victron VRM API ",
-  "0.80.20"=> "15.08.2023  hange calculation in ___setSolCastAPIcallKeyData once again, fix some warnings ",
-  "0.80.19"=> "10.08.2023  fix Illegal division by zero, Forum: https://forum.fhem.de/index.php?msg=1283836 ",
-  "0.80.18"=> "07.08.2023  change calculation of todayDoneAPIcalls in ___setSolCastAPIcallKeyData, add \$lagtime ".
-                           "Forum: https://forum.fhem.de/index.php?msg=1283487 ",
-  "0.80.17"=> "05.08.2023  change sequence of _createSummaries in centralTask, ComRef edited ",
-  "0.80.16"=> "26.07.2023  new consumer type noSchedule, expand maxconsumer to 16, minor changes/fixes ",
-  "0.80.15"=> "24.07.2023  new sub getDebug, new key switchdev in consumer attributes, change Debug consumtion ".
-                           "reorg data in pvHistory when a hour of day was deleted ",
-  "0.80.14"=> "21.07.2023  __substituteIcon: use isConsumerLogOn instead of isConsumerPhysOn ",
-  "0.80.13"=> "18.07.2023  include parameter DoN in nextHours hash, new KPI's todayConForecastTillSunset, currentRunMtsConsumer_XX ".
-                           "minor fixes and improvements ",
-  "0.80.12"=> "16.07.2023  preparation for alternative switch device in consumer attribute, revise CommandRef ".
-                           "fix/improve sub ___readCandQ and much more, get pvHistory -> one specific day selectable ".
-                           "get valConsumerMaster -> one specific consumer selectable, enhance consumer key locktime by on-locktime ",
   "0.1.0"  => "09.12.2020  initial Version "
 );
 
@@ -439,7 +404,7 @@ my $tempbasedef    = 25;                                                        
 
 my $maxconsumer    = 16;                                                            # maximale Anzahl der möglichen Consumer (Attribut)
 my $maxproducer    = 3;                                                             # maximale Anzahl der möglichen anderen Produzenten (Attribut)
-my $maxinverter    = 1;                                                             # maximale Anzahl der möglichen Inverter
+my $maxinverter    = 3;                                                             # maximale Anzahl der möglichen Inverter
 
 my $epiecMaxCycles = 10;                                                            # Anzahl Einschaltzyklen (Consumer) für verbraucherspezifische Energiestück Ermittlung
 my @ctypes         = qw(dishwasher dryer washingmachine heater charger other
@@ -465,7 +430,11 @@ my $b4coldef       = 'DBDBD0';                                                  
 my $b4fontcoldef   = '000000';                                                      # default Schriftfarbe Beam 4
 my $fgCDdef        = 130;                                                           # Abstand Verbrauchericons zueinander
 
-my $fgscaledef     = 0.10;                                                          # Scale Normativ Icons in Flowgreafik
+my $fgscaledef     = 0.10;                                                          # Flußgrafik: Scale Normativ Icons
+my $strokcolstddef = 'darkorange';                                                  # Flußgrafik: Standardfarbe aktive normale Kette
+my $strokcolsigdef = 'red';                                                         # Flußgrafik: Standardfarbe aktive Signal-Kette
+my $strokcolinadef = 'gray';                                                        # Flußgrafik: Standardfarbe inaktive Kette
+my $strokwidthdef  = 25;                                                            # Flußgrafik: Standard Breite der Kette
 my $prodicondef    = 'sani_garden_pump';                                            # default Producer-Icon
 my $cicondef       = 'light_light_dim_100';                                         # default Consumer-Icon
 my $ciconcoldef    = 'darkorange';                                                  # default Consumer-Icon Färbung
@@ -481,21 +450,6 @@ my $bPath = 'https://svn.fhem.de/trac/browser/trunk/fhem/contrib/SolarForecast/'
 my $pPath = '?format=txt';                                                          # Download Format
 my $cfile = 'controls_solarforecast.txt';                                           # Name des Controlfiles
 
-                                                                                    # default CSS-Style
-my $cssdef = qq{.flowg.text           { stroke: none; fill: gray; font-size: 60px; }                                     \n}.
-             qq{.flowg.bat25          { stroke: red; fill: red; }                                                        \n}.
-             qq{.flowg.bat50          { stroke: darkorange; fill: darkorange; }                                          \n}.
-             qq{.flowg.bat75          { stroke: green; fill: green; }                                                    \n}.
-             qq{.flowg.grid_color1    { fill: green; }                                                                   \n}.
-             qq{.flowg.grid_color2    { fill: red; }                                                                     \n}.
-             qq{.flowg.grid_color3    { fill: gray; }                                                                    \n}.
-             qq{.flowg.inactive_in    { stroke: gray;       stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.2; } \n}.
-             qq{.flowg.inactive_out   { stroke: gray;       stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.2; } \n}.
-             qq{.flowg.active_in      { stroke: red;        stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; } \n}.
-             qq{.flowg.active_out     { stroke: darkorange; stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; } \n}.
-             qq{.flowg.active_bat_in  { stroke: darkorange; stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; } \n}.
-             qq{.flowg.active_bat_out { stroke: green;      stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; } \n}
-             ;
 
 # initiale Hashes für Stunden Consumption Forecast inkl. und exkl. Verbraucher
 my $conhfc = { "01" => 0, "02" => 0, "03" => 0, "04" => 0, "05" => 0, "06" => 0, "07" => 0, "08" => 0,
@@ -541,18 +495,16 @@ my @rconfigs = qw( pvCorrectionFactor_Auto
                    energyH4Trigger
                  );
                                                                                  # Anlagenkonfiguration: maßgebliche Attribute
-my @aconfigs = qw( affect70percentRule affectBatteryPreferredCharge affectConsForecastIdentWeekdays
+my @aconfigs = qw( affectBatteryPreferredCharge affectConsForecastIdentWeekdays
                    affectConsForecastInPlanning affectSolCastPercentile
                    consumerLegend consumerAdviceIcon consumerLink
-                   ctrlAIdataStorageDuration ctrlAutoRefresh ctrlAutoRefreshFW ctrlBackupFilesKeep
+                   ctrlAIdataStorageDuration ctrlBackupFilesKeep
                    ctrlBatSocManagement ctrlConsRecommendReadings ctrlGenPVdeviation ctrlInterval
                    ctrlLanguage ctrlNextDayForecastReadings ctrlShowLink ctrlSolCastAPImaxReq
                    ctrlSolCastAPIoptimizeReq ctrlStatisticReadings ctrlUserExitFn
                    setupWeatherDev1 setupWeatherDev2 setupWeatherDev3
                    disable
-                   flowGraphicSize flowGraphicAnimate flowGraphicConsumerDistance flowGraphicShowConsumer
-                   flowGraphicShowConsumerDummy flowGraphicShowConsumerPower flowGraphicShowConsumerRemainTime
-                   flowGraphicCss graphicBeamWidth
+                   flowGraphicControl graphicBeamWidth
                    graphicBeamHeightLevel1 graphicBeamHeightLevel2
                    graphicBeam1Content graphicBeam2Content graphicBeam3Content graphicBeam4Content
                    graphicBeam1Color graphicBeam2Color graphicBeam3Color graphicBeam4Color
@@ -560,15 +512,15 @@ my @aconfigs = qw( affect70percentRule affectBatteryPreferredCharge affectConsFo
                    graphicBeam1MaxVal graphicEnergyUnit graphicHeaderOwnspec graphicHeaderOwnspecValForm
                    graphicHeaderDetail graphicHeaderShow graphicHistoryHour graphicHourCount graphicHourStyle
                    graphicLayoutType graphicSelect graphicShowDiff graphicShowNight graphicShowWeather
-                   graphicSpaceSize graphicStartHtml graphicEndHtml graphicWeatherColor graphicWeatherColorNight
+                   graphicSpaceSize graphicWeatherColor graphicWeatherColorNight
                    setupMeterDev setupBatteryDev setupInverterStrings setupRadiationAPI setupStringPeak
                    setupRoofTops
                  );
 
-for my $cinit (1..$maxconsumer) {
-  $cinit = sprintf "%02d", $cinit;
-  push @aconfigs, "consumer${cinit}";                         # Anlagenkonfiguration: add Consumer Attribute
-  push @dd,       "consumerSwitching${cinit}";                # ctrlDebug: add specific Consumer
+for my $cn (1..$maxconsumer) {
+  $cn = sprintf "%02d", $cn;
+  push @aconfigs, "consumer${cn}";                            # Anlagenkonfiguration: add Consumer Attribute
+  push @dd,       "consumerSwitching${cn}";                   # ctrlDebug: add specific Consumer
 }
 
 for my $in (1..$maxinverter) {
@@ -576,9 +528,9 @@ for my $in (1..$maxinverter) {
   push @aconfigs, "setupInverterDev${in}";                    # Anlagenkonfiguration: add Inverter Attribute
 }
 
-for my $prn (1..$maxproducer) {
-  $prn = sprintf "%02d", $prn;
-  push @aconfigs, "setupOtherProducer${prn}";                 # Anlagenkonfiguration: add Producer Attribute
+for my $pn (1..$maxproducer) {
+  $pn = sprintf "%02d", $pn;
+  push @aconfigs, "setupOtherProducer${pn}";                  # Anlagenkonfiguration: add Producer Attribute
 }
 
 my $allwidgets = 'icon|sortable|uzsu|knob|noArg|time|text|slider|multiple|select|bitfield|widgetList|colorpicker';
@@ -658,6 +610,7 @@ my %hattr = (                                                                # H
   setupRadiationAPI         => { fn => \&_attrRadiationAPI        },
   setupStringPeak           => { fn => \&_attrStringPeak          },
   setupRoofTops             => { fn => \&_attrRoofTops            },
+  flowGraphicControl        => { fn => \&_attrflowGraphicControl  },
 );
 
   for my $in (1..$maxinverter) {
@@ -687,7 +640,21 @@ my %hmoon = (
   7 => { icon => 'weather_moon_phases_8',      DE => 'abnehmende Sichel', EN => 'decreasing crescent' },
 );
 
-my %hqtxt = (                                                                                                 # Hash (Setup) Texte
+my %hrepl = (                                                                # Zeichenersetzungen
+  '0' => 'a',
+  '1' => 'b',
+  '2' => 'c',
+  '3' => 'd',
+  '4' => 'e',
+  '5' => 'f',
+  '6' => 'g',
+  '7' => 'h',
+  '8' => 'i',
+  '9' => 'j',
+  '.' => 'k',
+);
+
+my %hqtxt = (                                                                # Hash (Setup) Texte
   entry  => { EN => qq{<b>Warm welcome!</b><br>
                        The next queries will guide you through the basic installation.<br>
                        If all entries are made, please check the configuration finally with
@@ -705,7 +672,7 @@ my %hqtxt = (                                                                   
   crd    => { EN => qq{Please select the radiation forecast service with "attr LINK setupRadiationAPI"},
               DE => qq{Bitte geben sie den Strahlungsvorhersage Dienst mit "attr LINK setupRadiationAPI" an}                },
   cid    => { EN => qq{Please specify the Inverter device with "attr LINK setupInverterDev01"},
-              DE => qq{Bitte geben sie das Wechselrichter Device mit "attr LINK setupInverterDev01" an}                       },
+              DE => qq{Bitte geben sie das Wechselrichter Device mit "attr LINK setupInverterDev01" an}                     },
   mid    => { EN => qq{Please specify the device for energy measurement with "attr LINK setupMeterDev"},
               DE => qq{Bitte geben sie das Device zur Energiemessung mit "attr LINK setupMeterDev" an}                      },
   ist    => { EN => qq{Please define all of your used string names with "attr LINK setupInverterStrings"},
@@ -1199,7 +1166,6 @@ my %hfspvh = (
 sub Initialize {
   my $hash = shift;
 
-  my $fwd = join ",", devspec2array("TYPE=FHEMWEB:FILTER=STATE=Initialized");
   my $hod = join ",", map { sprintf "%02d", $_} (1..24);
   my $srd = join ",", sort keys (%hcsr);
   my $gbc = 'pvReal,pvForecast,consumption,consumptionForecast,gridconsumption,energycosts,gridfeedin,feedincome';
@@ -1232,12 +1198,12 @@ sub Initialize {
   $hash->{FW_summaryFn}       = \&FwFn;
   $hash->{FW_detailFn}        = \&FwFn;
   $hash->{ShutdownFn}         = \&Shutdown;
+  $hash->{RenameFn}           = \&Rename;
   $hash->{DbLog_splitFn}      = \&DbLogSplit;
   $hash->{AttrFn}             = \&Attr;
   $hash->{NotifyFn}           = \&Notify;
   $hash->{ReadyFn}            = \&runTask;
-  $hash->{AttrList}           = "affect70percentRule:1,dynamic,0 ".
-                                "affectBatteryPreferredCharge:slider,0,1,100 ".
+  $hash->{AttrList}           = "affectBatteryPreferredCharge:slider,0,1,100 ".
                                 "affectConsForecastIdentWeekdays:1,0 ".
                                 "affectConsForecastInPlanning:1,0 ".
                                 "affectConsForecastLastDays:slider,1,1,31 ".
@@ -1247,12 +1213,10 @@ sub Initialize {
                                 "consumerLink:0,1 ".
                                 "ctrlAIdataStorageDuration ".
                                 "ctrlAIshiftTrainStart:slider,1,1,23 ".
-                                "ctrlAutoRefresh:selectnumbers,120,0.2,1800,0,log10 ".
-                                "ctrlAutoRefreshFW:$fwd ".
                                 "ctrlBackupFilesKeep ".
                                 "ctrlBatSocManagement:textField-long ".
                                 "ctrlConsRecommendReadings:multiple-strict,$allcs ".
-                                "ctrlDebug:multiple-strict,$dm,#14 ".
+                                "ctrlDebug:multiple-strict,$dm,#10 ".
                                 "ctrlAreaFactorUsage:fix,trackFull,trackShared,trackFlex ".
                                 "ctrlGenPVdeviation:daily,continuously ".
                                 "ctrlInterval ".
@@ -1264,15 +1228,7 @@ sub Initialize {
                                 "ctrlStatisticReadings:multiple-strict,$srd ".
                                 "ctrlUserExitFn:textField-long ".
                                 "disable:1,0 ".
-                                "flowGraphicSize ".
-                                "flowGraphicAnimate:1,0 ".
-                                "flowGraphicConsumerDistance:slider,80,10,500 ".
-                                "flowGraphicShift:slider,-80,5,80 ".
-                                "flowGraphicShowConsumer:1,0 ".
-                                "flowGraphicShowConsumerDummy:1,0 ".
-                                "flowGraphicShowConsumerPower:0,1 ".
-                                "flowGraphicShowConsumerRemainTime:0,1 ".
-                                "flowGraphicCss:textField-long ".
+                                "flowGraphicControl:textField-long ".
                                 "graphicBeamHeightLevel1 ".
                                 "graphicBeamHeightLevel2 ".
                                 "graphicBeamWidth:slider,20,5,100 ".
@@ -1303,8 +1259,6 @@ sub Initialize {
                                 "graphicShowNight:1,0 ".
                                 "graphicShowWeather:1,0 ".
                                 "graphicSpaceSize ".
-                                "graphicStartHtml ".
-                                "graphicEndHtml ".
                                 "graphicWeatherColor:colorpicker,RGB ".
                                 "graphicWeatherColorNight:colorpicker,RGB ".
                                 "setupInverterStrings ".
@@ -1320,6 +1274,15 @@ sub Initialize {
                                 $setupprod.
                                 $consumer.
                                 $readingFnAttributes;
+                    
+  ### nicht mehr benötigte Daten verarbeiten - Bereich kann später wieder raus !!
+  ##########################################################################################################################                    
+  my $av = 'obsolete#-#use#attr#flowGraphicControl#instead';
+  $hash->{AttrList} .= " flowGraphicCss:$av flowGraphicSize:$av flowGraphicAnimate:$av flowGraphicConsumerDistance:$av flowGraphicShowConsumer:$av flowGraphicShowConsumerDummy:$av flowGraphicShowConsumerPower:$av flowGraphicShowConsumerRemainTime:$av flowGraphicShift:$av ";
+ 
+  my $av1 = "obsolete#-#the#attribute#will#be#deleted#soon";
+  $hash->{AttrList} .= " affect70percentRule:$av1 ctrlAutoRefresh:$av1 ctrlAutoRefreshFW:$av1 ";
+  ##########################################################################################################################
 
   $hash->{FW_hideDisplayName} = 1;                     # Forum 88667
 
@@ -3468,7 +3431,7 @@ sub __getDWDSolarData {
 
           my ($af, $pv, $sdr, $wcc);
 
-          if ($cafd =~ /track/xs) {                                                                  # Flächenfaktor Sonnenstand geführt
+          if ($cafd =~ /track/xs) {                                                            # Flächenfaktor Sonnenstand geführt
               ($af, $sdr, $wcc) = ___areaFactorTrack ( { name   => $name,
                                                          day    => $day,
                                                          dday   => $dday,
@@ -3488,7 +3451,7 @@ sub __getDWDSolarData {
               $af  = 1.00 if(!isNumeric($af));
               $sdr = 0.75 if(!isNumeric($sdr));
 
-              if ($cafd eq 'trackShared'|| ($cafd eq 'trackFlex' && $wcc >= 80)) {                  # Direktstrahlung + Diffusstrahlung
+              if ($cafd eq 'trackShared'|| ($cafd eq 'trackFlex' && $wcc >= 70)) {                  # Direktstrahlung + Diffusstrahlung
                   my $dirrad = $rad * $sdr;                                                         # Anteil Direktstrahlung an Globalstrahlung
                   my $difrad = $rad - $dirrad;                                                      # Anteil Diffusstrahlung an Globalstrahlung
 
@@ -5356,14 +5319,27 @@ sub Attr {
 
   ### nicht mehr benötigte Daten verarbeiten - Bereich kann später wieder raus !!
   ######################################################################################################################
-  #if ($cmd eq 'set' && $aName eq 'affectMaxDayVariance') {
-  #    if (!$init_done) {
-  #        return qq{Device "$name" -> The attribute '$aName' is obsolete and will be deleted soon. Please press "save config" when restart is finished.};
-  #    }
-  #    else {
-  #        return qq{The attribute '$aName' is obsolete and will be deleted soon.};
-  #    }
-  #}
+  # 20.10.2024
+  if ($cmd eq 'set' && $aName =~ /^flowGraphicCss|flowGraphicSize|flowGraphicAnimate|flowGraphicConsumerDistance|flowGraphicShowConsumer|flowGraphicShowConsumerDummy|flowGraphicShowConsumerPower|flowGraphicShowConsumerRemainTime|flowGraphicShift$/) {
+      if (!$init_done) {
+          # return qq{Device "$name" -> The attribute '$aName' is replaced by 'flowGraphicControl'. Please press "save config" when restart is finished.};
+          Log3 ($name, 1, qq{$name - The attribute '$aName' is replaced by 'flowGraphicControl'. Please press "save config" when restart is finished.});
+      }
+      else {
+          return qq{The attribute '$aName' is obsolete and replaced by 'flowGraphicControl'.};
+      }
+  }
+  # 31.10.2024
+  if ($cmd eq 'set' && $aName =~ /^graphicStartHtml|affect70percentRule|graphicEndHtml|ctrlAutoRefresh|ctrlAutoRefreshFW$/) {
+      if (!$init_done) {
+          my $msg = "The attribute $aName has been removed and is no longer valid.";
+          Log3 ($name, 1, "$name - $msg");
+          return qq{Device "$name" -> $msg};
+      }
+      else {
+          return qq{The attribute '$aName' is obsolete.};
+      }     
+  }
   ######################################################################################################################
 
   if ($aName eq 'disable') {
@@ -5373,11 +5349,6 @@ sub Attr {
       $do  = 0 if($cmd eq 'del');
       $val = ($do == 1 ? 'disabled' : 'initialized');
       singleUpdateState ( {hash => $hash, state => $val, evt => 1} );
-  }
-
-  if ($aName eq 'ctrlAutoRefresh') {
-      delete $hash->{HELPER}{AREFRESH};
-      delete $hash->{AUTOREFRESH};
   }
 
   if ($aName eq 'ctrlNextDayForecastReadings') {
@@ -5406,7 +5377,6 @@ sub Attr {
   }
 
   if ($aName eq 'ctrlGenPVdeviation' && $aVal eq 'daily') {
-      my $type = $hash->{TYPE};
       readingsDelete ($hash, 'Today_PVdeviation');
       delete $data{$type}{$name}{circular}{99}{tdayDvtn};
   }
@@ -5670,6 +5640,71 @@ return;
 }
 
 ################################################################
+#                  Attr flowGraphicControl
+################################################################
+sub _attrflowGraphicControl {            ## no critic "not used"
+  my $paref = shift;
+  my $name  = $paref->{name};
+  my $type  = $paref->{type};
+  my $aVal  = $paref->{aVal};
+  my $cmd   = $paref->{cmd};
+
+  my $hash  = $defs{$name};
+  
+  for my $av ( qw( animate 
+                   consumerdist
+                   h2consumerdist                   
+                   shift 
+                   showconsumer 
+                   showconsumerremaintime
+                   size
+                   showconsumerdummy
+                   showconsumerpower
+                   strokecolstd
+                   strokecolsig
+                   strokecolina
+                   strokewidth
+                 ) ) {
+      
+      delete $data{$type}{$name}{current}{$av};
+  }
+ 
+  if ($cmd eq 'set') {
+      my $valid = {
+          animate                => '0|1',
+          consumerdist           => '[89]\d{1}|[1234]\d{2}|500',
+          h2consumerdist         => '\d{1,3}',
+          shift                  => '-?[0-7]\d{0,1}|-?80',
+          size                   => '\d+',
+          showconsumer           => '0|1',
+          showconsumerdummy      => '0|1',
+          showconsumerremaintime => '0|1',
+          showconsumerpower      => '0|1',
+          strokecolstd           => '.*',
+          strokecolsig           => '.*',
+          strokecolina           => '.*',
+          strokewidth            => '\d+',
+      };
+      
+      my ($a, $h) = parseParams ($aVal);
+      
+      for my $key (keys %{$h}) {
+          my $comp = $valid->{$key};
+          next if(!$comp);
+
+          if ($h->{$key} =~ /^$comp$/xs) {
+              $data{$type}{$name}{current}{$key} = $h->{$key};
+          }
+          else {
+              return "The key '$key=$h->{$key}' is not specified correctly. Please use a valid value.";
+          }
+      }
+  }
+
+return;
+}
+
+################################################################
 #                      Attr setupMeterDev
 ################################################################
 sub _attrMeterDev {                    ## no critic "not used"
@@ -5795,18 +5830,44 @@ sub _attrInverterDev {                   ## no critic "not used"
   if ($paref->{cmd} eq 'set') {
       my ($err, $indev, $h) = isDeviceValid ( { name => $name, obj => $aVal, method => 'string' } );
       return $err if($err);
-
-      if (!$h->{pv} || !$h->{etotal}) {
-          return qq{The syntax of '$aName' is not correct. Please consider the commandref.};
+      
+      if ($in ne '01' && !AttrVal ($name, 'setupInverterDev01', '')) {
+          return qq{Set the first Inverter device with attribute 'setupInverterDev01'};
       }
 
-      if ($h->{capacity} && !isNumeric($h->{capacity})) {
-          return qq{The syntax of key 'capacity' is not correct. Please consider the commandref.};
+      if (!$h->{pv} || !$h->{etotal} || !$h->{capacity}) {
+          return qq{One or more of the keys 'pv, etotal, capacity' are missing . Please consider the commandref.};
       }
 
+      if (!isNumeric($h->{capacity})) {
+          return qq{The value of key 'capacity' must be numeric. Please consider the commandref.};
+      }
+   
+      if ($h->{limit}) {
+          if (!isNumeric($h->{limit}) || $h->{limit} < 0 || $h->{limit} > 100) {
+              return qq{The value of key 'limit' is not valid. Please consider the commandref.};
+          }
+      }   
+      
+      if ($h->{feed} && $h->{feed} !~ /^grid|bat$/xs) {
+          return qq{The value of key 'feed' is not valid. Please consider the commandref.};
+      }
+      
+      if ($h->{strings}) {
+          for my $s (split ',', $h->{strings}) {
+              if (!grep /^$s$/, keys %{$data{$type}{$name}{strings}}) {
+                  return qq{The string '$s' is not a valid string name defined in attribute 'setupInverterStrings'.};
+              }
+          }
+      }
+      
       $data{$type}{$name}{circular}{99}{attrInvChangedTs} = int time;
+      
       delete $data{$type}{$name}{inverters}{$in}{invertercap};
+      delete $data{$type}{$name}{inverters}{$in}{ilimit};   
       delete $data{$type}{$name}{inverters}{$in}{iicon};
+      delete $data{$type}{$name}{inverters}{$in}{istrings};
+      delete $data{$type}{$name}{inverters}{$in}{ifeed};
   }
   elsif ($paref->{cmd} eq 'del') {
       for my $k (keys %{$data{$type}{$name}{inverters}}) {
@@ -6278,6 +6339,24 @@ return ($reading, $value, $unit);
 }
 
 ################################################################
+#                         Rename
+################################################################
+sub Rename {
+  my $new_name = shift;
+  my $old_name = shift;
+  
+  my $hash = $defs{$old_name};
+  my $type = (split '::', __PACKAGE__)[1];
+  
+  $data{$type}{$new_name} = $data{$type}{$old_name};
+  delete $data{$type}{$old_name};                            
+  
+  # Log3 ($new_name, 1, qq{$new_name - Dump -> \n}. Dumper $data{$type}{$new_name});
+
+return;
+}
+
+################################################################
 #                         Shutdown
 ################################################################
 sub Shutdown {
@@ -6333,7 +6412,8 @@ sub Delete {
               $csmcache.$name,
               $scpicache.$name,
               $airaw.$name,
-              $aitrained.$name
+              $aitrained.$name,
+              $pvhexprtcsv.$name
             );
 
   opendir (DIR, $cachedir);
@@ -6352,6 +6432,9 @@ sub Delete {
 
       if ($err) {
           Log3 ($name, 1, qq{$name - Message while deleting file "$f": $err});
+      }
+      else {
+          Log3 ($name, 3, qq{$name - INFO - File "$f" successfully deleted.});
       }
   }
 
@@ -6843,6 +6926,30 @@ sub centralTask {
       $n = sprintf "%02d", $n;
       readingsDelete ($hash, "pvCorrectionFactor_${n}_autocalc");
   }
+    
+  my $fg1 = AttrVal ($name, 'flowGraphicSize', undef);                     # 20.10.2024
+  my $fg2 = AttrVal ($name, 'flowGraphicAnimate', undef);
+  my $fg3 = AttrVal ($name, 'flowGraphicConsumerDistance', undef);
+  my $fg4 = AttrVal ($name, 'flowGraphicShowConsumer', undef);
+  my $fg5 = AttrVal ($name, 'flowGraphicShowConsumerDummy', undef);
+  my $fg6 = AttrVal ($name, 'flowGraphicShowConsumerPower', undef);
+  my $fg7 = AttrVal ($name, 'flowGraphicShowConsumerRemainTime', undef);
+  my $fg8 = AttrVal ($name, 'flowGraphicShift', undef);
+  
+  my $newval;
+  $newval .= "size=$fg1 " if(defined $fg1);
+  $newval .= "animate=$fg2 " if(defined $fg2);
+  $newval .= "consumerdist=$fg3 " if(defined $fg3);
+  $newval .= "showconsumer=$fg4 " if(defined $fg4);
+  $newval .= "showconsumerdummy=$fg5 " if(defined $fg5);
+  $newval .= "showconsumerpower=$fg6 " if(defined $fg6);
+  $newval .= "showconsumerremaintime=$fg7 " if(defined $fg7);
+  $newval .= "shift=$fg8 " if(defined $fg8);  
+
+  if ($newval) {
+      CommandAttr (undef, "$name flowGraphicControl $newval");
+      ::CommandDeleteAttr (undef, "$name flowGraphicSize|flowGraphicAnimate|flowGraphicConsumerDistance|flowGraphicShowConsumer|flowGraphicShowConsumerDummy|flowGraphicShowConsumerPower|flowGraphicShowConsumerRemainTime|flowGraphicShift");
+  }
   ##########################################################################################################################
 
   setModel ($hash);                                                                            # Model setzen
@@ -6859,8 +6966,12 @@ sub centralTask {
   if (!CurrentVal ($hash, 'allStringsFullfilled', 0)) {                                        # die String Konfiguration erstellen wenn noch nicht erfolgreich ausgeführt
       my $ret = createStringConfig ($hash);
 
-      if ($ret) {
-          singleUpdateState ( {hash => $hash, state => $ret, evt => 1} );                                                                    # Central Task running Statusbit
+      if ($ret) { 
+          if (!CurrentVal ($hash, 'setupcomplete', 0)) {
+              $ret = 'The setup routine is still incomplete';
+          }      
+          singleUpdateState ( {hash => $hash, state => $ret, evt => 1} );                      # Central Task running Statusbit
+          
           return;
       }
   }
@@ -6910,14 +7021,14 @@ sub centralTask {
   readingsDelete              ($hash, 'AllPVforecastsToEvent');
 
   _getRoofTopData             ($centpars);                                            # Strahlungswerte/Forecast-Werte in solcastapi-Hash erstellen
+  _transferInverterValues     ($centpars);                                            # WR Werte übertragen
   _transferAPIRadiationValues ($centpars);                                            # Raw Erzeugungswerte aus solcastapi-Hash übertragen und Forecast mit/ohne Korrektur erstellen
   _calcMaxEstimateToday       ($centpars);                                            # heutigen Max PV Estimate & dessen Tageszeit ermitteln
-  _transferInverterValues     ($centpars);                                            # WR Werte übertragen
   _transferProducerValues     ($centpars);                                            # Werte anderer Erzeuger übertragen
   _transferMeterValues        ($centpars);                                            # Energy Meter auswerten
   _transferBatteryValues      ($centpars);                                            # Batteriewerte einsammeln
   _batSocTarget               ($centpars);                                            # Batterie Optimum Ziel SOC berechnen
-  #_createSummaries            ($centpars);                                            # Zusammenfassungen erstellen
+  _batChargeRecmd             ($centpars);                                            # Batterie Ladeempfehlung berechnen und erstellen
   _manageConsumerData         ($centpars);                                            # Consumer Daten sammeln und Zeiten planen
   _estConsumptionForecast     ($centpars);                                            # Verbrauchsprognose erstellen
   _evaluateThresholds         ($centpars);                                            # Schwellenwerte bewerten und signalisieren
@@ -7584,7 +7695,7 @@ sub __deletePvCorffReadings  {
           ($pcf)  = split " / ", $pcf if($pcf =~ /\s\/\s/xs);
 
           if ($pcf !~ /manual/xs) {                                                   # manuell gesetzte pcf-Readings nicht löschen
-              deleteReadingspec ($hash, "pvCorrectionFactor_${n}.*");
+              readingsDelete ($hash, "pvCorrectionFactor_${n}");                      # V 1.37.0
           }
           else {
               readingsSingleUpdate ($hash, "pvCorrectionFactor_${n}", $pcf, 0);
@@ -8201,16 +8312,16 @@ sub __calcPVestimates {
   my $fd      = $paref->{fd};
   my $num     = $paref->{num};
   my $debug   = $paref->{debug};
-  my $hash    = $defs{$name};
-
+  
+  my $hash        = $defs{$name};
   my $reld        = $fd == 0 ? "today" : $fd == 1 ? "tomorrow" : "unknown";
-  my $rr1c        = NexthoursVal ($hash, "NextHour".sprintf ("%02d",$num), "rr1c",            0);     # Gesamtniederschlag während der letzten Stunde kg/m2
-  my $wcc         = NexthoursVal ($hash, "NextHour".sprintf ("%02d",$num), "wcc",             0);     # effektive Wolkendecke nächste Stunde X
-  my $temp        = NexthoursVal ($hash, "NextHour".sprintf ("%02d",$num), "temp", $tempbasedef);     # vorhergesagte Temperatur Stunde X
+  my $rr1c        = NexthoursVal   ($hash, "NextHour".sprintf ("%02d",$num), "rr1c",            0);   # Gesamtniederschlag während der letzten Stunde kg/m2
+  my $wcc         = NexthoursVal   ($hash, "NextHour".sprintf ("%02d",$num), "wcc",             0);   # effektive Wolkendecke nächste Stunde X
+  my $temp        = NexthoursVal   ($hash, "NextHour".sprintf ("%02d",$num), "temp", $tempbasedef);   # vorhergesagte Temperatur Stunde X
   my ($acu, $aln) = isAutoCorrUsed ($name);
 
   $paref->{wcc}  = $wcc;
-  my ($hc, $hq)  = ___readCandQ ($paref);                                                      # liest den anzuwendenden Korrekturfaktor
+  my ($hc, $hq)  = ___readCandQ ($paref);                                                             # liest den anzuwendenden Korrekturfaktor
   delete $paref->{wcc};
 
   my ($lh,$sq,$peakloss, $modtemp);
@@ -8237,6 +8348,23 @@ sub __calcPVestimates {
       my $est = SolCastAPIVal ($hash, $string, $wantdt, 'pv_estimate50', 0);
       my $pv  = sprintf "%.1f", ($est * $hc);                                                         # Korrekturfaktor anwenden
 
+      my $invcap = 0;
+      
+      for my $in (keys %{$data{$type}{$name}{inverters}}) {
+          my $istrings = InverterVal ($hash, $in, 'istrings', '');                                    # dem Inverter zugeordnete Strings
+          next if(!grep /^$string$/, (split ',', $istrings));
+          
+          $invcap = InverterVal ($hash, $in, 'invertercap', 0);                                       # Max. Leistung des Inverters
+          
+          last;
+      }
+
+      if ($invcap && $pv > $invcap) {
+          $pv = $invcap;                                                                              # PV Vorhersage auf WR Kapazität begrenzen
+
+          debugLog ($paref, "radiationProcess", "PV forecast start time $wantdt limited to $pv Wh due to inverter capacity");
+      }
+  
       if ($debug =~ /radiationProcess/xs) {
           $lh = {                                                                                     # Log-Hash zur Ausgabe
               "String Peak"                    => $peak. " W",
@@ -8264,22 +8392,9 @@ sub __calcPVestimates {
   }
 
   $data{$type}{$name}{current}{allstringspeak} = $peaksum;                                           # temperaturbedingte Korrektur der installierten Peakleistung in W
-
-  $pvsum  = $peaksum if($peaksum && $pvsum > $peaksum);                                              # Vorhersage nicht größer als die Summe aller PV-Strings Peak
-
-  my $invcap = InverterVal ($hash, '01', 'invertercap', 0);                                          # Max. Leistung des Invertrs
-
-  if ($invcap && $pvsum > $invcap) {
-      $pvsum = $invcap;                                                                              # PV Vorhersage auf WR Kapazität begrenzen
-
-      debugLog ($paref, "radiationProcess", "PV forecast start time $wantdt limited to $pvsum Watt due to inverter capacity");
-  }
-
-  my $logao         = qq{};
-  $paref->{pvsum}   = $pvsum;
-  $paref->{peaksum} = $peaksum;
-  ($pvsum, $logao)  = ___70percentRule ($paref);
-
+  $pvsum                                       = $peaksum if($peaksum && $pvsum > $peaksum);         # Vorhersage nicht größer als die Summe aller PV-Strings Peak
+  $pvsum                                       = sprintf "%.0f", $pvsum;
+  
   if ($debug =~ /radiationProcess/xs) {
       $lh = {                                                                                        # Log-Hash zur Ausgabe
           "Starttime"                => $wantdt,
@@ -8287,7 +8402,7 @@ sub __calcPVestimates {
           "Cloudcover"               => $wcc,
           "Total Rain last hour"     => $rr1c." kg/m2",
           "PV Correction mode"       => ($acu ? $acu : 'no'),
-          "PV generation forecast"   => $pvsum." Wh ".$logao,
+          "PV generation forecast"   => $pvsum." Wh",
       };
 
       $sq = q{};
@@ -8402,36 +8517,6 @@ return ($peakloss, $modtemp);
 }
 
 ################################################################
-#                 70% Regel kalkulieren
-################################################################
-sub ___70percentRule {
-  my $paref   = shift;
-  my $name    = $paref->{name};
-  my $pvsum   = $paref->{pvsum};
-  my $peaksum = $paref->{peaksum};
-  my $num     = $paref->{num};                                                          # Nexthour
-
-  my $hash  = $defs{$name};
-  my $logao = qq{};
-  my $confc = NexthoursVal ($hash, "NextHour".sprintf("%02d",$num), "confc", 0);
-  my $max70 = $peaksum/100 * 70;
-
-  if (AttrVal ($name, "affect70percentRule", "0") eq "1" && $pvsum > $max70) {
-      $pvsum = $max70;
-      $logao = qq{(reduced by 70 percent rule)};
-  }
-
-  if (AttrVal ($name, "affect70percentRule", "0") eq "dynamic" && $pvsum > $max70 + $confc) {
-      $pvsum = $max70 + $confc;
-      $logao = qq{(reduced by 70 percent dynamic rule)};
-  }
-
-  $pvsum = int $pvsum;
-
-return ($pvsum, $logao);
-}
-
-################################################################
 #    den Maximalwert PV Vorhersage für Heute ermitteln
 ################################################################
 sub _calcMaxEstimateToday {
@@ -8532,19 +8617,24 @@ sub _transferInverterValues {
           $warn = ' (WARNING invalid real PV occured - see Logfile)';
       }
       
-      $data{$type}{$name}{inverters}{$in}{igeneration} = $pv;                                          # Hilfshash Wert current generation, Forum: https://forum.fhem.de/index.php/topic,117864.msg1139251.html#msg1139251
-      $data{$type}{$name}{inverters}{$in}{ietotal}     = $etotal;                                      # aktuellen etotal des WR speichern
-      $data{$type}{$name}{inverters}{$in}{iname}       = $indev;                                       # Name des Inverterdevices
-      $data{$type}{$name}{inverters}{$in}{ialias}      = AttrVal ($indev, 'alias', $indev);            # Alias Inverter
-      $data{$type}{$name}{inverters}{$in}{invertercap} = $h->{capacity} if(defined $h->{capacity});    # optionale Angabe max. WR-Leistung
-      $data{$type}{$name}{inverters}{$in}{iicon}       = $h->{icon}     if($h->{icon});                # Icon des Inverters
-
+      my $feed = $h->{feed} // 'default'; 
+      
+      $data{$type}{$name}{inverters}{$in}{igeneration} = $pv;                                           # Hilfshash Wert current generation, Forum: https://forum.fhem.de/index.php/topic,117864.msg1139251.html#msg1139251
+      $data{$type}{$name}{inverters}{$in}{ietotal}     = $etotal;                                       # aktuellen etotal des WR speichern
+      $data{$type}{$name}{inverters}{$in}{iname}       = $indev;                                        # Name des Inverterdevices
+      $data{$type}{$name}{inverters}{$in}{ialias}      = AttrVal ($indev, 'alias', $indev);             # Alias Inverter
+      $data{$type}{$name}{inverters}{$in}{invertercap} = $h->{capacity}  if(defined $h->{capacity});    # optionale Angabe max. WR-Leistung
+      $data{$type}{$name}{inverters}{$in}{ilimit}      = $h->{limit} // 100;                            # Wirkleistungsbegrenzung
+      $data{$type}{$name}{inverters}{$in}{iicon}       = $h->{icon}      if($h->{icon});                # Icon des Inverters
+      $data{$type}{$name}{inverters}{$in}{istrings}    = $h->{strings}   if($h->{strings});             # dem Inverter zugeordnete Strings
+      $data{$type}{$name}{inverters}{$in}{ifeed}       = $feed;                                         # Eigenschaften der Energielieferung
+      
       $pvsum        += $pv;
       $ethishoursum += $ethishour;
       
       writeToHistory ( { paref => $paref, key => 'pvrl'.$in, val => $ethishour, hour => $nhour } );
       
-      debugLog ($paref, "collectData", "collect Inverter $in data - device: $indev =>");
+      debugLog ($paref, "collectData", "collect Inverter $in data - device: $indev, delivery: $feed =>");
       debugLog ($paref, "collectData", "pv: $pv W, etotal: $etotal Wh");
   }
   
@@ -8615,6 +8705,7 @@ sub _transferProducerValues {
       $data{$type}{$name}{producers}{$pn}{pname}       = $prdev;                                             # Name des Producerdevices
       $data{$type}{$name}{producers}{$pn}{palias}      = AttrVal ($prdev, 'alias', $prdev);                  # Alias Producer
       $data{$type}{$name}{producers}{$pn}{picon}       = $h->{icon} if($h->{icon});                          # Icon des Producers 
+      $data{$type}{$name}{producers}{$pn}{pfeed}       = 'default';                                          # Eigenschaften der Energielieferung
 
       if ($ethishour < 0) {
           $ethishour = 0;
@@ -8659,10 +8750,10 @@ sub _transferMeterValues {
 
   my $type = $paref->{type};
 
-  my ($gc,$gcunit) = split ":", $h->{gcon};                                                   # Readingname/Unit für aktuellen Netzbezug
-  my ($gf,$gfunit) = split ":", $h->{gfeedin};                                                # Readingname/Unit für aktuelle Netzeinspeisung
-  my ($gt,$ctunit) = split ":", $h->{contotal};                                               # Readingname/Unit für Bezug total
-  my ($ft,$ftunit) = split ":", $h->{feedtotal};                                              # Readingname/Unit für Einspeisung total
+  my ($gc, $gcunit) = split ":", $h->{gcon};                                                   # Readingname/Unit für aktuellen Netzbezug
+  my ($gf, $gfunit) = split ":", $h->{gfeedin};                                                # Readingname/Unit für aktuelle Netzeinspeisung
+  my ($gt, $ctunit) = split ":", $h->{contotal};                                               # Readingname/Unit für Bezug total
+  my ($ft, $ftunit) = split ":", $h->{feedtotal};                                              # Readingname/Unit für Einspeisung total
 
   return if(!$gc || !$gf || !$gt || !$ft);
 
@@ -8728,19 +8819,19 @@ sub _transferMeterValues {
   my $gcuf = $gcunit =~ /^kW$/xi ? 1000 : 1;
   my $gfuf = $gfunit =~ /^kW$/xi ? 1000 : 1;
 
-  $gco  = ReadingsNum ($medev, $gc, 0) * $gcuf;                                               # aktueller Bezug (W)
-  $gfin = ReadingsNum ($medev, $gf, 0) * $gfuf;                                               # aktuelle Einspeisung (W)
+  $gco  = ReadingsNum ($medev, $gc, 0) * $gcuf;                                                      # aktueller Bezug (W)
+  $gfin = ReadingsNum ($medev, $gf, 0) * $gfuf;                                                      # aktuelle Einspeisung (W)
 
   my $params;
 
-  if ($gc eq '-gfeedin') {                                                                    # Spezialfall gcon bei neg. gfeedin                                                                                      # Spezialfall: bei negativen gfeedin -> $gco = abs($gf), $gf = 0
+  if ($gc eq '-gfeedin') {                                                                           # Spezialfall gcon bei neg. gfeedin                                                                                      # Spezialfall: bei negativen gfeedin -> $gco = abs($gf), $gf = 0
       $params = {
           dev  => $medev,
           rdg  => $gf,
           rdgf => $gfuf
       };
 
-      ($gfin,$gco) = substSpecialCases ($params);
+      ($gfin, $gco) = substSpecialCases ($params);
   }
 
   if ($gf eq '-gcon') {                                                                              # Spezialfall gfeedin bei neg. gcon
@@ -8750,14 +8841,8 @@ sub _transferMeterValues {
           rdgf => $gcuf
       };
 
-      ($gco,$gfin) = substSpecialCases ($params);
+      ($gco, $gfin) = substSpecialCases ($params);
   }
-
-  storeReading ('Current_GridConsumption', (int $gco).' W');
-  $data{$type}{$name}{current}{gridconsumption} = int $gco;                                          # Hilfshash Wert current grid consumption Forum: https://forum.fhem.de/index.php/topic,117864.msg1139251.html#msg1139251
-
-  storeReading ('Current_GridFeedIn', (int $gfin).' W');
-  $data{$type}{$name}{current}{gridfeedin} = int $gfin;                                              # Hilfshash Wert current grid Feed in
 
   my $ctuf    = $ctunit =~ /^kWh$/xi ? 1000 : 1;
   my $gctotal = ReadingsNum ($medev, $gt, 0) * $ctuf;                                                # Bezug total (Wh)
@@ -8767,21 +8852,24 @@ sub _transferMeterValues {
 
   $data{$type}{$name}{circular}{99}{gridcontotal} = $gctotal;                                        # Total Netzbezug speichern
   $data{$type}{$name}{circular}{99}{feedintotal}  = $fitotal;                                        # Total Feedin speichern
+  $data{$type}{$name}{current}{gridconsumption}   = int $gco;                                        # Current grid consumption Forum: https://forum.fhem.de/index.php/topic,117864.msg1139251.html#msg1139251
+  $data{$type}{$name}{current}{gridfeedin}        = int $gfin;                                       # Wert current grid Feed in
 
   debugLog ($paref, "collectData", "collect Meter data - device: $medev =>");
   debugLog ($paref, "collectData", "gcon: $gco W, gfeedin: $gfin W, contotal: $gctotal Wh, feedtotal: $fitotal Wh");
 
+
+  ## Management aus dem Netz bezogener Energie
+  ##############################################
   my $gcdaypast = 0;
   my $gfdaypast = 0;
+  my $docon     = 0;
 
   for my $hour (0..int $chour) {                                                                     # alle bisherigen Erzeugungen des Tages summieren
       $gcdaypast += ReadingsNum ($name, "Today_Hour".sprintf("%02d",$hour)."_GridConsumption", 0);
       $gfdaypast += ReadingsNum ($name, "Today_Hour".sprintf("%02d",$hour)."_GridFeedIn",      0);
   }
-
-  ## Management aus dem Netz bezogener Energie
-  ##############################################
-  my $docon  = 0;
+  
   my $idgcon = CircularVal ($hash, 99, 'initdaygcon', undef);
 
   if (!$gctotal) {
@@ -8816,8 +8904,8 @@ sub _transferMeterValues {
       writeToHistory ( { paref => $paref, key => 'gcons', val => $gctotthishour, hour => $nhour } );
   }
 
-  ## Management der in das Netz eingespeister Energie
-  #####################################################
+  ## Management der in das Netz eingespeister (nur vom Meter gemessene) Energie
+  ###############################################################################
   my $dofeed = 0;
   my $idfin  = CircularVal ($hash, 99, 'initdayfeedin', undef);
 
@@ -8834,7 +8922,7 @@ sub _transferMeterValues {
       }
   }
   elsif (!defined $idfin) {
-      $data{$type}{$name}{circular}{99}{initdayfeedin} = $fitotal - $gfdaypast - ReadingsNum ($name, "Today_Hour".sprintf("%02d",$chour+1)."_GridFeedIn", 0);
+      $data{$type}{$name}{circular}{99}{initdayfeedin} = $fitotal - $gfdaypast - ReadingsNum ($name, 'Today_Hour'.sprintf("%02d",$chour+1).'_GridFeedIn', 0);
   }
   else {
       $dofeed = 1;
@@ -9194,6 +9282,108 @@ return;
 }
 
 ################################################################
+#             Erstellung Batterie Ladeempfehlung 
+################################################################
+sub _batChargeRecmd {
+  my $paref = shift;
+  my $name  = $paref->{name};
+  my $chour = $paref->{chour};
+  
+  return if(!isBatteryUsed ($name));
+  
+  my $hash     = $defs{$name};
+  
+  my $rodpvfc  = ReadingsNum ($name, 'RestOfDayPVforecast',          0);                     # PV Prognose Rest des Tages
+  my $tompvfc  = ReadingsNum ($name, 'Tomorrow_PVforecast',          0);                     # PV Prognose nächster Tag
+  
+  my $confcss  = CurrentVal  ($hash, 'tdConFcTillSunset',            0);                     # Verbrauchsprognose bis Sonnenuntergang
+  my $tomconfc = ReadingsNum ($name, 'Tomorrow_ConsumptionForecast', 0); 
+  
+  my $pvCu     = ReadingsNum ($name, 'Current_PV',                   0);                     # aktuelle PV Erzeugung
+  my $batcap   = CurrentVal  ($hash, 'batinstcap',                   0);                     # installierte Batteriekapazität Wh
+  my $soc      = CurrentVal  ($hash, 'batcharge',                    0);                     # aktueller SOC (%)
+  my $curcon   = ReadingsNum ($name, 'Current_Consumption',          0);                     # aktueller Verbrauch
+  
+  my $inpmax   = 0;
+  
+  for my $in (1..$maxinverter) {                           
+      $in      = sprintf "%02d", $in;
+      my $feed = InverterVal ($hash, $in, 'ifeed', '');
+      next if(!$feed || $feed eq 'grid');                                                    # Inverter 'Grid' ausschließen
+      
+      my $iname = InverterVal ($hash, $in, 'iname',        '');
+      my $icap  = InverterVal ($hash, $in, 'invertercap',   0);
+      my $limit = InverterVal ($hash, $in, 'ilimit',      100);                              # Wirkleistungsbegrenzung  (default keine Begrenzung)
+      my $aplim = $icap * $limit / 100;
+      $inpmax  += $aplim;                                                                    # max. Leistung aller WR mit Berücksichtigung Wirkleistungsbegrenzung 
+  
+      debugLog ($paref, 'batteryManagement', "Inverter '$iname' capacity: $icap, Active power limit: $limit % -> Pmax limited: $aplim");
+  }
+  
+  debugLog ($paref, 'batteryManagement', "Summary active power limit of all Inverter (except feed 'grid'): $inpmax");
+  
+  return if(!$inpmax);
+  
+  my $sfmargin = $inpmax * 0.5;                                                              # Sicherheitszuschlag 50% der installierten Leistung (Wh)                                                         
+  my $betEneed = sprintf "%.0f", ($batcap - ($batcap * $soc / 100));                         # benötigte Energie bis 100% Batteriekapazität Wh
+
+  for my $num (0..47) {
+      my ($fd,$fh) = calcDayHourMove ($chour, $num);
+      next if($fd > 1);
+
+      my $today = NexthoursVal ($hash, 'NextHour'.sprintf("%02d",$num), 'today',      0);
+      my $confc = NexthoursVal ($hash, 'NextHour'.sprintf("%02d",$num), 'confc',      0);
+      my $pvfc  = NexthoursVal ($hash, 'NextHour'.sprintf("%02d",$num), 'pvfc',       0);
+      my $stt   = NexthoursVal ($hash, 'NextHour'.sprintf("%02d",$num), 'starttime', '');
+      $stt      = (split '-', $stt)[2] if($stt);
+            
+      my $dold  = 0;                                                                         # Ladeempfehlung 0 per Default
+      my $spday = 0;
+      
+      if ($today) {                                                                          # (Rest) heutiger Tag
+          $spday = $rodpvfc - $confcss;
+      }
+      else {                                                                                 # nächster Tag
+          $spday = $tompvfc - $tomconfc;
+      }
+      
+      $spday = 0 if($spday < 0);                                                             # PV Überschuß Prognose bis Sonnenuntergang
+      
+      if ( $betEneed + $sfmargin    >= $spday  ) {$dold = 1}                                 # Ladeempfehlung wenn benötigte Ladeenergie >= Restüberschuß des Tages zzgl. Sicherheitsaufschlag
+      if ( !$num && $pvCu - $curcon >= $inpmax ) {$dold = 1}                                 # Ladeempfehlung wenn akt. PV Leistung >= WR-Leistungsbegrenzung
+
+      my $msg = "(Eneed: $betEneed -> Surplus Day: $spday, Curr PV: $pvCu, Curr Consumption: $curcon -> Limit: $inpmax)";
+      
+      if ($num) {
+          $msg = "(Eneed: $betEneed -> Surplus Day: $spday)";
+      }
+      else {
+          storeReading ('Battery_ChargeRecommended', $dold);                                 # Reading nur für aktuelle Stunde
+      }
+      
+      debugLog ($paref, 'batteryManagement', "Charge activation $stt -> $dold $msg");
+      
+      if ($pvfc) {
+          if ($today) {                                                                      # (Rest) heutiger Tag
+              $confcss  -= $confc;
+              $confcss   = 0 if($confcss < 0);
+              $rodpvfc  -= $pvfc;
+          }
+          else {                                                                             # nächster Tag
+              $tomconfc -= $confc;
+              $tomconfc  = 0 if($tomconfc < 0);
+              $tompvfc  -= $pvfc;          
+          }
+      }
+      
+      $betEneed -= sprintf "%.0f", ($pvfc - $confc);
+      $betEneed  = $betEneed < 0 ? 0 : $betEneed; 
+  }
+  
+return;
+}
+
+################################################################
 #               Zusammenfassungen erstellen
 ################################################################
 sub _createSummaries {
@@ -9290,37 +9480,41 @@ sub _createSummaries {
   push @{$data{$type}{$name}{current}{h4fcslidereg}}, int $next4HoursSum->{PV};                         # Schieberegister 4h Summe Forecast
   limitArray ($data{$type}{$name}{current}{h4fcslidereg}, $slidenumdef);
 
-  my $gcon    = CurrentVal  ($hash, 'gridconsumption',         0);                                      # aktueller Netzbezug
-  my $tconsum = CurrentVal  ($hash, 'tomorrowconsumption', undef);                                      # Verbrauchsprognose für folgenden Tag
-  my $gfeedin = CurrentVal  ($hash, 'gridfeedin',              0);
-  my $batin   = CurrentVal  ($hash, 'powerbatin',              0);                                      # aktuelle Batterieladung
-  my $batout  = CurrentVal  ($hash, 'powerbatout',             0);                                      # aktuelle Batterieentladung
+  my $gcon    = CurrentVal ($hash, 'gridconsumption',         0);                                       # aktueller Netzbezug
+  my $tconsum = CurrentVal ($hash, 'tomorrowconsumption', undef);                                       # Verbrauchsprognose für folgenden Tag
+  my $gfeedin = CurrentVal ($hash, 'gridfeedin',              0);
+  my $batin   = CurrentVal ($hash, 'powerbatin',              0);                                       # aktuelle Batterieladung
+  my $batout  = CurrentVal ($hash, 'powerbatout',             0);                                       # aktuelle Batterieentladung
   
   my $pvgen   = 0;
+  my $pv2grid = 0;                                                                                      # PV-Erzeugung zu Grid-only
 
   for my $in (1..$maxinverter) {                                                                        # Summe alle Inverter
-      $in     = sprintf "%02d", $in;
-      $pvgen += InverterVal ($hash, $in, 'igeneration', 0);
+      $in      = sprintf "%02d", $in;
+      my $pvi  = InverterVal ($hash, $in, 'igeneration', 0);
+      my $feed = InverterVal ($hash, $in, 'ifeed',      '');
+      $pvgen   += $pvi;
+      $pv2grid += $pvi if($feed eq 'grid');
   }
   
   my $othprod = 0;                                                                                      # Summe Otherproducer
 
-  for my $pn (1..$maxproducer) {                                                                       # V1.32.0 : Erzeugung sonstiger Producer (01..03) hinzufügen
+  for my $pn (1..$maxproducer) {                                                                        # Erzeugung sonstiger Producer hinzufügen
       $pn       = sprintf "%02d", $pn;
       $othprod += ProducerVal ($hash, $pn, 'pgeneration', 0);
   }
 
-  my $consumption         = int ($pvgen + $othprod - $gfeedin + $gcon - $batin + $batout);
-  my $selfconsumption     = int ($pvgen - $gfeedin - $batin);
+  my $consumption         = int ($pvgen - $pv2grid + $othprod - $gfeedin + $gcon - $batin + $batout);   # ohne PV2Grid 
+  my $selfconsumption     = int ($pvgen - $pv2grid - $gfeedin - $batin);
   $selfconsumption        = $selfconsumption < 0 ? 0 : $selfconsumption;
 
-  my $surplus             = int ($pvgen + $othprod - $consumption);                                     # aktueller Überschuß
+  my $surplus             = int ($pvgen - $pv2grid + $othprod - $consumption);                          # aktueller Überschuß
   $surplus                = 0 if($surplus < 0);                                                         # wegen Vergleich nompower vs. surplus
 
   my $selfconsumptionrate = 0;
   my $autarkyrate         = 0;
   my $divi                = $selfconsumption + $batout + $gcon;
-  $selfconsumptionrate    = sprintf "%.0f", $selfconsumption / $pvgen * 100            if($pvgen * 1 > 0);
+  $selfconsumptionrate    = sprintf "%.0f", ($selfconsumption / $pvgen * 100)          if($pvgen * 1 > 0);
   $autarkyrate            = sprintf "%.0f", ($selfconsumption + $batout) / $divi * 100 if($divi);       # vermeide Illegal division by zero
 
   $data{$type}{$name}{current}{consumption}         = $consumption;
@@ -9330,6 +9524,8 @@ sub _createSummaries {
   $data{$type}{$name}{current}{surplus}             = $surplus;
   $data{$type}{$name}{current}{tdConFcTillSunset}   = $tdConFcTillSunset;
 
+  storeReading ('Current_GridFeedIn',           (int $gfeedin).       ' W');                            # V 1.37.0
+  storeReading ('Current_GridConsumption',      (int $gcon).          ' W');                            # V 1.37.0
   storeReading ('Current_Consumption',          $consumption.         ' W');
   storeReading ('Current_SelfConsumption',      $selfconsumption.     ' W');
   storeReading ('Current_SelfConsumptionRate',  $selfconsumptionrate. ' %');
@@ -9591,7 +9787,7 @@ sub __calcEnergyPieces {
   my $cotype  = ConsumerVal ($hash, $c, "type",    $defctype  );
   my $mintime = ConsumerVal ($hash, $c, "mintime", $defmintime);
 
-  if (isSunPath ($hash, $c)) {                                                                            # SunPath ist in mintime gesetzt
+  if (isSunPath ($hash, $c)) {                                                                 # SunPath ist in mintime gesetzt
       my ($riseshift, $setshift) = sunShift    ($hash, $c);
       my $tdiff                  = (CurrentVal ($hash, 'sunsetTodayTs',  0) + $setshift) -
                                    (CurrentVal ($hash, 'sunriseTodayTs', 0) + $riseshift);
@@ -9600,8 +9796,7 @@ sub __calcEnergyPieces {
 
   my $hours   = ceil ($mintime / 60);                                                          # Einplanungsdauer in h
   my $ctote   = ConsumerVal ($hash, $c, "avgenergy", undef);                                   # gemessener durchschnittlicher Energieverbrauch pro Stunde (Wh)
-  $ctote      = $ctote ?
-                $ctote :
+  $ctote      = $ctote ? $ctote :
                 ConsumerVal ($hash, $c, "power", 0);                                           # alternativer nominaler Energieverbrauch in W (bzw. Wh bezogen auf 1 h)
 
   if (int($hef{$cotype}{f}) == 1) {                                                            # bei linearen Verbrauchertypen die nominale Leistungsangabe verwenden statt Durchschnitt
@@ -11514,8 +11709,8 @@ sub __calcNewFactor {
 
   my ($oldfac, $oldq)        = CircularSunCloudkorrVal ($hash, sprintf("%02d",$h), $sabin, $crang, 0);  # bisher definierter Korrekturfaktor / Qualität
   my ($pvhis, $fchis, $dnum) = CircularSumVal          ($hash, sprintf("%02d",$h), $sabin, $crang, 0);
-  $oldfac                    = 1 if(1 * $oldfac == 0);
-
+  $oldfac                    = 1 if(1 * $oldfac == 0);                                            
+  
   debugLog ($paref, 'pvCorrectionWrite', "$calc Corrf -> read historical values: pv real sum: $pvhis, pv forecast sum: $fchis, days sum: $dnum");
 
   if ($dnum) {                                                                                        # Werte in History vorhanden -> haben Prio !
@@ -11569,7 +11764,9 @@ sub __calcNewFactor {
       $data{$type}{$name}{circular}{sprintf("%02d",$h)}{pvcorrf}{$crang} = $factor;
       $data{$type}{$name}{circular}{sprintf("%02d",$h)}{quality}{$crang} = $qual;
   }
-
+  
+  $oldfac = sprintf "%.2f", $oldfac;
+  
 return ($oldfac, $factor, $dnum);
 }
 
@@ -11896,46 +12093,7 @@ sub FwFn {
   $ret   .= entryGraphic ($name);
   $ret   .= "</html>";
 
-  # Autorefresh nur des aufrufenden FHEMWEB-Devices
-  my $al = AttrVal ($name, 'ctrlAutoRefresh', 0);
-  if($al) {
-      pageRefresh ($hash);
-  }
-
 return $ret;
-}
-
-###########################################################################
-# Seitenrefresh festgelegt durch SolarForecast-Attribut "ctrlAutoRefresh"
-# und "ctrlAutoRefreshFW"
-###########################################################################
-sub pageRefresh {
-  my $hash = shift;
-  my $name = $hash->{NAME};
-
-  my $al = AttrVal($name, 'ctrlAutoRefresh', 0);
-
-  if($al) {
-      my $rftime = gettimeofday()+$al;
-
-      if (!$hash->{HELPER}{AREFRESH} || $hash->{HELPER}{AREFRESH} <= gettimeofday()) {
-          RemoveInternalTimer ($hash, \&pageRefresh);
-          InternalTimer($rftime, \&pageRefresh, $hash, 0);
-
-          my $rd = AttrVal ($name, 'ctrlAutoRefreshFW', $hash->{HELPER}{FW});
-          { map { FW_directNotify("#FHEMWEB:$_", "location.reload('true')", "") } $rd }       ## no critic 'Map blocks'
-
-          $hash->{HELPER}{AREFRESH} = $rftime;
-          $hash->{AUTOREFRESH}      = FmtDateTime($rftime);
-      }
-  }
-  else {
-      delete $hash->{HELPER}{AREFRESH};
-      delete $hash->{AUTOREFRESH};
-      RemoveInternalTimer ($hash, \&pageRefresh);
-  }
-
-return;
 }
 
 ################################################################
@@ -11977,14 +12135,12 @@ sub entryGraphic {
 
   # Parameter f. Anzeige extrahieren
   ###################################
-  my $width      = AttrNum ($name, 'graphicBeamWidth',    20);                             # zu klein ist nicht problematisch
-  my $maxhours   = AttrNum ($name, 'graphicHourCount',    24);
-  my $alias      = AttrVal ($name, 'alias',            $name);                             # Linktext als Aliasname oder Devicename setzen  my $html_start = AttrVal ($name, 'graphicStartHtml', undef);                             # beliebige HTML Strings die vor der Grafik ausgegeben werden
-  my $html_start = AttrVal ($name, 'graphicStartHtml', undef);                             # beliebige HTML Strings die vor der Grafik ausgegeben werden
-  my $html_end   = AttrVal ($name, 'graphicEndHtml',   undef);                             # beliebige HTML Strings die nach der Grafik ausgegeben werden  my $w          = $width * $maxhours;                                                     # gesammte Breite der Ausgabe , WetterIcon braucht ca. 34px
-  my $w          = $width * $maxhours;                                                     # gesammte Breite der Ausgabe , WetterIcon braucht ca. 34px
-  my $offset     = -1 * AttrNum ($name, 'graphicHistoryHour', $histhourdef);
-  my $dlink      = qq{<a href="$::FW_ME$::FW_subdir?detail=$name">$alias</a>};
+  my $width    = AttrNum ($name, 'graphicBeamWidth',    20);                               # zu klein ist nicht problematisch
+  my $maxhours = AttrNum ($name, 'graphicHourCount',    24);
+  my $alias    = AttrVal ($name, 'alias',            $name);                               # Linktext als Aliasname oder Devicename setzen
+  my $w        = $width * $maxhours;                                                       # gesammte Breite der Ausgabe , WetterIcon braucht ca. 34px
+  my $offset   = -1 * AttrNum ($name, 'graphicHistoryHour', $histhourdef);
+  my $dlink    = qq{<a href="$::FW_ME$::FW_subdir?detail=$name">$alias</a>};
 
   if (!$gsel) {
       $gsel = AttrVal ($name, 'graphicSelect', 'both');                                    # Auswahl der anzuzeigenden Grafiken
@@ -12001,51 +12157,50 @@ sub entryGraphic {
       modulo         => 1,
       dstyle         => qq{style='padding-left: 10px; padding-right: 10px; padding-top: 3px; padding-bottom: 3px; white-space:nowrap;'},     # TD-Style
       offset         => $offset,
-      hourstyle      => AttrVal ($name, 'graphicHourStyle',                  ''),
-      colorb1        => AttrVal ($name, 'graphicBeam1Color',          $b1coldef),
-      colorb2        => AttrVal ($name, 'graphicBeam2Color',          $b2coldef),
-      fcolor1        => AttrVal ($name, 'graphicBeam1FontColor',  $b1fontcoldef),
-      fcolor2        => AttrVal ($name, 'graphicBeam2FontColor',  $b2fontcoldef),
-      beam1cont      => AttrVal ($name, 'graphicBeam1Content',         'pvReal'),
-      beam2cont      => AttrVal ($name, 'graphicBeam2Content',     'pvForecast'),
-      beam3cont      => AttrVal ($name, 'graphicBeam3Content',               ''),
-      beam4cont      => AttrVal ($name, 'graphicBeam4Content',               ''),
-      caicon         => AttrVal ($name, 'consumerAdviceIcon',        $caicondef),                # Consumer AdviceIcon
-      clegend        => AttrVal ($name, 'consumerLegend',            'icon_top'),                # Lage und Art Cunsumer Legende
-      clink          => AttrVal ($name, 'consumerLink'  ,                     1),                # Detail-Link zum Verbraucher
-      lotype         => AttrVal ($name, 'graphicLayoutType',           'double'),
-      kw             => AttrVal ($name, 'graphicEnergyUnit',               'Wh'),
-      height         => AttrNum ($name, 'graphicBeamHeightLevel1',          200),
+      hourstyle      => AttrVal    ($name, 'graphicHourStyle',                  ''),
+      colorb1        => AttrVal    ($name, 'graphicBeam1Color',          $b1coldef),
+      colorb2        => AttrVal    ($name, 'graphicBeam2Color',          $b2coldef),
+      fcolor1        => AttrVal    ($name, 'graphicBeam1FontColor',  $b1fontcoldef),
+      fcolor2        => AttrVal    ($name, 'graphicBeam2FontColor',  $b2fontcoldef),
+      beam1cont      => AttrVal    ($name, 'graphicBeam1Content',         'pvReal'),
+      beam2cont      => AttrVal    ($name, 'graphicBeam2Content',     'pvForecast'),
+      beam3cont      => AttrVal    ($name, 'graphicBeam3Content',               ''),
+      beam4cont      => AttrVal    ($name, 'graphicBeam4Content',               ''),
+      caicon         => AttrVal    ($name, 'consumerAdviceIcon',        $caicondef),                # Consumer AdviceIcon
+      clegend        => AttrVal    ($name, 'consumerLegend',            'icon_top'),                # Lage und Art Cunsumer Legende
+      clink          => AttrVal    ($name, 'consumerLink'  ,                     1),                # Detail-Link zum Verbraucher
+      lotype         => AttrVal    ($name, 'graphicLayoutType',           'double'),
+      kw             => AttrVal    ($name, 'graphicEnergyUnit',               'Wh'),
+      height         => AttrNum    ($name, 'graphicBeamHeightLevel1',          200),
       width          => $width,
-      fsize          => AttrNum ($name, 'graphicSpaceSize',                  24),
-      maxVal         => AttrNum ($name, 'graphicBeam1MaxVal',                 0),                # dyn. Anpassung der Balkenhöhe oder statisch ?
-      show_night     => AttrNum ($name, 'graphicShowNight',                   0),                # alle Balken (Spalten) anzeigen ?
-      show_diff      => AttrVal ($name, 'graphicShowDiff',                 'no'),                # zusätzliche Anzeige $di{} in allen Typen
-      weather        => AttrNum ($name, 'graphicShowWeather',                 1),                # Wetter Icons anzeigen
-      colorw         => AttrVal ($name, 'graphicWeatherColor',      $wthcolddef),                # Wetter Icon Farbe Tag
-      colorwn        => AttrVal ($name, 'graphicWeatherColorNight', $wthcolndef),                # Wetter Icon Farbe Nacht
-      wlalias        => AttrVal ($name, 'alias',                          $name),
-      sheader        => AttrNum ($name, 'graphicHeaderShow',                  1),                # Anzeigen des Grafik Headers
-      hdrDetail      => AttrVal ($name, 'graphicHeaderDetail',            'all'),                # ermöglicht den Inhalt zu begrenzen, um bspw. passgenau in ftui einzubetten
-      flowgsize      => AttrVal ($name, 'flowGraphicSize',        $flowGSizedef),                # Größe Energieflußgrafik
-      flowgani       => AttrVal ($name, 'flowGraphicAnimate',                 0),                # Animation Energieflußgrafik
-      flowgshift     => AttrVal ($name, 'flowGraphicShift',                   0),                # Verschiebung der Flußgrafikbox (muß negiert werden)
-      flowgcons      => AttrVal ($name, 'flowGraphicShowConsumer',            1),                # Verbraucher in der Energieflußgrafik anzeigen
-      flowgconX      => AttrVal ($name, 'flowGraphicShowConsumerDummy',       1),                # Dummyverbraucher in der Energieflußgrafik anzeigen
-      flowgconsPower => AttrVal ($name, 'flowGraphicShowConsumerPower'     ,  1),                # Verbraucher Leistung in der Energieflußgrafik anzeigen
-      flowgconsTime  => AttrVal ($name, 'flowGraphicShowConsumerRemainTime',  1),                # Verbraucher Restlaufeit in der Energieflußgrafik anzeigen
-      flowgconsDist  => AttrVal ($name, 'flowGraphicConsumerDistance', $fgCDdef),                # Abstand Verbrauchericons zueinander
-      css            => AttrVal ($name, 'flowGraphicCss',               $cssdef),                # flowGraphicCss Styles
-      genpvdva       => AttrVal ($name, 'ctrlGenPVdeviation',           'daily'),                # Methode der Abweichungsberechnung
-      lang           => getLang  ($hash),
-      debug          => getDebug ($hash),                                                        # Debug Module
+      fsize          => AttrNum    ($name, 'graphicSpaceSize',                  24),
+      maxVal         => AttrNum    ($name, 'graphicBeam1MaxVal',                 0),                # dyn. Anpassung der Balkenhöhe oder statisch ?
+      show_night     => AttrNum    ($name, 'graphicShowNight',                   0),                # alle Balken (Spalten) anzeigen ?
+      show_diff      => AttrVal    ($name, 'graphicShowDiff',                 'no'),                # zusätzliche Anzeige $di{} in allen Typen
+      weather        => AttrNum    ($name, 'graphicShowWeather',                 1),                # Wetter Icons anzeigen
+      colorw         => AttrVal    ($name, 'graphicWeatherColor',      $wthcolddef),                # Wetter Icon Farbe Tag
+      colorwn        => AttrVal    ($name, 'graphicWeatherColorNight', $wthcolndef),                # Wetter Icon Farbe Nacht
+      wlalias        => AttrVal    ($name, 'alias',                          $name),
+      sheader        => AttrNum    ($name, 'graphicHeaderShow',                  1),                # Anzeigen des Grafik Headers
+      hdrDetail      => AttrVal    ($name, 'graphicHeaderDetail',            'all'),                # ermöglicht den Inhalt zu begrenzen, um bspw. passgenau in ftui einzubetten
+      flowgsize      => CurrentVal ($hash, 'size',                   $flowGSizedef),                # Größe Energieflußgrafik
+      flowgani       => CurrentVal ($hash, 'animate',                            1),                # Animation Energieflußgrafik
+      flowgshift     => CurrentVal ($hash, 'shift',                              0),                # Verschiebung der Flußgrafikbox (muß negiert werden)
+      flowgcons      => CurrentVal ($hash, 'showconsumer',                       1),                # Verbraucher in der Energieflußgrafik anzeigen
+      flowgconX      => CurrentVal ($hash, 'showconsumerdummy',                  1),                # Dummyverbraucher in der Energieflußgrafik anzeigen
+      flowgconsPower => CurrentVal ($hash, 'showconsumerpower',                  1),                # Verbraucher Leistung in der Energieflußgrafik anzeigen
+      flowgconsTime  => CurrentVal ($hash, 'showconsumerremaintime',             1),                # Verbraucher Restlaufeit in der Energieflußgrafik anzeigen
+      flowgconsDist  => CurrentVal ($hash, 'consumerdist',                $fgCDdef),                # Abstand Verbrauchericons zueinander
+      flowgh2cDist   => CurrentVal ($hash, 'h2consumerdist',                     0),                # Erweiterung des vertikalen Abstandes Haus -> Consumer
+      genpvdva       => AttrVal    ($name, 'ctrlGenPVdeviation',           'daily'),                # Methode der Abweichungsberechnung
+      lang           => getLang    ($hash),
+      debug          => getDebug   ($hash),                                                         # Debug Module
   };
 
   my $ret = q{};
 
   $ret .= "<span>$dlink </span><br>"  if(AttrVal($name, 'ctrlShowLink', 0));
 
-  $ret .= $html_start if (defined($html_start));
   #$ret .= "<style>TD.solarfc {text-align: center; padding-left:1px; padding-right:1px; margin:0px;}</style>";
   $ret .= "<style>TD.solarfc {text-align: center; padding-left:5px; padding-right:5px; margin:0px;}</style>";
   $ret .= "<table class='roomoverview' width='$w' style='width:".$w."px'><tr class='devTypeTr'></tr>";
@@ -12186,7 +12341,6 @@ sub entryGraphic {
 
   $ret .= "</td></tr>";
   $ret .= "</table>";
-  $ret .= $html_end if (defined($html_end));
 
 return $ret;
 }
@@ -12206,23 +12360,23 @@ sub _checkSetupNotComplete {
 
   ##########################################################################################
 
-  my $is    = AttrVal     ($name, 'setupInverterStrings',   undef);                       # String Konfig
-  my $wedev = AttrVal     ($name, 'setupWeatherDev1',       undef);                       # Device Vorhersage Wetterdaten (Bewölkung etc.)
-  my $radev = AttrVal     ($name, 'setupRadiationAPI',      undef);                       # Device Strahlungsdaten Vorhersage
-  my $indev = AttrVal     ($name, 'setupInverterDev01',     undef);                       # Inverter Device
-  my $medev = AttrVal     ($name, 'setupMeterDev',          undef);                       # Meter Device
-  my $peaks = AttrVal     ($name, 'setupStringPeak',        undef);                       # String Peak
-  my $maz   = ReadingsVal ($name, 'setupStringAzimuth',     undef);                       # Modulausrichtung Konfig (Azimut)
-  my $mdec  = ReadingsVal ($name, 'setupStringDeclination', undef);                       # Modul Neigungswinkel Konfig
-  my $mrt   = AttrVal     ($name, 'setupRoofTops',          undef);                       # RoofTop Konfiguration (SolCast API)
+  my $strings = AttrVal     ($name, 'setupInverterStrings',   undef);                       # String Konfig
+  my $wedev   = AttrVal     ($name, 'setupWeatherDev1',       undef);                       # Device Vorhersage Wetterdaten (Bewölkung etc.)
+  my $radev   = AttrVal     ($name, 'setupRadiationAPI',      undef);                       # Device Strahlungsdaten Vorhersage
+  my $indev   = AttrVal     ($name, 'setupInverterDev01',     undef);                       # Inverter Device
+  my $medev   = AttrVal     ($name, 'setupMeterDev',          undef);                       # Meter Device
+  my $peaks   = AttrVal     ($name, 'setupStringPeak',        undef);                       # String Peak
+  my $maz     = ReadingsVal ($name, 'setupStringAzimuth',     undef);                       # Modulausrichtung Konfig (Azimut)
+  my $mdec    = ReadingsVal ($name, 'setupStringDeclination', undef);                       # Modul Neigungswinkel Konfig
+  my $mrt     = AttrVal     ($name, 'setupRoofTops',          undef);                       # RoofTop Konfiguration (SolCast API)
 
-  my $vrmcr = SolCastAPIVal ($hash, '?VRM', '?API', 'credentials', '');                   # Victron VRM Credentials gesetzt
+  my $vrmcr   = SolCastAPIVal ($hash, '?VRM', '?API', 'credentials', '');                   # Victron VRM Credentials gesetzt
 
-  my ($coset, $lat, $lon) = locCoordinates();                                             # Koordinaten im global device
+  my ($coset, $lat, $lon) = locCoordinates();                                               # Koordinaten im global device
   my $rip;
-  $rip      = 1 if(exists $data{$type}{$name}{solcastapi}{'?IdPair'});                    # es existiert mindestens ein Paar RoofTop-ID / API-Key
+  $rip      = 1 if(exists $data{$type}{$name}{solcastapi}{'?IdPair'});                      # es existiert mindestens ein Paar RoofTop-ID / API-Key
 
-  my $pv0   = NexthoursVal ($hash, 'NextHour00', 'pvfc', undef);                          # der erste PV ForeCast Wert
+  my $pv0   = NexthoursVal ($hash, 'NextHour00', 'pvfc', undef);                            # der erste PV ForeCast Wert
 
   my $link   = qq{<a href="$::FW_ME$::FW_subdir?detail=$name">$name</a>};
   my $height = AttrNum ($name, 'graphicBeamHeightLevel1', 200);
@@ -12249,7 +12403,7 @@ sub _checkSetupNotComplete {
   my $chkicon  = "<a onClick=$cmdplchk>$img</a>";
   my $chktitle = $htitles{plchk}{$lang};
 
-  if (!$is || !$wedev || !$radev || !$indev || !$medev || !$peaks                                        ||
+  if (!$strings || !$wedev || !$radev || !$indev || !$medev || !$peaks                                   ||
      (isSolCastUsed ($hash) ? (!$rip || !$mrt) : isVictronKiUsed ($hash) ? !$vrmcr : (!$maz || !$mdec )) ||
      (isForecastSolarUsed ($hash) ? !$coset : '')                                                        ||
      (isOpenMeteoUsed ($hash)     ? !$coset : '')                                                        ||
@@ -12262,7 +12416,7 @@ sub _checkSetupNotComplete {
       if (!$wedev) {                                                                        ## no critic 'Cascading'
           $ret .= $hqtxt{cfd}{$lang};
       }
-      elsif (!$is) {
+      elsif (!$strings) {
           $ret .= $hqtxt{ist}{$lang};
       }
       elsif (!$peaks) {
@@ -12310,9 +12464,13 @@ sub _checkSetupNotComplete {
       $ret .= "</tr>";
       $ret .= "</table>";
       $ret  =~ s/LINK/$link/gxs;
+      
+      delete $data{$type}{$name}{current}{setupcomplete};
 
       return $ret;
   }
+  
+  $data{$type}{$name}{current}{setupcomplete} = 1;
 
 return;
 }
@@ -14077,86 +14235,115 @@ sub __weatherOnBeam {
 return $ret;
 }
 
-################################################################
+######################################################################################
 #                  Energieflußgrafik
-################################################################
+# M - MoveTo setzt den aktuellen Punkt fest, von dem aus der Pfad starten soll
+#     (https://wiki.selfhtml.org/wiki/SVG/Tutorials/Pfade#MoveTo)
+# L - LineTo zeichnet eine Linie vom aktuellen zum angegebenen Punkt
+#     (https://wiki.selfhtml.org/wiki/SVG/Tutorials/Pfade#LineTo)
+######################################################################################
 sub _flowGraphic {
-  my $paref         = shift;
-  my $hash          = $paref->{hash};
-  my $name          = $paref->{name};
-  my $type          = $paref->{type};
-  my $flowgsize     = $paref->{flowgsize};
-  my $flowgani      = $paref->{flowgani};
-  my $flowgshift    = $paref->{flowgshift};                   # Verschiebung der Flußgrafikbox (muß negiert werden)
-  my $flowgcons     = $paref->{flowgcons};                    # Verbraucher in der Energieflußgrafik anzeigen
-  my $flowgconTime  = $paref->{flowgconsTime};                # Verbraucher Restlaufeit in der Energieflußgrafik anzeigen
-  my $flowgconX     = $paref->{flowgconX};
-  my $flowgconPower = $paref->{flowgconsPower};
-  my $consDist      = $paref->{flowgconsDist};
-  my $css           = $paref->{css};
-  my $lang          = $paref->{lang};
+  my $paref          = shift;
+  my $hash           = $paref->{hash};
+  my $name           = $paref->{name};
+  my $type           = $paref->{type};
+  my $flowgsize      = $paref->{flowgsize};
+  my $flowgani       = $paref->{flowgani};
+  my $flowgshift     = $paref->{flowgshift};                                   # Verschiebung der Flußgrafikbox (muß negiert werden)
+  my $flowgcons      = $paref->{flowgcons};                                    # Verbraucher in der Energieflußgrafik anzeigen
+  my $flowgconsTime  = $paref->{flowgconsTime};                                # Verbraucher Restlaufeit in der Energieflußgrafik anzeigen
+  my $flowgconX      = $paref->{flowgconX};
+  my $flowgconsPower = $paref->{flowgconsPower};
+  my $flowgPrdsPower = 1;                                                      # initial Producer akt. Erzeugung anzeigen
+  my $cdist          = $paref->{flowgconsDist};                                # Abstand Consumer zueinander
+  my $exth2cdist     = $paref->{flowgh2cDist};                                 # vertikaler Abstand Home -> Consumer Zeile
+  my $lang           = $paref->{lang};
 
-  my $style      = 'width:98%; height:'.$flowgsize.'px;';
-  my $animation  = $flowgani ? '@keyframes dash {  to {  stroke-dashoffset: 0;  } }' : '';  # Animation Ja/Nein
   my $cgc        = ReadingsNum ($name, 'Current_GridConsumption', 0);
-  my $cgfi       = ReadingsNum ($name, 'Current_GridFeedIn',      0);
-  my $csc        = ReadingsNum ($name, 'Current_SelfConsumption', 0);
+  my $node2grid  = ReadingsNum ($name, 'Current_GridFeedIn',      0);          # vom Knoten zum Grid
+  my $cself      = ReadingsNum ($name, 'Current_SelfConsumption', 0);
   my $cc         = CurrentVal  ($hash, 'consumption',             0);
   my $batin      = ReadingsNum ($name, 'Current_PowerBatIn',  undef);
-  my $batout     = ReadingsNum ($name, 'Current_PowerBatOut', undef);
+  my $bat2home   = ReadingsNum ($name, 'Current_PowerBatOut', undef);
   my $soc        = ReadingsNum ($name, 'Current_BatCharge',     100);
   my $cc_dummy   = $cc;
 
   my $scale      = $fgscaledef;
-  my $hasbat     = 1;                                         # initial Batterie vorhanden
+  my $pdist      = 130;                                                        # Abstand Producer zueinander
+  my $hasbat     = 1;                                                          # initial Batterie vorhanden
+  my $stna       = $name;
+  $stna         .= int (rand (1500));
+  
+  my ($lcp, $y_pos, $y_pos1);
+  
+  for my $re (keys %hrepl) {                                                   # V 1.37.1 Ziffern etc. eliminieren, Forum: https://forum.fhem.de/index.php?msg=1323229
+      $stna =~ s/$re/$hrepl{$re}/gxs;
+  }
   
   ## definierte Producer + Inverter ermitteln und zusammenfassen
   ################################################################
-  my $pdcr  = {};                                                             # Hashref Producer
-  my $ppall = 0;                                                              # Summe Erzeugung alle nicht PV-Producer
-  my $pvall = 0;                                                              # Summe Erzeugung alle Inverter
-  my $lfn   = 0;
+  my $pdcr    = {};                                                            # Hashref Producer
+  my $ppall   = 0;                                                             # Summe Erzeugung alle nicht PV-Producer
+  my $pv2node = 0;                                                             # Summe PV-Erzeugung alle Inverter
+  my $pv2grid = 0;
+  my $pv2bat  = 0;
+  my $lfn     = 0;
 
   for my $pn (1..$maxproducer) {
-      $pn   = sprintf "%02d", $pn;
-      my $p = ProducerVal ($hash, $pn, 'pgeneration', undef);
+      $pn      = sprintf "%02d", $pn;
+      my $p    = ProducerVal ($hash, $pn, 'pgeneration',    undef);
+      my $feed = ProducerVal ($hash, $pn, 'pfeed',      'default');
 
       if (defined $p) {
           $p                  = __normDecPlaces ($p);
-          $pdcr->{$lfn}{p}    = $p;                                           # aktuelle Erzeugung nicht PV-Producer 
-          $pdcr->{$lfn}{pn}   = $pn;                                          # Producernummer
-          $pdcr->{$lfn}{ptyp} = 'producer';                                   # Typ des Producers
-          $ppall             += $p;                                           # aktuelle Erzeuguung aller nicht PV-Producer
+          $pdcr->{$lfn}{p}    = $p;                                            # aktuelle Erzeugung nicht PV-Producer 
+          $pdcr->{$lfn}{pn}   = $pn;                                           # Producernummer
+          $pdcr->{$lfn}{feed} = $feed;                                         # Eigenschaft der Energielieferung
+          $pdcr->{$lfn}{ptyp} = 'producer';                                    # Typ des Producers
+          $ppall             += $p;                                            # aktuelle Erzeuguung aller nicht PV-Producer
           
           $lfn++;
       }
   }
       
   for my $in (1..$maxinverter) {
-      $in   = sprintf "%02d", $in;
-      my $p = InverterVal ($hash, $in, 'igeneration', undef);
+      $in      = sprintf "%02d", $in;
+      my $p    = InverterVal ($hash, $in, 'igeneration',    undef);
+      my $feed = InverterVal ($hash, $in, 'ifeed',      'default');
 
       if (defined $p) {
           $p                  = __normDecPlaces ($p);
-          $pdcr->{$lfn}{p}    = $p;                                           # aktuelle Erzeugung Inverter
-          $pdcr->{$lfn}{pn}   = $in;                                          # Inverternummer
-          $pdcr->{$lfn}{ptyp} = 'inverter';                                   # Typ des Producers
-          $pvall             += $p;
+          $pdcr->{$lfn}{pn}   = $in;                                           # Inverternummer
+          $pdcr->{$lfn}{feed} = $feed;                                         # Eigenschaft der Energielieferung
+          $pdcr->{$lfn}{ptyp} = 'inverter';                                    # Typ des Producers
+          $pdcr->{$lfn}{p}    = $p;                                            # aktuelle PV
+          $pv2node           += $p if($feed eq 'default');                     # PV-Erzeugung Inverter für das Hausnetz     
+          $pv2grid           += $p if($feed eq 'grid');                        # PV nur für das öffentliche Netz 
+          $pv2bat            += $p if($feed eq 'bat');                         # Direktladen PV nur in die Batterie
           
           $lfn++;
       }
   }
   
-  my $pallsum       = __normDecPlaces ($ppall + $pvall);
-  my $producercount = keys %{$pdcr};
-  my @producers     = sort{$a<=>$b} keys %{$pdcr};
+  ## Producer Koordninaten Steuerhash
+  #####################################
+  my ($togrid, $tonode, $tobat) = __sortProducer ($pdcr);                      # lfn Producer sortiert nach ptyp und feed
+   
+  my $psorted = {                                                    
+      '1togrid' => { xicon => -100, xchain => 150,  ychain => 400, step => 30,     count => scalar @{$togrid}, sorted => $togrid },      # Producer/PV nur zu Grid 
+      '2tonode' => { xicon =>  350, xchain => 700,  ychain => 200, step => $pdist, count => scalar @{$tonode}, sorted => $tonode },      # Producer/PV zum Knoten
+      '3tobat'  => { xicon =>  750, xchain => 1370, ychain => 430, step => 30,     count => scalar @{$tobat},  sorted => $tobat  },      # Producer/PV nur zu Batterie
+  };
+  
+  my $doproducerrow = 1;
+  $doproducerrow    = 0 if(!$psorted->{'1togrid'}{count} && !$psorted->{'3tobat'}{count}  && $psorted->{'2tonode'}{count} == 1);
 
   ## definierte Verbraucher ermitteln
   #####################################
-  my $cnsmr = {};                                                              # Hashref Consumer current power
+  my $cnsmr = {};                                                                       # Hashref Consumer current power
   
-  for my $c (sort{$a<=>$b} keys %{$data{$type}{$name}{consumers}}) {           # definierte Verbraucher ermitteln
-      next if(isConsumerNoshow ($hash, $c) =~ /^[13]$/xs);                     # auszublendende Consumer nicht berücksichtigen
+  for my $c (sort{$a<=>$b} keys %{$data{$type}{$name}{consumers}}) {                    # definierte Verbraucher ermitteln
+      next if(isConsumerNoshow ($hash, $c) =~ /^[13]$/xs);                              # auszublendende Consumer nicht berücksichtigen
       $cnsmr->{$c}{p}    = ReadingsNum ($name, "consumer${c}_currentPower", 0);
       $cnsmr->{$c}{ptyp} = 'consumer';
   }
@@ -14166,148 +14353,149 @@ sub _flowGraphic {
 
   ## Batterie + Werte festlegen
   ###############################
-  my $bat_color = $soc < 26 ? 'flowg bat25' :
-                  $soc < 76 ? 'flowg bat50' :
-                  'flowg bat75';
+  my $bat_color = $soc < 26 ? "$stna bat25" :
+                  $soc < 76 ? "$stna bat50" :
+                  "$stna bat75";
 
-  if (!defined($batin) && !defined($batout)) {
-      $hasbat = 0;
-      $batin  = 0;
-      $batout = 0;
-      $soc    = 0;
+  if (!defined $batin && !defined $bat2home) {
+      $hasbat   = 0;
+      $batin    = 0;
+      $bat2home = 0;
+      $soc      = 0;
   }
+  
+  my $grid2home_style = $cgc       ? "$stna active_sig"    : "$stna inactive";            # cgc current GridConsumption
+  my $bat2home_style  = $bat2home  ? "$stna active_normal" : "$stna inactive";
+  my $cgc_direction   = "M250,515 L670,590";                                                         
 
-  my $grid_color    = $cgfi   ? 'flowg grid_color1'               : 'flowg grid_color2';
-  my $cgc_style     = $cgc    ? 'flowg active_in'                 : 'flowg inactive_in';
-  my $batout_style  = $batout ? 'flowg active_out active_bat_out' : 'flowg inactive_in';
-  $grid_color       = 'flowg grid_color3'  if(!$cgfi && !$cgc && $batout);                     # dritte Farbe
-  my $cgc_direction = 'M490,515 L670,590';                                                     # Batterientladung ins Netz
-
-  if ($batout) {                                                                               # Batterie wird entladen
-      my $cgfo = $cgfi - $pvall;
+  if ($bat2home) {                                                                        # Batterie wird ins Haus entladen
+      my $cgfo = $node2grid - $pv2node;
 
       if ($cgfo > 1) {
-          $cgc_style      = 'flowg active_out';
-          $cgc_direction  = 'M670,590 L490,515';
-          $cgfi          -= $cgfo;
-          $cgc            = $cgfo;
+          $grid2home_style = "$stna active_normal";
+          $cgc_direction   = "M670,590 L250,515";
+          $node2grid      -= $cgfo;
+          $cgc             = $cgfo;
       }
   }
+ 
+  my $bat2home_direction = "M1200,515 L730,590";
+  my $node2bat           = $batin;
 
-  my $batout_direction = 'M902,515 L730,590';
+  if ($batin) {                                                             # Batterie wird geladen
+      my $home2bat = $batin - ($pv2node + $pv2bat);
 
-  if ($batin) {                                                       # Batterie wird geladen
-      my $gbi = $batin - $pvall;
-
-      if ($gbi > 1) {                                                 # Batterieladung anteilig aus Hausnetz geladen
-          $batin            -= $gbi;
-          $batout_style      = 'flowg active_in';
-          $batout_direction  = 'M730,590 L902,515';
-          $batout            = $gbi;
+      if ($home2bat > 1) {                                                  # Batterieladung wird anteilig aus Hausnetz geladen
+          $node2bat           -= $home2bat;
+          $bat2home_style      = "$stna active_sig";
+          $bat2home_direction  = "M730,590 L1200,515";
+          $bat2home            = $home2bat;
       }
   }
 
   ## Werte / SteuerungVars anpassen
   ###################################
-  $flowgcons  = 0 if(!$consumercount);                                # Consumer Anzeige ausschalten wenn keine Consumer definiert
-  my $p2home  = __normDecPlaces ($csc + $ppall);                      # Energiefluß von Knoten zum Haus: Selbstverbrauch + alle Producer
+  my $pnodesum  = __normDecPlaces ($ppall + $pv2node);                      # Erzeugung Summe im Knoten
+  $pnodesum    += abs $node2bat if($node2bat < 0);                          # Batterie ist voll und SolarLader liefert an Knoten
+  $node2bat    -= $pv2bat;                                                  # Knoten-Bat -> abzüglich Direktladung (pv2bat)
+  $flowgcons    = 0 if(!$consumercount);                                    # Consumer Anzeige ausschalten wenn keine Consumer definiert
+  my $node2home = __normDecPlaces ($cself + $ppall);                        # Energiefluß vom Knoten zum Haus: Selbstverbrauch + alle Producer (Batterie-In/Solar-Ladegeräte sind nicht in SelfConsumtion enthalten)
+
 
   ## SVG Box initialisieren mit Grid-Icon
   #########################################
-  my $vbwidth   = 800;                                                # width and height specify the viewBox size
-  my $vbminx    = -10 * $flowgshift;                                  # min-x and min-y represent the smallest X and Y coordinates that the viewBox may have
-  my $vbminy    = -25;
+  my $vbwidth    = 800;                                                     # width and height specify the viewBox size
+  my $vbminx     = -10 * $flowgshift;                                       # min-x and min-y represent the smallest X and Y coordinates that the viewBox may have
+  my $vbminy     = $doproducerrow ? -25 : 125;                              # Grafik höher positionieren wenn keine Poducerreihe angezeigt
 
-  my $vbhight   = !$flowgcons    ? 380 :
-                  !$flowgconTime ? 590 :
-                  610;
+  my $vbhight    = !$flowgcons     ? 380 :
+                   !$flowgconsTime ? 590 :
+                   610;
+  $vbhight      += $exth2cdist;
+  
+  if ($doproducerrow) {$vbhight += 100};                                    # Höhe Box vergrößern wenn Poducerreihe angezeigt
 
-  $vbhight += 100;
-
-  my $vbox = "$vbminx $vbminy $vbwidth $vbhight";
-
+  my $vbox       = "$vbminx $vbminy $vbwidth $vbhight";
+  my $svgstyle   = 'width:98%; height:'.$flowgsize.'px;';
+  my $animation  = $flowgani  ? '@keyframes dash { to { stroke-dashoffset: 0; } }' : '';     # Animation Ja/Nein
+  
+  my $grid_color = $node2grid                        ? "$stna grid_green" : 
+                   !$node2grid && !$cgc && $bat2home ? "$stna grid_gray"  :
+                   "$stna grid_red";
+  
+  my $strokecolstd = CurrentVal ($hash, 'strokecolstd', $strokcolstddef);
+  my $strokecolsig = CurrentVal ($hash, 'strokecolsig', $strokcolsigdef);
+  my $strokecolina = CurrentVal ($hash, 'strokecolina', $strokcolinadef);
+  my $strokewidth  = CurrentVal ($hash, 'strokewidth',  $strokwidthdef);  
+  
   my $ret = << "END0";
       <style>
-      $css
+      .$stna.text            { stroke: none; fill: gray; font-size: 60px; }                                     
+      .$stna.bat25           { stroke: red; fill: red; }                                                        
+      .$stna.bat50           { stroke: darkorange; fill: darkorange; }                                          
+      .$stna.bat75           { stroke: green; fill: green; }                                                    
+      .$stna.grid_green      { fill: green; }                                                                   
+      .$stna.grid_red        { fill: red; }                                                                     
+      .$stna.grid_gray       { fill: gray; }                                                                    
+      .$stna.inactive        { stroke: $strokecolina; stroke-width: $strokewidth; stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.2; } 
+      .$stna.active_sig      { stroke: $strokecolsig; stroke-width: $strokewidth; stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; } 
+      .$stna.active_normal   { stroke: $strokecolstd; stroke-width: $strokewidth; stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; } 
+      
       $animation
       </style>
 
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="$vbox" style="$style" id="SVGPLOT">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="$vbox" style="$svgstyle" id="SVGPLOT_$stna">
 
-      <g id="grid" class="$grid_color" transform="translate(215,260),scale(3.0)">
+      <g id="grid_$stna" class="$grid_color" transform="translate(100,260),scale(3.0)">
           <path d="M15.3,2H8.7L2,6.46V10H4V8H8v2.79l-4,9V22H6V20.59l6-3.27,6,3.27V22h2V19.79l-4-9V8h4v2h2V6.46ZM14,4V6H10V4ZM6.3,6,8,4.87V6Zm8,6L15,13.42,12,15,9,13.42,9.65,12ZM7.11,17.71,8.2,15.25l1.71.93Zm8.68-2.46,1.09,2.46-2.8-1.53ZM14,10H10V8h4Zm2-5.13L17.7,6H16Z"/>
       </g>
 END0
 
-  ## Producer Liste und Icons in Grafik anzeigen
-  ################################################
-  my $pos_left       = 0;
-  my $producer_start = 0;
-  my $producerPower  = 0;
-
-  if ($producercount % 2) {
-      $producer_start = 350 - ($consDist  * (($producercount -1) / 2));
+  ## Producer Icon - in Reihenfolge: zum Grid - zum Knoten - zur Batterie
+  #########################################################################
+  $paref->{stna}     = $stna;
+  $paref->{pnodesum} = $pnodesum; 
+  $paref->{psorted}  = $psorted;
+  $paref->{pdcr}     = $pdcr;
+  $paref->{pdist}    = $pdist;
+  
+  if (!$doproducerrow) {
+      $paref->{y_coord} = 165;      
+      $ret .= __addProducerIcon ($paref);                                             # Producer Icons row einfügen
   }
-  else {
-      $producer_start = 350 - (($consDist / 2) * ($producercount-1));
-  }
-
-  $pos_left = $producer_start + 5;
-
-  for my $lfn (@producers) {
-      my $pn      = $pdcr->{$lfn}{pn};
-      my ($picon, $ptxt) = __substituteIcon ( { hash  => $hash,                                                 # Icon des Producerdevices
-                                                name  => $name,
-                                                pn    => $pn,
-                                                ptyp  => $pdcr->{$lfn}{ptyp},
-                                                don   => NexthoursVal ($hash, 'NextHour00', 'DoN', 0),          # Tag oder Nacht
-                                                pcurr => $pdcr->{$lfn}{p},
-                                                lang  => $lang
-                                              }
-                                            );
-
-      $picon           = FW_makeImage    ($picon, '');
-      ($scale, $picon) = __normIconScale ($picon, $name);
+  else {                                                                              # mehr als ein Producer vorhanden
+      $paref->{y_coord} = 0;      
+      $ret .= __addProducerIcon ($paref);                                             # Producer Icons row einfügen
       
-      $ret .= qq{<g id="producer_$pn" fill="grey" transform="translate($pos_left,0),scale($scale)">};
-      $ret .= "<title>$ptxt</title>".$picon;
-      $ret .= '</g> ';
-
-      $pos_left += $consDist;
+      $paref->{x_coord} = 360;
+      $paref->{y_coord} = 165;
+      $ret .= __addNodeIcon ($paref);                                                 # Knoten Icon
   }
   
-  ## Knoten Icon
-  ################                                       
-  my ($nicon, $ntxt) = __substituteIcon ( { hash  => $hash,
-                                            name  => $name,
-                                            ptyp  => 'node',
-                                            pcurr => $pallsum,
-                                            lang  => $lang
-                                           }
-                                         );
-  
-  $nicon           = FW_makeImage    ($nicon, '');
-  ($scale, $nicon) = __normIconScale ($nicon, $name);
-  
-  $ret .= qq{<g id="Node" transform="translate(360,165),scale($scale)">};                                # translate(X-Koordinate,Y-Koordinate), scale(<Größe>)-> Koordinaten ändern sich bei Größenänderung           
-  $ret .= "<title>$ntxt</title>".$nicon;
-  $ret .= '</g> ';
+  delete $paref->{stna};
+  delete $paref->{pnodesum};
+  delete $paref->{psorted};
+  delete $paref->{pdcr};
+  delete $paref->{pdist};
+  delete $paref->{x_coord};
+  delete $paref->{y_coord};
 
   ## Consumer Liste und Icons in Grafik anzeigen
   ################################################
-  $pos_left          = 0;
+  my $cons_left      = 0;
   my $consumer_start = 0;
   my $currentPower   = 0;
+  $y_pos             = 505 + $exth2cdist;
 
   if ($flowgcons) {
       if ($consumercount % 2) {
-          $consumer_start = 350 - ($consDist  * (($consumercount -1) / 2));
+          $consumer_start = 350 - ($cdist  * ($consumercount -1) / 2);
       }
       else {
-          $consumer_start = 350 - (($consDist / 2) * ($consumercount-1));
+          $consumer_start = 350 - ($cdist / 2 * ($consumercount-1));
       }
 
-      $pos_left = $consumer_start + 15;
+      $cons_left = $consumer_start + 15;
 
       for my $c (@consumers) {
           my $calias     = ConsumerVal ($hash, $c, 'alias', '');                                           # Name des Consumerdevices
@@ -14326,19 +14514,19 @@ END0
           $cicon           = FW_makeImage    ($cicon, '');
           ($scale, $cicon) = __normIconScale ($cicon, $name);
           
-          $ret .= qq{<g id="consumer_$c" transform="translate($pos_left,505),scale($scale)">};
+          $ret .= qq{<g id="consumer_${c}_$stna" transform="translate($cons_left,$y_pos),scale($scale)">};
           $ret .= "<title>$calias</title>".$cicon;
           $ret .= '</g> ';
 
-          $pos_left += $consDist;
+          $cons_left += $cdist;
       }
   }
   
   ## Batterie Icon
-  ##################
-  if ($hasbat) {                                                                                   
+  ##################   
+  if ($hasbat) {                                                                             
       $ret .= << "END1";
-      <g class="$bat_color" transform="translate(610,245),scale(.30) rotate (90)">
+      <g class="$bat_color" transform="translate(750,245),scale(.30) rotate (90)">
       <path d="m 134.65625,89.15625 c -6.01649,0 -11,4.983509 -11,11 l 0,180 c 0,6.01649 4.98351,11 11,11 l 95.5,0 c 6.01631,0 11,-4.9825 11,-11 l 0,-180 c 0,-6.016491 -4.98351,-11 -11,-11 l -95.5,0 z m 0,10 95.5,0 c 0.60951,0 1,0.390491 1,1 l 0,180 c 0,0.6085 -0.39231,1 -1,1 l -95.5,0 c -0.60951,0 -1,-0.39049 -1,-1 l 0,-180 c 0,-0.609509 0.39049,-1 1,-1 z"/>
       <path d="m 169.625,69.65625 c -6.01649,0 -11,4.983509 -11,11 l 0,14 10,0 0,-14 c 0,-0.609509 0.39049,-1 1,-1 l 25.5,0 c 0.60951,0 1,0.390491 1,1 l 0,14 10,0 0,-14 c 0,-6.016491 -4.98351,-11 -11,-11 l -25.5,0 z"/>
 END1
@@ -14355,7 +14543,7 @@ END1
   my $hicon        = FW_makeImage    ($homeicondef, '');
   ($scale, $hicon) = __normIconScale ($hicon, $name);
   
-  $ret .= qq{<g id="Home" transform="translate(368,360),scale($scale)">};                         # translate(X-Koordinate,Y-Koordinate), scale(<Größe>)-> Koordinaten ändern sich bei Größenänderung           
+  $ret .= qq{<g id="home_$stna" transform="translate(368,360),scale($scale)">};                   # translate(X-Koordinate,Y-Koordinate), scale(<Größe>)-> Koordinaten ändern sich bei Größenänderung           
   $ret .= "<title>Home</title>".$hicon;
   $ret .= '</g> ';  
 
@@ -14367,90 +14555,105 @@ END1
       my $dicon        = FW_makeImage    ($cicondef.$dumcol, '');
       ($scale, $dicon) = __normIconScale ($dicon, $name);
       
-      $ret .= qq{<g id="consumer_X" transform="translate(520,360),scale($scale)">};
+      $ret .= qq{<g id="dummy_$stna" transform="translate(660,360),scale($scale)">};
       $ret .= "<title>$dumtxt</title>".$dicon;
       $ret .= '</g> ';
   }
 
-  ## Laufketten PV->Home, PV->Grid, Grid->Home
-  ##############################################
-  my $csc_style  = $p2home ? 'flowg active_out' : 'flowg inactive_out';
-  my $cgfi_style = $cgfi   ? 'flowg active_out' : 'flowg inactive_out';
-  $ret          .= << "END2";
+  ## Laufketten Node->Home, Node->Grid, Bat->Home
+  #################################################
+  my $node2home_style = $node2home ? "$stna active_normal" : "$stna inactive";
+  my $node2grid_style = $node2grid ? "$stna active_normal" : "$stna inactive";
+  
+  $ret .= << "END2";
   <g transform="translate(50,50),scale(0.5)" stroke-width="27" fill="none">
-  <path id="pv-home"   class="$csc_style"  d="M700,400 L700,580" />
-  <path id="pv-grid"   class="$cgfi_style" d="M670,400 L490,480" />
-  <path id="grid-home" class="$cgc_style"  d="$cgc_direction" />
+  <path id="node2home_$stna" class="$node2home_style" d="M700,400 L700,580" />
+  <path id="node2grid_$stna" class="$node2grid_style" d="M670,400 L250,480" />
+  <path id="grid2home_$stna" class="$grid2home_style" d="$cgc_direction" />
 END2
 
   ## Laufketten PV->Batterie, Batterie->Home
   ##############################################
   if ($hasbat) {
-      my $batin_style = $batin ? 'flowg active_in active_bat_in' : 'flowg inactive_out';
-      $ret           .= << "END3";
-      <path id="bat-home" class="$batout_style" d="$batout_direction" />
-      <path id="pv-bat"   class="$batin_style"  d="M730,400 L910,480" />
+      my $node2bat_style  = $node2bat     ? "$stna active_normal" : "$stna inactive";
+      my $batin_direction = $node2bat < 0 ? "M1200,480 L730,400"  : "M730,400 L1200,480";
+      $node2bat           = abs $node2bat;
+                           
+      $ret .= << "END3";
+      <path id="bat2home_$stna" class="$bat2home_style" d="$bat2home_direction" />
+      <path id="pv2bat_$stna"   class="$node2bat_style" d="$batin_direction" />
 END3
   }
 
   ## Dummy Consumer Laufketten
   ##############################
    if ($flowgconX) {
-      my $consumer_style = 'flowg inactive_out';
-      $consumer_style    = 'flowg active_in' if($cc_dummy > 1);
-      my $chain_color    = "";                                                        # Farbe der Laufkette Consumer-Dummy
-
+      my $consumer_style = "$stna inactive";
+      $consumer_style    = "$stna active_sig" if($cc_dummy > 1);
+      my $chain_color    = "";                                                                # Farbe der Laufkette Consumer-Dummy
+      
       if ($cc_dummy > 0.5) {
           $chain_color  = 'style="stroke: #'.substr(Color::pahColor(0,500,1000,$cc_dummy,[0,255,0, 127,255,0, 255,255,0, 255,127,0, 255,0,0]),0,6).';"';
           #$chain_color  = 'style="stroke: #DF0101;"';
       }
 
-      $ret .= qq{<path id="home-consumer_X" class="$consumer_style" $chain_color d="M790,690 L930,690" />};
+      $ret .= qq{<path id="home2dummy_$stna" class="$consumer_style" $chain_color d="M790,690 L1200,690" />};
    }
+   
+  ## Producer Laufketten - in Reihenfolge: zum Grid - zum Knoten - zur Batterie
+  ## Laufkette nur anzeigen wenn Producerzeile angezeigt werden soll
+  ###############################################################################
+  if ($doproducerrow) {
+      for my $st (sort keys %{$psorted}) {
+          my $left   = $psorted->{$st}{start} * 2;                                                # Übertrag aus Producer Icon Abschnitt
+          my $count  = $psorted->{$st}{count};
+          my $xchain = $psorted->{$st}{xchain};                                                   # X- Koordinate Kette am Ziel
+          my $ychain = $psorted->{$st}{ychain};                                                   # Y- Koordinate Kette am Ziel
+          my $step   = $psorted->{$st}{step};
+          my @sorted = @{$psorted->{$st}{sorted}};
 
-  ## Producer Laufketten
-  ########################
-  $pos_left              = $producer_start * 2;
-  my $pos_left_start_con = 0;
-  my $distance_prd       = 65;
+          if ($count % 2) {
+              $xchain = $xchain - ($pdist  * ($count -1) / 2);
+          }
+          else {
+              $xchain = $xchain - ($pdist / 2 * ($count - 1));
+          }
+          
+          my $producer_style;
+          
+          for my $lfn (@sorted) {
+              my $pn             = $pdcr->{$lfn}{pn};
+              my $p              = $pdcr->{$lfn}{p};
+              $producer_style    = $p > 0 ? "$stna active_normal" : "$stna inactive";
+              my $chain_color    = '';                                                            # Farbe der Laufkette des Producers
 
-  if ($producercount % 2) {
-      $pos_left_start_con = 700 - ($distance_prd  * (($producercount -1) / 2));
-  }
-  else {
-      $pos_left_start_con = 700 - ((($distance_prd ) / 2) * ($producercount-1));
-  }
-
-  for my $lfn (@producers) {
-      my $pn             = $pdcr->{$lfn}{pn};
-      my $p              = $pdcr->{$lfn}{p};
-      my $consumer_style = 'flowg inactive_out';
-         $consumer_style = 'flowg active_out' if($p > 0);
-      my $chain_color    = '';                                                            # Farbe der Laufkette des Producers
-
-      if ($p) {
-          #$chain_color  = 'style="stroke: #'.substr(Color::pahColor(0,50,100,$p,[0,255,0, 127,255,0, 255,255,0, 255,127,0, 255,0,0]),0,6).';"';
-          $chain_color  = 'style="stroke: darkorange;"';
+              if ($p) {
+                  #$chain_color  = 'style="stroke: #'.substr(Color::pahColor(0,50,100,$p,[0,255,0, 127,255,0, 255,255,0, 255,127,0, 255,0,0]),0,6).';"';
+              }
+     
+              $ret    .= qq{<path id="genproducer_${pn}_$stna" class="$producer_style" $chain_color d=" M$left,130 L$xchain,$ychain" />}; 
+              $left   += ($pdist * 2);
+              $xchain += $step;
+          }
       }
-
-      $ret                .= qq{<path id="genproducer_$pn " class="$consumer_style" $chain_color d=" M$pos_left,130 L$pos_left_start_con,200" />};   # Design Consumer Laufkette
-      $pos_left           += ($consDist * 2);
-      $pos_left_start_con += $distance_prd;
   }
 
   ## Consumer Laufketten
   ########################
   if ($flowgcons) {
-      $pos_left          = $consumer_start * 2;
-      my $pos_left_start = 0;
-      my $distance_con   = 65;
+      $cons_left          = $consumer_start * 2;
+      my $cons_left_start = 0;
+      my $distance_con    = 65;
+      $y_pos              = 880 + 2 * $exth2cdist;
 
       if ($consumercount % 2) {
-          $pos_left_start = 700 - ($distance_con  * (($consumercount -1) / 2));
+          $cons_left_start = 700 - ($distance_con  * ($consumercount -1) / 2);
       }
       else {
-          $pos_left_start = 700 - ((($distance_con ) / 2) * ($consumercount-1));
+          $cons_left_start = 700 - ($distance_con / 2 * ($consumercount-1));
       }
+      
+      my $consumer_style;
 
       for my $c (@consumers) {
           my $power     = ConsumerVal ($hash, $c, 'power',   0);
@@ -14463,71 +14666,75 @@ END3
 
           my $p              = $currentPower;
           $p                 = (($currentPower / $power) * 100) if ($power > 0);
-          my $consumer_style = 'flowg inactive_out';
-          $consumer_style    = 'flowg active_out' if($p > $defpopercent);
+          $consumer_style    = $p > $defpopercent ? "$stna active_normal" : "$stna inactive";
           my $chain_color    = "";                                                                 # Farbe der Laufkette des Consumers
 
           if ($p > 0.5) {
               $chain_color = 'style="stroke: #'.substr(Color::pahColor(0,50,100,$p,[0,255,0, 127,255,0, 255,255,0, 255,127,0, 255,0,0]),0,6).';"';
-              #$chain_color  = 'style="stroke: #DF0101;"';
           }
 
-          $ret            .= qq{<path id="home-consumer_$c" class="$consumer_style" $chain_color d="M$pos_left_start,780 L$pos_left,880" />};
-          $pos_left       += ($consDist * 2);
-          $pos_left_start += $distance_con;
+          $ret             .= qq{<path id="home2consumer_${c}_$stna" class="$consumer_style" $chain_color d="M$cons_left_start,780 L$cons_left,$y_pos" />};
+          $cons_left       += ($cdist * 2);
+          $cons_left_start += $distance_con;
       }
   }
 
   ## Textangaben an Grafikelementen
   ###################################
   $cc_dummy = sprintf("%.0f", $cc_dummy);                                                         # Verbrauch Dummy-Consumer
-  $ret .= qq{<text class="flowg text" id="node-txt"      x="800"  y="320" style="text-anchor: start;">$pallsum</text>}    if ($pallsum > 0);
-  $ret .= qq{<text class="flowg text" id="bat-txt"       x="1110" y="520" style="text-anchor: start;">$soc %</text>}      if ($hasbat);                        # Lage Text Batterieladungszustand
-  $ret .= qq{<text class="flowg text" id="node_home-txt" x="730"  y="520" style="text-anchor: start;">$p2home</text>}     if ($p2home);
-  $ret .= qq{<text class="flowg text" id="node-grid-txt" x="525"  y="420" style="text-anchor: end;">$cgfi</text>}         if ($cgfi);
-  $ret .= qq{<text class="flowg text" id="grid-home-txt" x="515"  y="610" style="text-anchor: end;">$cgc</text>}          if ($cgc);
-  $ret .= qq{<text class="flowg text" id="batout-txt"    x="880"  y="610" style="text-anchor: start;">$batout</text>}     if ($batout && $hasbat);
-  $ret .= qq{<text class="flowg text" id="batin-txt"     x="880"  y="420" style="text-anchor: start;">$batin</text>}      if ($batin && $hasbat);
-  $ret .= qq{<text class="flowg text" id="home-txt"      x="600"  y="710" style="text-anchor: end;">$cc</text>};                                               # Current_Consumption Anlage
-  $ret .= qq{<text class="flowg text" id="dummy-txt"     x="1085" y="710" style="text-anchor: start;">$cc_dummy</text>}   if ($flowgconX && $flowgconPower);   # Current_Consumption Dummy
-
-  my $lcp;
+  $ret .= qq{<text class="$stna text" id="nodetxt_$stna"      x="800"  y="320" style="text-anchor: start;">$pnodesum</text>}    if ($pnodesum > 0);
+  $ret .= qq{<text class="$stna text" id="batsoctxt_$stna"    x="1380" y="520" style="text-anchor: start;">$soc %</text>}       if ($hasbat);                         # Lage Text Batterieladungszustand
+  $ret .= qq{<text class="$stna text" id="node2hometxt_$stna" x="730"  y="520" style="text-anchor: start;">$node2home</text>}   if ($node2home); 
+  $ret .= qq{<text class="$stna text" id="node2gridtxt_$stna" x="420"  y="420" style="text-anchor: end;">$node2grid</text>}     if ($node2grid);
+  $ret .= qq{<text class="$stna text" id="grid2hometxt_$stna" x="420"  y="610" style="text-anchor: end;">$cgc</text>}           if ($cgc); 
+  $ret .= qq{<text class="$stna text" id="batouttxt_$stna"    x="1000" y="610" style="text-anchor: start;">$bat2home</text>}    if ($bat2home && $hasbat);
+  $ret .= qq{<text class="$stna text" id="node2battxt_$stna"  x="1000" y="420" style="text-anchor: start;">$node2bat</text>}    if ($node2bat && $hasbat); 
+  $ret .= qq{<text class="$stna text" id="hometxt_$stna"      x="600"  y="750" style="text-anchor: end;">$cc</text>};                                                 # Current_Consumption Anlage
+  $ret .= qq{<text class="$stna text" id="dummytxt_$stna"     x="1380" y="710" style="text-anchor: start;">$cc_dummy</text>}    if ($flowgconX && $flowgconsPower);   # Current_Consumption Dummy
   
-  ## Textangabe Producer
-  ########################                                                        
-  $pos_left = $producer_start * 2 - 70;                                                       # -XX -> Start Lage Producer Beschriftung
+  ## Textangabe Producer - in Reihenfolge: zum Grid - zum Knoten - zur Batterie
+  ## Textangabe nur anzeigen wenn Producerzeile angezeigt werden soll
+  ###############################################################################
+  if ($doproducerrow) {                                                    
+      for my $st (sort keys %{$psorted}) {                                                       
+          my $left   = $psorted->{$st}{start} * 2 - 70;                                            # Übertrag aus Producer Icon Abschnitt, -XX -> Start Lage Producer Beschriftung
+          my @sorted = @{$psorted->{$st}{sorted}};
+          
+          for my $lfn (@sorted) {
+              my $pn        = $pdcr->{$lfn}{pn};
+              $currentPower = $pdcr->{$lfn}{p};
+              $lcp          = length $currentPower;
 
-  for my $lfn (@producers) {
-      my $pn        = $pdcr->{$lfn}{pn};
-      $currentPower = $pdcr->{$lfn}{p};
-      $lcp          = length $currentPower;
+              # Leistungszahl abhängig von der Größe entsprechend auf der x-Achse verschieben
+              ###############################################################################          
+              if    ($lcp >= 5) {$left -= 10}
+              elsif ($lcp == 4) {$left += 10}
+              elsif ($lcp == 3) {$left += 15}
+              elsif ($lcp == 2) {$left += 20}
+              elsif ($lcp == 1) {$left += 40}
 
-      # Leistungszahl abhängig von der Größe entsprechend auf der x-Achse verschieben
-      ###############################################################################          
-      if    ($lcp >= 5) {$pos_left -= 10}
-      elsif ($lcp == 4) {$pos_left += 10}
-      elsif ($lcp == 3) {$pos_left += 15}
-      elsif ($lcp == 2) {$pos_left += 20}
-      elsif ($lcp == 1) {$pos_left += 40}
+              $ret .= qq{<text class="$stna text" id="producertxt_${pn}_$stna" x="$left" y="100">$currentPower</text>} if($flowgPrdsPower);
 
-      $ret .= qq{<text class="flowg text" id="producer-txt_$pn" x="$pos_left" y="100">$currentPower</text>} if($flowgconPower);    # Lage producer Consumption
-
-      # Leistungszahl wieder zurück an den Ursprungspunkt
-      ####################################################          
-      if    ($lcp >= 5) {$pos_left += 10}
-      elsif ($lcp == 4) {$pos_left -= 10}
-      elsif ($lcp == 3) {$pos_left -= 15}
-      elsif ($lcp == 2) {$pos_left -= 20}
-      elsif ($lcp == 1) {$pos_left -= 40}       
-      
-      $pos_left  += ($consDist * 2);
+              # Leistungszahl wieder zurück an den Ursprungspunkt
+              ####################################################          
+              if    ($lcp >= 5) {$left += 10}
+              elsif ($lcp == 4) {$left -= 10}
+              elsif ($lcp == 3) {$left -= 15}
+              elsif ($lcp == 2) {$left -= 20}
+              elsif ($lcp == 1) {$left -= 40}       
+              
+              $left += ($pdist * 2);
+          }
+      }
   }
 
   ## Textangabe Consumer
   ########################
   if ($flowgcons) {
-      $pos_left = ($consumer_start * 2) - 50;                                                         # -XX -> Start Lage Consumer Beschriftung
-
+      $cons_left = ($consumer_start * 2) - 50;                                                         # -XX -> Start Lage Consumer Beschriftung
+      $y_pos     = 1110 + 2 * $exth2cdist;
+      $y_pos1    = 1170 + 2 * $exth2cdist;
+       
       for my $c (@consumers) {
           $currentPower    = sprintf "%.1f", $cnsmr->{$c}{p};
           $currentPower    = sprintf "%.0f", $currentPower if($currentPower > 10);
@@ -14540,34 +14747,162 @@ END3
           
           $lcp = length $currentPower;
 
-          #$ret .= qq{<text class="flowg text" id="consumer-txt_$c"      x="$pos_left" y="1110" style="text-anchor: start;">$currentPower</text>} if ($flowgconPower);    # Lage Consumer Consumption
-          #$ret .= qq{<text class="flowg text" id="consumer-txt_time_$c" x="$pos_left" y="1170" style="text-anchor: start;">$consumerTime</text>} if ($flowgconTime);     # Lage Consumer Restlaufzeit
+          #$ret .= qq{<text class="$stna text" id="consumertxt_${c}_$stna"      x="$cons_left" y="1110" style="text-anchor: start;">$currentPower</text>} if ($flowgconsPower);    # Lage Consumer Consumption
+          #$ret .= qq{<text class="$stna text" id="consumertxt_time_${c}_$stna" x="$cons_left" y="1170" style="text-anchor: start;">$consumerTime</text>} if ($flowgconsTime);     # Lage Consumer Restlaufzeit
 
           # Verbrauchszahl abhängig von der Größe entsprechend auf der x-Achse verschieben
           ##################################################################################
-          if    ($lcp >= 5) {$pos_left -= 40}
-          elsif ($lcp == 4) {$pos_left -= 25}
-          elsif ($lcp == 3) {$pos_left -= 5 }
-          elsif ($lcp == 2) {$pos_left += 7 }
-          elsif ($lcp == 1) {$pos_left += 25}
-
-          $ret .= qq{<text class="flowg text" id="consumer-txt_$c"      x="$pos_left" y="1110">$currentPower</text>} if ($flowgconPower);    # Lage Consumer Consumption
-          $ret .= qq{<text class="flowg text" id="consumer-txt_time_$c" x="$pos_left" y="1170">$consumerTime</text>} if ($flowgconTime);     # Lage Consumer Restlaufzeit
+          if    ($lcp >= 5) {$cons_left -= 40}
+          elsif ($lcp == 4) {$cons_left -= 25}
+          elsif ($lcp == 3) {$cons_left -= 5 }
+          elsif ($lcp == 2) {$cons_left += 7 }
+          elsif ($lcp == 1) {$cons_left += 25}
+          
+          $ret .= qq{<text class="$stna text" id="consumertxt_${c}_$stna"      x="$cons_left" y="$y_pos">$currentPower</text>}  if($flowgconsPower);    # Lage Consumer Consumption
+          $ret .= qq{<text class="$stna text" id="consumertxt_time_${c}_$stna" x="$cons_left" y="$y_pos1">$consumerTime</text>} if($flowgconsTime);     # Lage Consumer Restlaufzeit
 
           # Verbrauchszahl wieder zurück an den Ursprungspunkt
           ######################################################          
-          if    ($lcp >= 5) {$pos_left += 40}
-          elsif ($lcp == 4) {$pos_left += 25}
-          elsif ($lcp == 3) {$pos_left += 5 }
-          elsif ($lcp == 2) {$pos_left -= 7 }
-          elsif ($lcp == 1) {$pos_left -= 25}
+          if    ($lcp >= 5) {$cons_left += 40}
+          elsif ($lcp == 4) {$cons_left += 25}
+          elsif ($lcp == 3) {$cons_left += 5 }
+          elsif ($lcp == 2) {$cons_left -= 7 }
+          elsif ($lcp == 1) {$cons_left -= 25}
 
-          $pos_left  += ($consDist * 2);
+          $cons_left  += ($cdist * 2);
       }
   }
 
   $ret .= qq{</g></svg>};
 
+return $ret;
+}
+
+################################################################
+#  erzeugt eine Liste der Producernummern sortiert von
+#  links nach rechts:
+#  -> alle Inverter mit Feed-Typ 'grid'
+#  -> alle Producer (nicht PV)
+#  -> alle Inverter mit Feed-Typ 'default'
+#  -> alle Inverter mit Feed-Typ 'bat'
+################################################################         
+sub __sortProducer {
+  my $pdcr = shift;                                                           # Hashref Producer
+  
+  my @igrid  = ();
+  my @togrid = ();
+  my @prod   = ();
+  my @idef   = ();
+  my @tonode = ();
+  my @ibat   = ();
+  my @tobat  = ();
+  
+  for my $lfn (sort{$a<=>$b} keys %{$pdcr}) {
+      my $ptyp = $pdcr->{$lfn}{ptyp};                                         # producer | inverter
+      my $feed = $pdcr->{$lfn}{feed};                                         # default | grid | bat
+      
+      push @igrid, $lfn if($ptyp eq 'inverter' && $feed eq 'grid');
+      push @prod,  $lfn if($ptyp eq 'producer');
+      push @idef,  $lfn if($ptyp eq 'inverter' && $feed eq 'default');
+      push @ibat,  $lfn if($ptyp eq 'inverter' && $feed eq 'bat');
+  }
+  
+  push @togrid, @igrid;
+  push @tonode, @prod;
+  push @tonode, @idef;
+  push @tobat,  @ibat;
+  
+return (\@togrid, \@tonode, \@tobat);
+}
+
+################################################################
+#          Producer Icon einfügen
+################################################################
+sub __addProducerIcon {
+  my $paref    = shift;
+  my $hash     = $paref->{hash};
+  my $name     = $paref->{name};
+  my $lang     = $paref->{lang};
+  my $stna     = $paref->{stna};
+  my $psorted  = $paref->{psorted};
+  my $pdcr     = $paref->{pdcr};
+  my $pdist    = $paref->{pdist};
+  my $y_coord  = $paref->{y_coord};
+  
+  my ($scale, $ret);
+  
+  for my $st (sort keys %{$psorted}) {
+      my $left   = 0;
+      my $xicon  = $psorted->{$st}{xicon};
+      my $count  = $psorted->{$st}{count};
+      my @sorted = @{$psorted->{$st}{sorted}};
+      
+      if ($count % 2) {
+          $xicon = $xicon - ($pdist  * ($count - 1) / 2);
+      }
+      else {
+          $xicon = $xicon - ($pdist / 2 * ($count - 1));
+      }
+      
+      $psorted->{$st}{start} = $xicon;
+      $left                  = $xicon + 5;
+
+      for my $lfn (@sorted) {
+          my $pn             = $pdcr->{$lfn}{pn};
+          my ($picon, $ptxt) = __substituteIcon ( { hash  => $hash,                                                 # Icon des Producerdevices
+                                                    name  => $name,
+                                                    pn    => $pn,
+                                                    ptyp  => $pdcr->{$lfn}{ptyp},
+                                                    don   => NexthoursVal ($hash, 'NextHour00', 'DoN', 0),          # Tag oder Nacht
+                                                    pcurr => $pdcr->{$lfn}{p},
+                                                    lang  => $lang
+                                                  }
+                                                );
+
+          $picon           = FW_makeImage    ($picon, '');
+          ($scale, $picon) = __normIconScale ($picon, $name);
+          
+          $ret .= qq{<g id="producer_${pn}_$stna" fill="grey" transform="translate($left,$y_coord),scale($scale)">};
+          $ret .= "<title>$ptxt</title>".$picon;
+          $ret .= '</g> ';
+
+          $left += $pdist;
+      }
+  }
+  
+return $ret;
+}
+
+################################################################
+#          Knoten Icon einfügen
+################################################################
+sub __addNodeIcon {                                
+  my $paref    = shift;
+  my $hash     = $paref->{hash};
+  my $name     = $paref->{name};
+  my $lang     = $paref->{lang};
+  my $stna     = $paref->{stna};
+  my $pnodesum = $paref->{pnodesum};
+  my $x_coord  = $paref->{x_coord};
+  my $y_coord  = $paref->{y_coord};
+  
+  my $scale;
+  
+  my ($nicon, $ntxt) = __substituteIcon ( { hash  => $hash,
+                                            name  => $name,
+                                            ptyp  => 'node',
+                                            pcurr => $pnodesum,
+                                            lang  => $lang
+                                           }
+                                         );
+  
+  $nicon           = FW_makeImage    ($nicon, '');
+  ($scale, $nicon) = __normIconScale ($nicon, $name);
+  
+  my $ret = qq{<g id="node_$stna" transform="translate($x_coord,$y_coord),scale($scale)">};     # translate(X-Koordinate,Y-Koordinate), scale(<Größe>)-> Koordinaten ändern sich bei Größenänderung           
+  $ret   .= "<title>$ntxt</title>".$nicon;
+  $ret   .= '</g> ';
+  
 return $ret;
 }
 
@@ -14702,8 +15037,6 @@ sub __normIconScale {
   
   $icon =~ s/width="(.*?)"/width="$widthnormpt"/;
   $icon =~ s/height="(.*?)"/height="$heightnormpt"/;
-  
-  # Log3 ($name, 2, "$name - widthnormpt: $widthnormpt, heightnormpt: $heightnormpt");
   
 return ($fgscaledef, $icon);
 }
@@ -16468,7 +16801,7 @@ sub checkPlantConfig {
 
   for my $sn (sort keys %{$data{$type}{$name}{strings}}) {
       my $sp = $sn." => ".$sub->($sn)."<br>";
-      Log3 ($name, 1, "$name - sp: $sp");
+
       $result->{'String Configuration'}{note} .= $sn." => ".$sub->($sn)."<br>";
 
       if ($data{$type}{$name}{strings}{$sn}{peak} >= 500) {
@@ -20184,11 +20517,13 @@ to ensure that the system configuration is correct.
          <table>
          <colgroup> <col width="20%"> <col width="80%"> </colgroup>
             <tr><td> <b>ietotal </b>        </td><td>total energy generated by the inverter to date (Wh)              </td></tr>
+            <tr><td> <b>ifeed </b>          </td><td>Energy supply characteristics                                    </td></tr>
             <tr><td> <b>igeneration </b>    </td><td>current PV generation (W)                                        </td></tr>
             <tr><td> <b>iicon </b>          </td><td>any icons defined for displaying the device in the graphic       </td></tr>
             <tr><td> <b>ialias </b>         </td><td>Alias of the device                                              </td></tr>
             <tr><td> <b>iname </b>          </td><td>Name of the device                                               </td></tr>
             <tr><td> <b>invertercap </b>    </td><td>the nominal power (W) of the inverter (if defined)               </td></tr>
+            <tr><td> <b>istrings </b>       </td><td>List of strings assigned to the inverter (if defined)            </td></tr>
 		 </table>
       </ul>
 
@@ -20204,11 +20539,12 @@ to ensure that the system configuration is correct.
       <ul>
          <table>
          <colgroup> <col width="20%"> <col width="80%"> </colgroup>
-            <tr><td> <b>petotal </b>        </td><td>total energy generated by the producer to date (Wh)             </td></tr>
-            <tr><td> <b>pgeneration </b>    </td><td>current power (W)                                               </td></tr>
-            <tr><td> <b>picon </b>          </td><td>any icons defined for displaying the device in the graphic      </td></tr>
-            <tr><td> <b>palias </b>         </td><td>Alias of the device                                             </td></tr>
-            <tr><td> <b>pname </b>          </td><td>Name of the device                                              </td></tr>
+            <tr><td> <b>petotal </b>        </td><td>total energy generated by the producer to date (Wh)              </td></tr>
+            <tr><td> <b>pfeed </b>          </td><td>Energy supply characteristics                                    </td></tr>
+            <tr><td> <b>pgeneration </b>    </td><td>current power (W)                                                </td></tr>
+            <tr><td> <b>picon </b>          </td><td>any icons defined for displaying the device in the graphic       </td></tr>
+            <tr><td> <b>palias </b>         </td><td>Alias of the device                                              </td></tr>
+            <tr><td> <b>pname </b>          </td><td>Name of the device                                               </td></tr>
 		 </table>
       </ul>
 
@@ -20233,22 +20569,6 @@ to ensure that the system configuration is correct.
   <br><br>
   <ul>
      <ul>
-       <a id="SolarForecast-attr-affect70percentRule"></a>
-       <li><b>affect70percentRule</b><br>
-         If set, the predicted power is limited according to the 70% rule. <br><br>
-
-         <ul>
-         <table>
-         <colgroup> <col width="15%"> <col width="85%"> </colgroup>
-            <tr><td> <b>0</b>       </td><td>No limit on the forecast PV generation (default)                                </td></tr>
-            <tr><td> <b>1</b>       </td><td>the predicted PV generation is limited to 70% of the installed string power(s)  </td></tr>
-            <tr><td> <b>dynamic</b> </td><td>the predicted PV generation is limited when 70% of the installed                </td></tr>
-            <tr><td>                </td><td>string(s) power plus the predicted consumption is exceeded.                     </td></tr>
-         </table>
-         </ul>
-       </li>
-       <br>
-
        <a id="SolarForecast-attr-affectBatteryPreferredCharge"></a>
        <li><b>affectBatteryPreferredCharge </b><br>
          Consumers with the <b>can</b> mode are only switched on when the specified battery charge (%)
@@ -20558,21 +20878,6 @@ to ensure that the system configuration is correct.
        </li>
        <br>
 
-       <a id="SolarForecast-attr-ctrlAutoRefresh"></a>
-       <li><b>ctrlAutoRefresh</b> <br>
-         If set, active browser pages of the FHEMWEB device that has called up the SolarForecast device are
-         reloaded after the set time (seconds). If browser pages of a certain FHEMWEB device are to be reloaded
-         instead, this device can be specified with the attribute "ctrlAutoRefreshFW".
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-ctrlAutoRefreshFW"></a>
-       <li><b>ctrlAutoRefreshFW</b><br>
-         If "ctrlAutoRefresh" is activated, this attribute can be used to determine the FHEMWEB device whose active browser pages
-         should be regularly reloaded.
-       </li>
-       <br>
-
        <a id="SolarForecast-attr-ctrlBackupFilesKeep"></a>
        <li><b>ctrlBackupFilesKeep &lt;Integer&gt; </b><br>
          Defines the number of generations of backup files
@@ -20814,88 +21119,64 @@ to ensure that the system configuration is correct.
          </ul>
        </li>
        <br>
-
-       <a id="SolarForecast-attr-flowGraphicCss"></a>
-       <li><b>flowGraphicCss </b><br>
-         Defines the style for the energy flow graph. The attribute is automatically preset.
-         To change the flowGraphicCss attribute, please accept the default and adjust it: <br><br>
+       
+       <a id="SolarForecast-attr-flowGraphicControl"></a>
+       <li><b>flowGraphicControl &lt;Key1=Value1&gt; &lt;Key2=Value2&gt; ... </b><br>
+         By optionally specifying the key=value pairs listed below, various display properties of the energy flow 
+         graph can be influenced. <br>
+         The entry can be made in several lines.
+         <br><br>
 
          <ul>
-           .flowg.text           { stroke: none; fill: gray; font-size: 60px; } <br>
-           .flowg.bat25          { stroke: red; fill: red; }                    <br>
-           .flowg.bat50          { stroke: darkorange; fill: darkorange; }      <br>
-           .flowg.bat75          { stroke: green; fill: green; }                <br>
-           .flowg.grid_color1    { fill: green; }                               <br>
-           .flowg.grid_color2    { fill: red; }                                 <br>
-           .flowg.grid_color3    { fill: gray; }                                <br>
-           .flowg.inactive_in    { stroke: gray;       stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.2; }                                                                     <br>
-           .flowg.inactive_out   { stroke: gray;       stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.2; }                                                                     <br>
-           .flowg.active_in      { stroke: red;        stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; }   <br>
-           .flowg.active_out     { stroke: darkorange; stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; }   <br>
-           .flowg.active_bat_in  { stroke: darkorange; stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; }   <br>
-           .flowg.active_bat_out { stroke: green;      stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; }   <br>
+         <table>
+         <colgroup> <col width="26%"> <col width="74%"> </colgroup>
+            <tr><td> <b>animate</b>                 </td><td> Animates the energy flow graphic if displayed. (<a href="#SolarForecast-attr-graphicSelect">graphicSelect</a>)         </td></tr>
+            <tr><td>                                </td><td><b>0</b> - Animation off, <b>1</b> - Animation on, default: 1                                                           </td></tr>
+            <tr><td>                                </td><td>                                                                                                                        </td></tr>
+            <tr><td> <b>consumerdist</b>            </td><td>Controls the distance between the consumer icons.                                                                       </td></tr>
+            <tr><td>                                </td><td>Value: <b>80 ... 500</b>, default: 130                                                                                  </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+            <tr><td> <b>h2consumerdist</b>          </td><td>Extension of the vertical distance between the house and the consumer icons.                                            </td></tr>
+            <tr><td>                                </td><td>Value: <b>0 ... 999</b>, default: 0                                                                                     </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>shift</b>                   </td><td>Horizontal shift of the energy flow graph.                                                                              </td></tr>
+			<tr><td>                                </td><td>Value: <b>-80 ... 80</b>, default: 0                                                                                    </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>showconsumer</b>            </td><td>Display of consumers in the energy flow chart.                                                                          </td></tr>
+			<tr><td>                                </td><td><b>0</b> - Display off, <b>1</b> - Display on, default: 1                                                               </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>showconsumerdummy</b>       </td><td>Controls the display of the dummy consumer. The dummy consumer is assigned the                                          </td></tr>
+			<tr><td>                                </td><td>energy consumption that cannot be assigned to other consumers.                                                          </td></tr>
+			<tr><td>                                </td><td><b>0</b> - Display off, <b>1</b> - Display on, default: 1                                                               </td></tr>	
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>showconsumerpower</b>       </td><td>Controls the display of the consumers' energy consumption.                                                              </td></tr>
+			<tr><td>                                </td><td><b>0</b> - Display off, <b>1</b> - Display on, default: 1                                                               </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>showconsumerremaintime</b>  </td><td>Controls the display of the remaining running time (minutes) of the loads.                                              </td></tr>
+			<tr><td>                                </td><td><b>0</b> - Display off, <b>1</b> - Display on, default: 1                                                               </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>size </b>                   </td><td>Size of the energy flow graphic in pixels if displayed. (<a href="#SolarForecast-attr-graphicSelect">graphicSelect</a>) </td></tr>
+			<tr><td>                                </td><td>Value: <b>Integer</b>, default: 400                                                                                     </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>strokecolina </b>           </td><td>Color of an inactive line                                                                                               </td></tr>
+			<tr><td>                                </td><td>Value: <b>Hex (e.g. #cc3300) or designation (e.g. red, blue)</b>, default: gray                                         </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>strokecolsig </b>           </td><td>Color of an active signal line                                                                                          </td></tr>
+			<tr><td>                                </td><td>Value: <b>Hex (e.g. #cc3300) or designation (e.g. red, blue)</b>, default: red                                          </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>strokecolstd </b>           </td><td>Color of an active standard line                                                                                        </td></tr>
+			<tr><td>                                </td><td>Value: <b>Hex (e.g. #cc3300) or designation (e.g. red, blue)</b>, default: darkorange                                   </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>strokewidth </b>            </td><td>Width of the lines                                                                                                      </td></tr>
+			<tr><td>                                </td><td>Value: <b>Integer</b>, default: 25                                                                                      </td></tr>
+        </table>
          </ul>
-
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicAnimate"></a>
-       <li><b>flowGraphicAnimate </b><br>
-         Animates the energy flow graph if displayed.
-         Siehe auch Attribut <a href="#SolarForecast-attr-graphicSelect">graphicSelect</a>. <br>
-         (default: 0)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicConsumerDistance"></a>
-       <li><b>flowGraphicConsumerDistance </b><br>
-         Controls the spacing between consumer icons in the energy flow graph if displayed.
-         Siehe auch Attribut <a href="#SolarForecast-attr-flowGraphicShowConsumer">flowGraphicShowConsumer</a>. <br>
-         (default: 130)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicShowConsumer"></a>
-       <li><b>flowGraphicShowConsumer </b><br>
-         Suppresses the display of loads in the energy flow graph when set to "0". <br>
-         (default: 1)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicShift"></a>
-       <li><b>flowGraphicShift &lt;Pixel/10&gt; </b><br>
-         Horizontal shift of the energy flow graph. <br>
-         (default: 0)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicShowConsumerDummy"></a>
-       <li><b>flowGraphicShowConsumerDummy </b><br>
-         Shows or suppresses the dummy consumer in the energy flow graph. <br>
-         The dummy consumer is assigned the energy consumption that could not be assigned to other consumers. <br>
-         (default: 1)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicShowConsumerPower"></a>
-       <li><b>flowGraphicShowConsumerPower </b><br>
-         Shows or suppresses the energy consumption of the loads in the energy flow graph. <br>
-         (default: 1)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicShowConsumerRemainTime"></a>
-       <li><b>flowGraphicShowConsumerRemainTime </b><br>
-         Shows or suppresses the remaining time (in minutes) of the loads in the energy flow graph. <br>
-         (default: 1)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicSize"></a>
-       <li><b>flowGraphicSize &lt;Pixel&gt; </b><br>
-         Size of the energy flow graph if displayed.
-         Siehe auch Attribut <a href="#SolarForecast-attr-graphicSelect">graphicSelect</a>. <br>
-         (default: 400)
+		 
+       <ul>
+         <b>Example: </b> <br>
+         attr &lt;name&gt; flowGraphicControl size=300 animate=0 consumerdist=100 showconsumer=1 showconsumerdummy=0 shift=-20 strokewidth=15 strokecolstd=#99cc00
+       </ul>
+	   
        </li>
        <br>
 
@@ -21081,7 +21362,6 @@ to ensure that the system configuration is correct.
             <tr><td>                                         </td><td>Consumer&lt;br&gt;Quickstart:consumerImmediatePlanning : : :                            </td></tr>
             <tr><td>                                         </td><td>Weather:graphicShowWeather : : :                                                        </td></tr>
             <tr><td>                                         </td><td>History:graphicHistoryHour : : :                                                        </td></tr>
-            <tr><td>                                         </td><td>GraphicSize:flowGraphicSize : : :                                                       </td></tr>
             <tr><td>                                         </td><td>ShowNight:graphicShowNight : : :                                                        </td></tr>
             <tr><td>                                         </td><td>Debug:ctrlDebug : : :                                                                   </td></tr>
          </table>
@@ -21201,9 +21481,7 @@ to ensure that the system configuration is correct.
 
        <a id="SolarForecast-attr-graphicSelect"></a>
        <li><b>graphicSelect </b><br>
-         Selects the graphic segments of the module to be displayed. <br>
-         To customize the energy flow graphic, the <a href="#SolarForecast-attr-flowGraphicCss">flowGraphicCss</a>
-         attribute is available in addition to the flowGraphic.* attributes.
+         Selects the graphic segments of the module to be displayed.
          <br><br>
 
          <ul>
@@ -21242,18 +21520,6 @@ to ensure that the system configuration is correct.
        </li>
        <br>
 
-       <a id="SolarForecast-attr-graphicStartHtml"></a>
-       <li><b>graphicStartHtml &lt;HTML-String&gt; </b><br>
-         Specify any HTML string to be executed before the graphics code.
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-graphicEndHtml"></a>
-       <li><b>graphicEndHtml &lt;HTML-String&gt; </b><br>
-         Specify any HTML string that will be executed after the graphic code.
-       </li>
-       <br>
-
        <a id="SolarForecast-attr-graphicSpaceSize"></a>
        <li><b>graphicSpaceSize &lt;value&gt; </b><br>
          Defines how much space in px above or below the bars (with display type differential (diff)) is kept free for
@@ -21282,7 +21548,7 @@ to ensure that the system configuration is correct.
 
        Specifies an arbitrary Device and its Readings to deliver the battery performance data.
        The module assumes that the numerical value of the readings is always positive.
-       It can also be a dummy device with corresponding readings. The meaning of the respective "Readingname" is:
+       It can also be a dummy device with corresponding readings.
        <br><br>
 
        <ul>
@@ -21323,35 +21589,47 @@ to ensure that the system configuration is correct.
 
        <a id="SolarForecast-attr-setupInverterDev" data-pattern="setupInverterDev.*"></a>
        <li><b>setupInverterDevXX &lt;Inverter Device Name&gt; pv=&lt;Readingname&gt;:&lt;Unit&gt; etotal=&lt;Readingname&gt;:&lt;Unit&gt; 
-                                 [capacity=&lt;max. WR-Leistung&gt;] [icon=&lt;Day&gt;[@&lt;Color&gt;][:&lt;Night&gt;[@&lt;Color&gt;]]] </b> <br><br>
+                                 capacity=&lt;max. WR-Leistung&gt; [strings=&lt;String1&gt;,&lt;String2&gt;,...]
+                                 [feed=&lt;Delivery type&gt;] [limit=&lt;0..100&gt;]
+                                 [icon=&lt;Day&gt;[@&lt;Color&gt;][:&lt;Night&gt;[@&lt;Color&gt;]]] </b> <br><br>
 
-       Specifies any Device and its Readings to deliver the current PV generation values.
-       It can also be a dummy device with appropriate readings.
-       The values of several inverter devices are merged e.g. in a dummy device and this device is specified with the
-       corresponding readings. <br>
-       Specifying <b>capacity</b> is optional, but strongly recommended to optimize prediction accuracy.
+       Defines any inverter device or solar charger and its readings to supply the current PV generation values. <br>
+       A solar charger does not convert the energy supplied by the solar cells into alternating current, 
+       but instead directly charges an existing battery <br>
+       (e.g. a Victron SmartSolar MPPT). <br>
+       Several devices can be defined one after the other in the setupInverterDev01..XX attributes. <br>
+       This can also be a dummy device with corresponding readings. <br>
+       The values of several inverters can be combined in a dummy device, for example, and this device can 
+       be specified with the corresponding readings. <br>
        <br><br>
 
        <ul>
         <table>
         <colgroup> <col width="15%"> <col width="85%"> </colgroup>
-           <tr><td> <b>icon</b>     </td><td>Icon for displaying the inverter in the flow chart (optional)                                           </td></tr>
-           <tr><td>                 </td><td><b>&lt;Day&gt;</b> - Icon and optional color for activity after sunrise                                 </td></tr>
-           <tr><td>                 </td><td><b>&lt;Night&gt;</b> - Icon and optional color after sunset, otherwise the moon phase is displayed      </td></tr>           
-           <tr><td> <b>pv</b>       </td><td>Reading which provides the current PV generation as a positive value                                    </td></tr>
-           <tr><td> <b>etotal</b>   </td><td>Reading which provides the total PV energy generated (a steadily increasing counter).                   </td></tr>
-           <tr><td>                 </td><td>If the reading violates the specification of a continuously rising counter,                             </td></tr>
-           <tr><td>                 </td><td>SolarForecast handles this error and reports the situation by means of a log message.                   </td></tr>
-           <tr><td> <b>Einheit</b>  </td><td>the respective unit (W,kW,Wh,kWh)                                                                       </td></tr>
-           <tr><td> <b>capacity</b> </td><td>Rated power of the inverter according to data sheet, i.e. max. possible output in Watts                 </td></tr>
-           <tr><td>                 </td><td>(The entry is optional, but is strongly recommended)                                                    </td></tr>
+           <tr><td> <b>pv</b>       </td><td>Reading which provides the current PV generation as a positive value                                        </td></tr>
+           <tr><td> <b>etotal</b>   </td><td>Reading which provides the total PV energy generated (a steadily increasing counter).                       </td></tr>
+           <tr><td>                 </td><td>If the reading violates the specification of a continuously rising counter,                                 </td></tr>
+           <tr><td>                 </td><td>SolarForecast handles this error and reports the situation by means of a log message.                       </td></tr>
+           <tr><td> <b>Einheit</b>  </td><td>the respective unit (W,kW,Wh,kWh)                                                                           </td></tr>
+           <tr><td> <b>capacity</b> </td><td>Rated power of the inverter according to data sheet, i.e. max. possible output in Watts                     </td></tr>
+           <tr><td> <b>strings</b>  </td><td>Comma-separated list of the strings assigned to the inverter (optional). The string names                   </td></tr>
+           <tr><td>                 </td><td>are defined in the <a href=“#SolarForecast-attr-setupInverterStrings”>setupInverterStrings</a> attribute.   </td></tr>
+           <tr><td>                 </td><td>If 'strings' is not specified, all defined string names are assigned to the inverter.                       </td></tr>         
+           <tr><td> <b>feed</b>     </td><td>Defines special properties of the device's energy supply (optional).                                        </td></tr>
+           <tr><td>                 </td><td>If the key is not set, the device feeds the PV energy into the house's AC grid.                             </td></tr>
+           <tr><td>                 </td><td><b>bat</b> - the device supplies energy exclusively to the battery                                          </td></tr>
+           <tr><td>                 </td><td><b>grid</b> - the energy is fed exclusively into the public grid                                            </td></tr>
+           <tr><td> <b>limit</b>    </td><td>Defines any active power limitation in % (optional).                                                        </td></tr>
+           <tr><td> <b>icon</b>     </td><td>Icon for displaying the inverter in the flow chart (optional)                                               </td></tr>
+           <tr><td>                 </td><td><b>&lt;Day&gt;</b> - Icon and optional color for activity after sunrise                                     </td></tr>
+           <tr><td>                 </td><td><b>&lt;Night&gt;</b> - Icon and optional color after sunset, otherwise the moon phase is displayed          </td></tr>           
         </table>
        </ul>
        <br>
 
        <ul>
          <b>Example: </b> <br>
-         attr &lt;name&gt; setupInverterDev01 STP5000 pv=total_pac:kW etotal=etotal:kWh capacity=5000 icon=inverter@red:solar
+         attr &lt;name&gt; setupInverterDev01 STP5000 pv=total_pac:kW etotal=etotal:kWh capacity=5000 strings=Garage icon=inverter@red:solar
        </ul>
        <br>
 
@@ -21380,9 +21658,9 @@ to ensure that the system configuration is correct.
                             gfeedin=&lt;Readingname&gt;:&lt;Unit&gt; feedtotal=&lt;Readingname&gt;:&lt;Unit&gt;
                             [conprice=&lt;Field&gt;] [feedprice=&lt;Field&gt;] </b> <br><br>
 
-       Sets any device and its readings for energy measurement.
+       Defines any device and its readings for measuring energy into or out of the public grid.
        The module assumes that the numeric value of the readings is positive.
-       It can also be a dummy device with corresponding readings. The meaning of the respective "Readingname" is:
+       It can also be a dummy device with corresponding readings.
        <br><br>
 
        <ul>
@@ -22600,11 +22878,13 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
          <table>
          <colgroup> <col width="20%"> <col width="80%"> </colgroup>
             <tr><td> <b>ietotal </b>        </td><td>Stand gesamte bisher erzeugte Energie des Wechselrichters (Wh)              </td></tr>
+            <tr><td> <b>ifeed </b>          </td><td>Eigenschaften der Energielieferung                                          </td></tr>
             <tr><td> <b>igeneration </b>    </td><td>aktuelle PV Erzeugung (W)                                                   </td></tr>
             <tr><td> <b>iicon </b>          </td><td>die evtl. festgelegten Icons zur Darstellung des Gerätes in der Grafik      </td></tr>
             <tr><td> <b>ialias </b>         </td><td>Alias des Devices                                                           </td></tr>
             <tr><td> <b>iname </b>          </td><td>Name des Devices                                                            </td></tr>
             <tr><td> <b>invertercap </b>    </td><td>die nominale Leistung (W) des Wechselrichters (falls definiert)             </td></tr>
+            <tr><td> <b>istrings </b>       </td><td>Liste der dem Wechselrichter zugeordneten Strings (falls definiert)         </td></tr>
 		 </table>
       </ul>
 
@@ -22621,6 +22901,7 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
          <table>
          <colgroup> <col width="20%"> <col width="80%"> </colgroup>
             <tr><td> <b>petotal </b>        </td><td>Stand gesamte bisher erzeugte Energie des Erzeugers (Wh)                    </td></tr>
+            <tr><td> <b>pfeed </b>          </td><td>Eigenschaften der Energielieferung                                          </td></tr>
             <tr><td> <b>pgeneration </b>    </td><td>aktuelle Leistung (W)                                                       </td></tr>
             <tr><td> <b>picon </b>          </td><td>die evtl. festgelegten Icons zur Darstellung des Gerätes in der Grafik      </td></tr>
             <tr><td> <b>palias </b>         </td><td>Alias des Devices                                                           </td></tr>
@@ -22649,22 +22930,6 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
   <br><br>
   <ul>
      <ul>
-       <a id="SolarForecast-attr-affect70percentRule"></a>
-       <li><b>affect70percentRule</b><br>
-         Wenn gesetzt, wird die prognostizierte Leistung entsprechend der 70% Regel begrenzt. <br><br>
-
-         <ul>
-         <table>
-         <colgroup> <col width="15%"> <col width="85%"> </colgroup>
-            <tr><td> <b>0</b>       </td><td>keine Begrenzung der prognostizierten PV-Erzeugung (default)                                 </td></tr>
-            <tr><td> <b>1</b>       </td><td>die prognostizierte PV-Erzeugung wird auf 70% der installierten Stringleistung(en) begrenzt  </td></tr>
-            <tr><td> <b>dynamic</b> </td><td>die prognostizierte PV-Erzeugung wird begrenzt wenn 70% der installierten                    </td></tr>
-            <tr><td>                </td><td>Stringleistung(en) zzgl. des prognostizierten Verbrauchs überschritten wird                  </td></tr>
-         </table>
-         </ul>
-       </li>
-       <br>
-
        <a id="SolarForecast-attr-affectBatteryPreferredCharge"></a>
        <li><b>affectBatteryPreferredCharge </b><br>
          Es werden Verbraucher mit dem Mode <b>can</b> erst dann eingeschaltet, wenn die angegebene Batterieladung (%)
@@ -22974,21 +23239,6 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
        </li>
        <br>
 
-       <a id="SolarForecast-attr-ctrlAutoRefresh"></a>
-       <li><b>ctrlAutoRefresh</b> <br>
-         Wenn gesetzt, werden aktive Browserseiten des FHEMWEB-Devices welches das SolarForecast-Device aufgerufen hat, nach der
-         eingestellten Zeit (Sekunden) neu geladen. Sollen statt dessen Browserseiten eines bestimmten FHEMWEB-Devices neu
-         geladen werden, kann dieses Device mit dem Attribut "ctrlAutoRefreshFW" festgelegt werden.
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-ctrlAutoRefreshFW"></a>
-       <li><b>ctrlAutoRefreshFW</b><br>
-         Ist "ctrlAutoRefresh" aktiviert, kann mit diesem Attribut das FHEMWEB-Device bestimmt werden dessen aktive Browserseiten
-         regelmäßig neu geladen werden sollen.
-       </li>
-       <br>
-
        <a id="SolarForecast-attr-ctrlBackupFilesKeep"></a>
        <li><b>ctrlBackupFilesKeep &lt;Ganzzahl&gt;</b><br>
          Legt die Anzahl der Generationen von Sicherungsdateien
@@ -23232,88 +23482,64 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
          </ul>
        </li>
        <br>
-
-       <a id="SolarForecast-attr-flowGraphicCss"></a>
-       <li><b>flowGraphicCss </b><br>
-         Definiert den Style für die Energieflußgrafik. Das Attribut wird automatisch vorbelegt.
-         Zum Ändern des flowGraphicCss-Attributes bitte den Default übernehmen und anpassen: <br><br>
+       
+       <a id="SolarForecast-attr-flowGraphicControl"></a>
+       <li><b>flowGraphicControl &lt;Schlüssel1=Wert1&gt; &lt;Schlüssel2=Wert2&gt; ... </b><br>
+         Durch die optionale Angabe der nachfolgend aufgeführten Schlüssel=Wert Paare können verschiedene 
+         Anzeigeeigenschaften der Energieflußgrafik beeinflusst werden. <br>
+         Die Eingabe kann mehrzeilig erfolgen.
+         <br><br>
 
          <ul>
-           .flowg.text           { stroke: none; fill: gray; font-size: 60px; } <br>
-           .flowg.bat25          { stroke: red; fill: red; }                    <br>
-           .flowg.bat50          { stroke: darkorange; fill: darkorange; }      <br>
-           .flowg.bat75          { stroke: green; fill: green; }                <br>
-           .flowg.grid_color1    { fill: green; }                               <br>
-           .flowg.grid_color2    { fill: red; }                                 <br>
-           .flowg.grid_color3    { fill: gray; }                                <br>
-           .flowg.inactive_in    { stroke: gray;       stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.2; }                                                                     <br>
-           .flowg.inactive_out   { stroke: gray;       stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.2; }                                                                     <br>
-           .flowg.active_in      { stroke: red;        stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; }   <br>
-           .flowg.active_out     { stroke: darkorange; stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; }   <br>
-           .flowg.active_bat_in  { stroke: darkorange; stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; }   <br>
-           .flowg.active_bat_out { stroke: green;      stroke-dashoffset: 20; stroke-dasharray: 10; opacity: 0.8; animation: dash 0.5s linear; animation-iteration-count: infinite; }   <br>
+         <table>
+         <colgroup> <col width="26%"> <col width="74%"> </colgroup>
+            <tr><td> <b>animate</b>                 </td><td> Animiert die Energieflußgrafik sofern angezeigt. (<a href="#SolarForecast-attr-graphicSelect">graphicSelect</a>)       </td></tr>
+            <tr><td>                                </td><td><b>0</b> - Animation aus,  <b>1</b> - Animation an, default: 1                                                          </td></tr>
+            <tr><td>                                </td><td>                                                                                                                        </td></tr>
+            <tr><td> <b>consumerdist</b>            </td><td>Steuert den Abstand zwischen den Verbraucher-Icons.                                                                     </td></tr>
+            <tr><td>                                </td><td>Wert: <b>80 ... 500</b>, default: 130                                                                                   </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+            <tr><td> <b>h2consumerdist</b>          </td><td>Erweiterung des vertikalen Abstandes zwischen dem Haus und den Verbraucher-Icons.                                       </td></tr>
+            <tr><td>                                </td><td>Wert: <b>0 ... 999</b>, default: 0                                                                                      </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>shift</b>                   </td><td>Horizontale Verschiebung der Energieflußgrafik.                                                                         </td></tr>
+			<tr><td>                                </td><td>Wert: <b>-80 ... 80</b>, default: 0                                                                                     </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>showconsumer</b>            </td><td>Anzeige der Verbraucher in der Energieflußgrafik.                                                                       </td></tr>
+			<tr><td>                                </td><td><b>0</b> - Anzeige aus,  <b>1</b> - Anzeige an, default: 1                                                              </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>showconsumerdummy</b>       </td><td>Steuert die Anzeige des Dummy-Verbrauchers. Dem Dummy-Verbraucher wird der                                              </td></tr>
+			<tr><td>                                </td><td>Energieverbrauch zugewiesen der anderen Verbrauchern nicht zugeordnet werden kann.                                      </td></tr>
+			<tr><td>                                </td><td><b>0</b> - Anzeige aus,  <b>1</b> - Anzeige an, default: 1                                                              </td></tr>	
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>showconsumerpower</b>       </td><td>Steuert die Anzeige des Energieverbrauchs der Verbraucher.                                                              </td></tr>
+			<tr><td>                                </td><td><b>0</b> - Anzeige aus,  <b>1</b> - Anzeige an, default: 1                                                              </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>showconsumerremaintime</b>  </td><td>Steuert die Anzeige der Restlaufzeit (Minuten) der Verbraucher.                                                         </td></tr>
+			<tr><td>                                </td><td><b>0</b> - Anzeige aus,  <b>1</b> - Anzeige an, default: 1                                                              </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>size </b>                   </td><td>Größe der Energieflußgrafik in Pixel sofern angezeigt. (<a href="#SolarForecast-attr-graphicSelect">graphicSelect</a>)  </td></tr>
+			<tr><td>                                </td><td>Wert: <b>Ganzzahl</b>, default: 400                                                                                     </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>strokecolina </b>           </td><td>Farbe einer inaktiven Linie                                                                                             </td></tr>
+			<tr><td>                                </td><td>Wert: <b>Hex (z.B. #cc3300) oder Bezeichnung (z.B. red, blue)</b>, default: gray                                        </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>strokecolsig </b>           </td><td>Farbe einer aktiven Signallinie                                                                                         </td></tr>
+			<tr><td>                                </td><td>Wert: <b>Hex (z.B. #cc3300) oder Bezeichnung (z.B. red, blue)</b>, default: red                                         </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>strokecolstd </b>           </td><td>Farbe einer aktiven Standardlinie                                                                                       </td></tr>
+			<tr><td>                                </td><td>Wert: <b>Hex (z.B. #cc3300) oder Bezeichnung (z.B. red, blue)</b>, default: darkorange                                  </td></tr>
+			<tr><td>                                </td><td>                                                                                                                        </td></tr>
+			<tr><td> <b>strokewidth </b>            </td><td>Breite der Linien                                                                                                       </td></tr>
+			<tr><td>                                </td><td>Wert: <b>Ganzzahl</b>, default: 25                                                                                      </td></tr>
+        </table>
          </ul>
-
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicAnimate"></a>
-       <li><b>flowGraphicAnimate </b><br>
-         Animiert die Energieflußgrafik sofern angezeigt.
-         Siehe auch Attribut <a href="#SolarForecast-attr-graphicSelect">graphicSelect</a>. <br>
-         (default: 0)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicConsumerDistance"></a>
-       <li><b>flowGraphicConsumerDistance </b><br>
-         Steuert den Abstand zwischen den Consumer-Icons in der Energieflußgrafik sofern angezeigt.
-         Siehe auch Attribut <a href="#SolarForecast-attr-flowGraphicShowConsumer">flowGraphicShowConsumer</a>. <br>
-         (default: 130)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicShowConsumer"></a>
-       <li><b>flowGraphicShowConsumer </b><br>
-         Unterdrückt die Anzeige der Verbraucher in der Energieflußgrafik wenn auf "0" gesetzt. <br>
-         (default: 1)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicShift"></a>
-       <li><b>flowGraphicShift &lt;Pixel/10&gt; </b><br>
-         Horizontale Verschiebung der Energieflußgrafik. <br>
-         (default: 0)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicShowConsumerDummy"></a>
-       <li><b>flowGraphicShowConsumerDummy </b><br>
-         Zeigt bzw. unterdrückt den Dummy-Verbraucher in der Energieflußgrafik. <br>
-         Dem Dummy-Verbraucher wird der Energieverbrauch zugewiesen der anderen Verbrauchern nicht zugeordnet werden konnte. <br>
-         (default: 1)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicShowConsumerPower"></a>
-       <li><b>flowGraphicShowConsumerPower </b><br>
-         Zeigt bzw. unterdrückt den Energieverbrauch der Verbraucher in der Energieflußgrafik. <br>
-         (default: 1)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicShowConsumerRemainTime"></a>
-       <li><b>flowGraphicShowConsumerRemainTime </b><br>
-         Zeigt bzw. unterdrückt die Restlaufzeit (in Minuten) der Verbraucher in der Energieflußgrafik. <br>
-         (default: 1)
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-flowGraphicSize"></a>
-       <li><b>flowGraphicSize &lt;Pixel&gt; </b><br>
-         Größe der Energieflußgrafik sofern angezeigt.
-         Siehe auch Attribut <a href="#SolarForecast-attr-graphicSelect">graphicSelect</a>. <br>
-         (default: 400)
+		 
+       <ul>
+         <b>Beispiel: </b> <br>
+         attr &lt;name&gt; flowGraphicControl size=300 animate=0 consumerdist=100 showconsumer=1 showconsumerdummy=0 shift=-20 strokewidth=15 strokecolstd=#99cc00
+       </ul>
+	   
        </li>
        <br>
 
@@ -23499,7 +23725,6 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
             <tr><td>                                         </td><td>Consumer&lt;br&gt;Sofortstart:consumerImmediatePlanning : : :                 </td></tr>
             <tr><td>                                         </td><td>Wetter:graphicShowWeather : : :                                               </td></tr>
             <tr><td>                                         </td><td>History:graphicHistoryHour : : :                                              </td></tr>
-            <tr><td>                                         </td><td>GraphicSize:flowGraphicSize : : :                                             </td></tr>
             <tr><td>                                         </td><td>ShowNight:graphicShowNight : : :                                              </td></tr>
             <tr><td>                                         </td><td>Debug:ctrlDebug : : :                                                         </td></tr>
          </table>
@@ -23618,9 +23843,8 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
 
        <a id="SolarForecast-attr-graphicSelect"></a>
        <li><b>graphicSelect </b><br>
-         Wählt die anzuzeigenden Grafiksegmente des Moduls aus. <br>
-         Zur Anpassung der Energieflußgrafik steht neben den flowGraphic.*-Attributen auch
-         das Attribut <a href="#SolarForecast-attr-flowGraphicCss">flowGraphicCss</a> zur Verfügung. <br><br>
+         Wählt die anzuzeigenden Grafiksegmente des Moduls aus.
+         <br><br>
 
          <ul>
          <table>
@@ -23658,18 +23882,6 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
        </li>
        <br>
 
-       <a id="SolarForecast-attr-graphicStartHtml"></a>
-       <li><b>graphicStartHtml &lt;HTML-String&gt; </b><br>
-         Angabe eines beliebigen HTML-Strings der vor dem Grafik-Code ausgeführt wird.
-       </li>
-       <br>
-
-       <a id="SolarForecast-attr-graphicEndHtml"></a>
-       <li><b>graphicEndHtml &lt;HTML-String&gt; </b><br>
-         Angabe eines beliebigen HTML-Strings der nach dem Grafik-Code ausgeführt wird.
-       </li>
-       <br>
-
        <a id="SolarForecast-attr-graphicSpaceSize"></a>
        <li><b>graphicSpaceSize &lt;value&gt; </b><br>
          Legt fest wieviel Platz in px über oder unter den Balken (bei Anzeigetyp Differential (diff)) zur Anzeige der
@@ -23698,7 +23910,7 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
 
        Legt ein beliebiges Device und seine Readings zur Lieferung der Batterie Leistungsdaten fest.
        Das Modul geht davon aus, dass der numerische Wert der Readings immer positiv ist.
-       Es kann auch ein Dummy Device mit entsprechenden Readings sein. Die Bedeutung des jeweiligen "Readingname" ist:
+       Es kann auch ein Dummy Device mit entsprechenden Readings sein.
        <br><br>
 
        <ul>
@@ -23739,35 +23951,48 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
 
        <a id="SolarForecast-attr-setupInverterDev" data-pattern="setupInverterDev.*"></a>
        <li><b>setupInverterDevXX &lt;Inverter Device Name&gt; pv=&lt;Readingname&gt;:&lt;Einheit&gt; etotal=&lt;Readingname&gt;:&lt;Einheit&gt; 
-                                 [capacity=&lt;max. WR-Leistung&gt;] [icon=&lt;Tag&gt;[@&lt;Farbe&gt;][:&lt;Nacht&gt;[@&lt;Farbe&gt;]]] </b> <br><br>
+                                 capacity=&lt;max. WR-Leistung&gt; [strings=&lt;String1&gt;,&lt;String2&gt;,...]
+                                 [feed=&lt;Liefertyp&gt;] [limit=&lt;0..100&gt;]
+                                 [icon=&lt;Tag&gt;[@&lt;Farbe&gt;][:&lt;Nacht&gt;[@&lt;Farbe&gt;]]] </b> <br><br>
 
-       Legt ein beliebiges Device und dessen Readings zur Lieferung der aktuellen PV Erzeugungswerte fest.
-       Es kann auch ein Dummy Device mit entsprechenden Readings sein.
-       Die Werte mehrerer Inverterdevices führt man z.B. in einem Dummy Device zusammen und gibt dieses Device mit den
-       entsprechenden Readings an. <br>
-       Die Angabe von <b>capacity</b> ist optional, wird aber zur Optimierung der Vorhersagegenauigkeit dringend empfohlen.
+       Legt ein beliebiges Wechselrichter-Gerät bzw. Solar-Ladegerät und dessen Readings zur Lieferung der aktuellen 
+       PV Erzeugungswerte fest. <br>
+       Ein Solar-Ladegerät wandelt die von den Solarzellen gelieferte Energie nicht in Wechselstrom um, sondern 
+       lädt damit direkt eine vorhandene Batterie <br>
+       (z.B. ein Victron SmartSolar MPPT). <br>
+       Es können nacheinander mehrere Geräte in den Attributen setupInverterDev01..XX definiert werden. <br>
+       Dabei kann es sich auch um ein Dummy Gerät mit entsprechenden Readings handeln. <br>
+       Die Werte mehrerer Wechselrichter kann man z.B. in einem Dummy Gerät zusammenführen und gibt dieses Gerät mit 
+       den entsprechenden Readings an. <br>
        <br><br>
 
        <ul>
         <table>
         <colgroup> <col width="15%"> <col width="85%"> </colgroup>
-           <tr><td> <b>icon</b>     </td><td>Icon zur Darstellung des Inverters in der Flowgrafik (optional)                                      </td></tr>
-           <tr><td>                 </td><td><b>&lt;Tag&gt;</b> - Icon und ggf. Farbe bei Aktivität nach Sonnenaufgang                            </td></tr>
-           <tr><td>                 </td><td><b>&lt;Nacht&gt;</b> - Icon und ggf. Farbe nach Sonnenuntergang, sonst wird die Mondphase angezeigt  </td></tr>
-           <tr><td> <b>pv</b>       </td><td>Reading welches die aktuelle PV-Erzeugung als positiven Wert liefert                                 </td></tr>
-           <tr><td> <b>etotal</b>   </td><td>Reading welches die gesamte erzeugte PV-Energie liefert (ein stetig aufsteigender Zähler)            </td></tr>
-           <tr><td>                 </td><td>Sollte des Reading die Vorgabe eines stetig aufsteigenden Zählers verletzen, behandelt               </td></tr>
-           <tr><td>                 </td><td>SolarForecast diesen Fehler und meldet die aufgetretene Situation durch einen Logeintrag.            </td></tr>
-           <tr><td> <b>Einheit</b>  </td><td>die jeweilige Einheit (W,kW,Wh,kWh)                                                                  </td></tr>
-           <tr><td> <b>capacity</b> </td><td>Bemessungsleistung des Wechselrichters gemäß Datenblatt, d.h. max. möglicher Output in Watt          </td></tr>
-           <tr><td>                 </td><td>(Die Angabe ist optional, wird aber dringend empfohlen zu setzen)                                    </td></tr>
+           <tr><td> <b>pv</b>       </td><td>Reading welches die aktuelle PV-Erzeugung als positiven Wert liefert                                        </td></tr>
+           <tr><td> <b>etotal</b>   </td><td>Reading welches die gesamte erzeugte PV-Energie liefert (ein stetig aufsteigender Zähler)                   </td></tr>
+           <tr><td>                 </td><td>Sollte des Reading die Vorgabe eines stetig aufsteigenden Zählers verletzen, behandelt                      </td></tr>
+           <tr><td>                 </td><td>SolarForecast diesen Fehler und meldet die aufgetretene Situation durch einen Logeintrag.                   </td></tr>
+           <tr><td> <b>Einheit</b>  </td><td>die jeweilige Einheit (W,kW,Wh,kWh)                                                                         </td></tr>
+           <tr><td> <b>capacity</b> </td><td>Bemessungsleistung des Wechselrichters gemäß Datenblatt, d.h. max. möglicher Output in Watt                 </td></tr>
+           <tr><td> <b>strings</b>  </td><td>Komma getrennte Liste der dem Wechselrichter zugeordneten Strings (optional). Die Stringnamen               </td></tr>
+           <tr><td>                 </td><td>werden im Attribut <a href="#SolarForecast-attr-setupInverterStrings">setupInverterStrings</a> definiert.   </td></tr>
+           <tr><td>                 </td><td>Ist 'strings' nicht angegeben, werden alle definierten Stringnamen dem Wechselrichter zugeordnet.           </td></tr>         
+           <tr><td> <b>feed</b>     </td><td>Definiert spezielle Eigenschaften der Energielieferung des Gerätes (optional).                              </td></tr>
+           <tr><td>                 </td><td>Ist der Schlüssel nicht gesetzt, speist das Gerät die PV-Energie in das Wechselstromnetz des Hauses ein.    </td></tr>
+           <tr><td>                 </td><td><b>bat</b> - das Gerät liefert die Energie ausschließlich an die Batterie                                   </td></tr>
+           <tr><td>                 </td><td><b>grid</b> - die Energie wird ausschließlich in das öffentlich Netz eingespeist                            </td></tr>
+           <tr><td> <b>limit</b>    </td><td>Definiert eine eventuelle Wirkleistungsbeschränkung in % (optional).                                        </td></tr>
+           <tr><td> <b>icon</b>     </td><td>Icon zur Darstellung des Inverters in der Flowgrafik (optional)                                             </td></tr>
+           <tr><td>                 </td><td><b>&lt;Tag&gt;</b> - Icon und ggf. Farbe bei Aktivität nach Sonnenaufgang                                   </td></tr>
+           <tr><td>                 </td><td><b>&lt;Nacht&gt;</b> - Icon und ggf. Farbe nach Sonnenuntergang, sonst wird die Mondphase angezeigt         </td></tr>
          </table>
        </ul>
        <br>
 
        <ul>
          <b>Beispiel: </b> <br>
-         attr &lt;name&gt; setupInverterDev01 STP5000 pv=total_pac:kW etotal=etotal:kWh capacity=5000 icon=inverter@red:solar
+         attr &lt;name&gt; setupInverterDev01 STP5000 pv=total_pac:kW etotal=etotal:kWh capacity=5000 strings=Garage icon=inverter@red:solar
        </ul>
        <br>
 
@@ -23796,9 +24021,9 @@ die ordnungsgemäße Anlagenkonfiguration geprüft werden.
                             gfeedin=&lt;Readingname&gt;:&lt;Einheit&gt; feedtotal=&lt;Readingname&gt;:&lt;Einheit&gt;
                             [conprice=&lt;Feld&gt;] [feedprice=&lt;Feld&gt;] </b> <br><br>
 
-       Legt ein beliebiges Device und seine Readings zur Energiemessung fest.
+       Legt ein beliebiges Device und seine Readings zur Energiemessung in bzw. aus dem öffentlichen Netz fest.
        Das Modul geht davon aus, dass der numerische Wert der Readings positiv ist.
-       Es kann auch ein Dummy Device mit entsprechenden Readings sein. Die Bedeutung des jeweiligen "Readingname" ist:
+       Es kann auch ein Dummy Device mit entsprechenden Readings sein.
        <br><br>
 
        <ul>

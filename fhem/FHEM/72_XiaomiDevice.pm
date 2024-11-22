@@ -1,5 +1,5 @@
 ﻿##############################################
-# $Id: 72_XiaomiDevice.pm 23021 2020-10-25 08:38:27Z moises $$$
+# $Id: 72_XiaomiDevice.pm 29324 2024-11-01 02:06:39Z moises $$$
 #
 #  72_XiaomiDevice.pm
 #
@@ -3974,7 +3974,11 @@ sub XiaomiDevice_Read($) {
     $Crypt::Rijndael_PP::DEFAULT_KEYSIZE = 128;
     $cbc = Crypt::CBC->new(-key => $key, -cipher => 'Crypt::Rijndael_PP',-iv => $iv, -literal_key => 1, -header => "none", -keysize => 16 );
   }
-  my $return = $cbc->decrypt_hex($data);
+  my $return = 00000000000000000000000000000000;
+  if(length($data)%32 == 0)
+  {
+    $return = $cbc->decrypt_hex($data);
+  }
 
   Log3 $name, 5, "$name: decrypted \n".$return;
   if( length($data) == 48 && $return !~ m/^{.*}/ )
