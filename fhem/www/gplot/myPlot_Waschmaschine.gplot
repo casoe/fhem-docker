@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2022-10-11 15:50:44
+# Created by FHEM/98_SVG.pm, 2024-11-11 13:07:57
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -10,8 +10,7 @@ set y2tics
 set grid ytics
 set ylabel ""
 set y2label ""
-set yrange [0:2500]
 
-#dblog MQTT2_DVES_A4CAD6:power
+#dblog MQTT2_DVES_A4CAD6:power:::
 
 plot "<IN>" using 1:2 axes x1y1 title 'Energieverbrauch in Watt' ls l0 lw 1 with steps

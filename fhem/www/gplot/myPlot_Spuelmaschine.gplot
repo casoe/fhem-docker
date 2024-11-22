@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2024-11-09 13:24:48
+# Created by FHEM/98_SVG.pm, 2024-11-22 12:04:19
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -10,6 +10,7 @@ set y2tics
 set grid ytics
 set ylabel ""
 set y2label ""
+set yrange [0:2500]
 
 #dblog MQTT2_DVES_0371A9:power:::
 
