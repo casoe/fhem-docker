@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: Common.pm 29221 2024-10-11 11:36:00Z Ellert $
+# $Id: Common.pm 29396 2024-12-03 17:01:07Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::Devices::AMConnect::Common;
-my $cvsid = '$Id: Common.pm 29221 2024-10-11 11:36:00Z Ellert $';
+my $cvsid = '$Id: Common.pm 29396 2024-12-03 17:01:07Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -48,6 +48,7 @@ BEGIN {
           CommandDeleteReading
           DoTrigger
           FmtDateTime
+          fhemTimeGm
           FW_ME
           FW_dir
           FW_wname
@@ -199,6 +200,7 @@ hideSchedulerButton=""
         url                     => 'https://raw.githubusercontent.com/AndriiHeonia/hull/master/dist/hull.js'
       },
       interval                  => 840,
+      isDst                     => -1,
       no_position_attr          => $noPositionAttr,
       interval_ws               => 7110,
       interval_ping             => 570,
@@ -211,7 +213,7 @@ hideSchedulerButton=""
       retry_interval_wsreopen   => 2,
       timeout_apiauth           => 5,
       timeout_getmower          => 5,
-      timeout_cmd               => 10,
+      timeout_cmd               => 15,
       midnightCycle             => 1,
       client_id                 => $client_id,
       grant_type                => 'client_credentials',
@@ -873,6 +875,7 @@ sub getMowerResponse {
     } else {
 
       my $result = eval { JSON::XS->new->utf8( not $::unicodeEncoding )->decode( $data ) };
+
       if ($@) {
 
         Log3( $name, 2, "$iam - JSON error while request: $@");
@@ -880,8 +883,10 @@ sub getMowerResponse {
       } else {
 
         $hash->{helper}{mowers} = $result->{data};
+
         my $maxMower = 0;
         $maxMower = @{$hash->{helper}{mowers}} if ( ref ( $hash->{helper}{mowers} ) eq 'ARRAY' );
+
         if ($maxMower <= $mowerNumber || $mowerNumber < 0 ) {
 
           Log3 $name, 2, "$iam wrong mower number $mowerNumber ($maxMower mower available). Change definition of $name.";
@@ -895,56 +900,11 @@ sub getMowerResponse {
           $foundMower .= "\n" . $i .' => '. $hash->{helper}{mowers}[$i]{attributes}{system}{name} . ' ' . $hash->{helper}{mowers}[$i]{id};
 
         }
+
+        $hash->{helper}{foundMower} = $foundMower;
         Log3 $name, 5, "$iam found $foundMower ";
 
-        if ( defined ( $hash->{helper}{mower}{id} ) && $hash->{helper}{midnightCycle} ) { # update dataset
-
-          $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp} = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp};
-          $hash->{helper}{mowerold}{attributes}{mower}{activity} = $hash->{helper}{mower}{attributes}{mower}{activity};
-          $hash->{helper}{mowerold}{attributes}{statistics}{numberOfCollisions} = $hash->{helper}{mower}{attributes}{statistics}{numberOfCollisions};
-
-        } elsif ( !defined ($hash->{helper}{mower}{id}) ) { # first data set
-
-          $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp} = $hash->{helper}{mowers}[$mowerNumber]{attributes}{metadata}{statusTimestamp};
-          $hash->{helper}{mowerold}{attributes}{mower}{activity} = $hash->{helper}{mowers}[$mowerNumber]{attributes}{mower}{activity};
-          $hash->{helper}{mowerold}{attributes}{statistics}{numberOfCollisions} = $hash->{helper}{mowers}[$mowerNumber]{attributes}{statistics}{numberOfCollisions};
-          $hash->{helper}{statistics}{numberOfCollisionsOld} = $hash->{helper}{mowers}[$mowerNumber]{attributes}{statistics}{numberOfCollisions};
-
-          if ( $hash->{helper}{mowers}[$mowerNumber]{attributes}{capabilities}{position} ) {
-
-            $hash->{helper}{searchpos} = [ dclone $hash->{helper}{mowers}[$mowerNumber]{attributes}{positions}[0] ];
-
-            if ( AttrVal( $name, 'mapImageCoordinatesToRegister', '' ) eq '' ) {
-              posMinMax( $hash, $hash->{helper}{mowers}[$mowerNumber]{attributes}{positions} );
-            }
-
-          }
-
-        }
-
-        $hash->{helper}{mower} = dclone( $hash->{helper}{mowers}[$mowerNumber] );
-        $hash->{helper}{mower_id} = $hash->{helper}{mower}{id};
-        $hash->{helper}{newdatasets} = 0;
-        
-        if ( $hash->{helper}{mower}{attributes}{capabilities}{position} ) {
-          setDevAttrList( $name );
-        } else {
-          setDevAttrList( $name, $hash->{helper}{no_position_attr} );
-        }
-
-        $hash->{helper}{storediff} = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} - $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp};
-
-        calculateStatistics( $hash ) if ( $hash->{helper}{midnightCycle} );
-
-        # Update readings
-        readingsBeginUpdate($hash);
-
-          readingsBulkUpdateIfChanged($hash, 'api_MowerFound', $foundMower );
-          fillReadings( $hash );
-          readingsBulkUpdate($hash, 'device_state', 'connected' );
-
-        readingsEndUpdate($hash, 1);
-
+        processingMowerResponse( $hash );
 
         # schedule new access token
         RemoveInternalTimer( $hash, \&getNewAccessToken );
@@ -960,7 +920,7 @@ sub getMowerResponse {
       }
 
     }
-    
+
   } else {
 
     readingsSingleUpdate( $hash, 'device_state', "error statuscode $statuscode", 1 );
@@ -978,9 +938,69 @@ sub getMowerResponse {
 }
 
 #########################
-sub getMowerWs {
-  
+sub processingMowerResponse {
+
   my ( $hash ) = @_;
+  my $name = $hash->{NAME};
+  my $type = $hash->{TYPE};
+  my $iam = "$type $name processingMowerResponse:";
+  my $mowerNumber = $hash->{helper}{mowerNumber};
+  my $foundMower = defined( $hash->{helper}{foundMower} ) ? $hash->{helper}{foundMower} : undef;
+
+  if ( defined ( $hash->{helper}{mower}{id} ) && $hash->{helper}{midnightCycle} ) { # update dataset
+
+    $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp} = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp};
+    $hash->{helper}{mowerold}{attributes}{mower}{activity} = $hash->{helper}{mower}{attributes}{mower}{activity};
+    $hash->{helper}{mowerold}{attributes}{statistics}{numberOfCollisions} = $hash->{helper}{mower}{attributes}{statistics}{numberOfCollisions};
+
+  } elsif ( !defined ($hash->{helper}{mower}{id}) ) { # first data set
+
+    $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp} = $hash->{helper}{mowers}[$mowerNumber]{attributes}{metadata}{statusTimestamp};
+    $hash->{helper}{mowerold}{attributes}{mower}{activity} = $hash->{helper}{mowers}[$mowerNumber]{attributes}{mower}{activity};
+    $hash->{helper}{mowerold}{attributes}{statistics}{numberOfCollisions} = $hash->{helper}{mowers}[$mowerNumber]{attributes}{statistics}{numberOfCollisions};
+    $hash->{helper}{statistics}{numberOfCollisionsOld} = $hash->{helper}{mowers}[$mowerNumber]{attributes}{statistics}{numberOfCollisions};
+
+    if ( $hash->{helper}{mowers}[$mowerNumber]{attributes}{capabilities}{position} ) {
+
+      $hash->{helper}{searchpos} = [ dclone $hash->{helper}{mowers}[$mowerNumber]{attributes}{positions}[0] ];
+
+      if ( AttrVal( $name, 'mapImageCoordinatesToRegister', '' ) eq '' ) {
+        posMinMax( $hash, $hash->{helper}{mowers}[$mowerNumber]{attributes}{positions} );
+      }
+
+    }
+
+  }
+
+  $hash->{helper}{mower} = dclone( $hash->{helper}{mowers}[$mowerNumber] );
+  $hash->{helper}{mower_id} = $hash->{helper}{mower}{id};
+  $hash->{helper}{newdatasets} = 0;
+  
+  if ( $hash->{helper}{mower}{attributes}{capabilities}{position} ) {
+    setDevAttrList( $name );
+  } else {
+    setDevAttrList( $name, $hash->{helper}{no_position_attr} );
+  }
+
+  $hash->{helper}{storediff} = $hash->{helper}{mower}{attributes}{metadata}{statusTimestamp} - $hash->{helper}{mowerold}{attributes}{metadata}{statusTimestamp};
+
+  calculateStatistics( $hash ) if ( $hash->{helper}{midnightCycle} );
+  $hash->{helper}{midnightCycle} = 0;
+
+  # Update readings
+  readingsBeginUpdate( $hash );
+
+    readingsBulkUpdateIfChanged( $hash, 'api_MowerFound', $foundMower ) if ( $foundMower );
+    fillReadings( $hash );
+    readingsBulkUpdate( $hash, 'device_state', 'connected' );
+
+  readingsEndUpdate( $hash, 1 );
+
+}
+
+#########################
+sub getMowerWs {
+  my ( $hash, $endpoint ) = @_;
   my $name = $hash->{NAME};
   my $type = $hash->{TYPE};
   my $iam = "$type $name getMowerWs:";
@@ -988,22 +1008,98 @@ sub getMowerWs {
   my $provider = ReadingsVal($name,".provider","");
   my $client_id = $hash->{helper}->{client_id};
   my $timeout = AttrVal( $name, 'timeoutGetMower', $hash->{helper}->{timeout_getmower} );
+  my $callback = \&getMowerResponseWs;
 
   my $header = "Accept: application/vnd.api+json\r\nX-Api-Key: " . $client_id . "\r\nAuthorization: Bearer " . $access_token . "\r\nAuthorization-Provider: " . $provider;
   Log3 $name, 5, "$iam header [ $header ]";
   readingsSingleUpdate( $hash, 'api_callsThisMonth' , ReadingsVal( $name,  'api_callsThisMonth', 0 ) + 1, 0) if ( $hash->{helper}{additional_polling} );
 
+  if ( $endpoint eq 'messages') { $callback = \&getEndpointResponse }
+
   ::HttpUtils_NonblockingGet( {
-    url        => APIURL . '/mowers/' . $hash->{helper}{mower}{id},
+    url        => APIURL . '/mowers/' . $hash->{helper}{mower}{id} . ($endpoint ? '/' . $endpoint : ''),
     timeout    => $timeout,
     hash       => $hash,
     method     => "GET",
     header     => $header,  
-    callback   => \&getMowerResponseWs,
+    callback   => $callback,
+    endpoint   => $endpoint,
     t_begin    => scalar gettimeofday()
   } );
 
   return undef;
+}
+
+#########################
+sub getEndpointResponse {
+
+  my ( $param, $err, $data ) = @_;
+  my $hash = $param->{hash};
+  my $name = $hash->{NAME};
+  my $type = $hash->{TYPE};
+  my $statuscode = $param->{code} // '';
+  my $endpoint = $param->{endpoint} // '';
+  my $iam = "$type $name getEndpointResponse:";
+
+  Log3 $name, 1, "$iam response time ". sprintf( "%.2f", ( gettimeofday() - $param->{t_begin} ) ) . ' s' if ( $param->{timeout} == 60 );
+  Log3 $name, 4, "$iam response calling \$endpoint >$endpoint<, \$statuscode >$statuscode<, \$err >$err<, \$param->url $param->{url} \n \$data >$data<";
+
+  if ( !$err && $statuscode == 200 && $data) {
+
+    if ( $data eq '' ) {
+
+      Log3 $name, 2, "$iam no mower data present";
+
+    } else {
+
+      my $result = eval { JSON::XS->new->allow_nonref(0)->utf8( not $unicodeEncoding )->decode( $data ) };
+
+      if ( $@ ) {
+
+        Log3( $name, 2, "$iam - JSON error while request: $@");
+
+      } elsif ( $endpoint eq 'messages' ) {
+
+        if ( defined $result->{data}{attributes}{messages} ) {
+
+          $hash->{helper}{endpoints}{$endpoint} = $result->{data};
+          $hash->{helper}->{mower_commandStatus} = 'OK - messages';
+          $hash->{helper}->{mower_commandSend} = 'messages';
+
+        } else {
+
+          $hash->{helper}->{mower_commandStatus} = 'OK - no messages recieved';
+          $hash->{helper}->{mower_commandSend} = 'messages';
+
+        }
+
+      }
+
+      readingsBeginUpdate($hash);
+
+        readingsBulkUpdateIfChanged( $hash, 'mower_commandStatus', $hash->{helper}{mower_commandStatus}, 1 );
+        readingsBulkUpdateIfChanged( $hash, 'mower_commandSend', $hash->{helper}{mower_commandSend}, 1 );
+
+      readingsEndUpdate($hash, 1);
+
+    }
+
+  } else {
+
+    readingsBeginUpdate($hash);
+
+      readingsBulkUpdateIfChanged( $hash, 'mower_commandStatus', "ERROR statuscode $statuscode", 1 );
+      readingsBulkUpdateIfChanged( $hash, 'mower_commandSend', $hash->{helper}{mower_commandSend}, 1 );
+
+    readingsEndUpdate($hash, 1);
+
+    Log3 $name, 1, "$iam \$statuscode >$statuscode<, \$err >$err<,\n \$data [$data] \n\$param->url $param->{url}";
+    DoTrigger($name, "MOWERAPI ERROR");
+
+  }
+
+  return undef;
+
 }
 
 #########################
@@ -1142,7 +1238,7 @@ sub Get {
     my $ret = listInternalData($hash);
     return $ret;
 
-  } elsif (  $setName eq 'MowerData' ) {
+  } elsif ( $setName eq 'MowerData' ) {
 
     my $ret = listMowerData($hash);
     return $ret;
@@ -1170,8 +1266,6 @@ sub Set {
   my $type = $hash->{TYPE};
   my $name = $hash->{NAME};
   my $iam = "$type $name Set:";
-  my @ti = localtime();
-  my $tcorr = ($ti[8] ? '2,1,0' : '1,2,0 ');
 
   return "$iam: needs at least one argument" if ( @val < 2 );
   return "Unknown argument, $iam is disabled, choose one of none:noArg" if ( IsDisabled( $name ) );
@@ -1313,9 +1407,23 @@ sub Set {
     return undef;
 
   ##########
-  } elsif ( ReadingsVal( $name, 'device_state', 'defined' ) !~ /defined|initialized|authentification|authenticated|update/ && $setName =~ /confirmError/ && AttrVal( $name, 'testing', '' ) ) {
+  } elsif ( ReadingsVal( $name, 'device_state', 'defined' ) !~ /defined|initialized|authentification|authenticated|update/
+    && $setName =~ /confirmError/ && $hash->{helper}{mower}{attributes}{capabilities}{canConfirmError} && AttrVal( $name, 'testing', '' ) ) {
 
     CMD($hash,$setName);
+    return undef;
+
+  ##########
+  } elsif ( ReadingsVal( $name, 'device_state', 'defined' ) !~ /defined|initialized|authentification|authenticated|update/
+    && $setName =~ /resetCuttingBladeUsageTime/ && defined( $hash->{helper}{mower}{attributes}{statistics}{cuttingBladeUsageTime} ) ) {
+
+    CMD($hash,$setName);
+    return undef;
+
+  ##########
+  } elsif ( ReadingsVal( $name, 'device_state', 'defined' ) !~ /defined|initialized|authentification|authenticated|update/ && $setName =~ /getMessages/ ) {
+
+    getMowerWs( $hash, 'messages' );
     return undef;
 
   ##########
@@ -1355,7 +1463,7 @@ sub Set {
 
   }
   ##########
-  my $ret = " getNewAccessToken:noArg ParkUntilFurtherNotice:noArg ParkUntilNextSchedule:noArg Pause:noArg Start:selectnumbers,30,30,600,0,lin Park:selectnumbers,30,30,600,0,lin ResumeSchedule:noArg getUpdate:noArg client_secret dateTime:$tcorr ";
+  my $ret = " getNewAccessToken:noArg ParkUntilFurtherNotice:noArg ParkUntilNextSchedule:noArg Pause:noArg Start:selectnumbers,30,30,600,0,lin Park:selectnumbers,30,30,600,0,lin ResumeSchedule:noArg getUpdate:noArg client_secret dateTime getMessages:noArg ";
   $ret .= "mowerScheduleToAttribute:noArg sendScheduleFromAttributeToMower:noArg ";
   $ret .= "cuttingHeight:1,2,3,4,5,6,7,8,9 " if ( defined $hash->{helper}{mower}{attributes}{settings}{cuttingHeight} );
   $ret .= "defaultDesignAttributesToAttribute:noArg mapZonesTemplateToAttribute:noArg chargingStationPositionToAttribute:noArg " if ( $hash->{helper}{mower}{attributes}{capabilities}{position} );
@@ -1380,7 +1488,8 @@ sub Set {
 
   }
 
-  $ret .= "confirmError:noArg " if ( AttrVal( $name, 'testing', '' ) );
+  $ret .= "confirmError:noArg " if ( $hash->{helper}{mower}{attributes}{capabilities}{canConfirmError} && AttrVal( $name, 'testing', '' ) );
+  $ret .= "resetCuttingBladeUsageTime " if ( defined( $hash->{helper}{mower}{attributes}{statistics}{cuttingBladeUsageTime} ) );
   return "Unknown argument $setName, choose one of".$ret;
   
 }
@@ -1398,6 +1507,7 @@ sub CMD {
   my $iam = "$type $name CMD:";
   my $timeout = AttrVal( $name, 'timeoutCMD', $hash->{helper}->{timeout_cmd} );
   my $method = 'POST';
+  my $ts = TimeLocal();
   $hash->{helper}{mower_commandSend} = $cmd[ 0 ] . ( $cmd[ 1 ] ? ' '.$cmd[ 1 ] : '' ) . ( $cmd[ 2 ] ? ' '.$cmd[ 2 ] : '' );
 
   if ( IsDisabled( $name ) ) {
@@ -1430,10 +1540,11 @@ my $header = "Accept: application/vnd.api+json\r\nX-Api-Key: ".$client_id."\r\nA
   elsif ($cmd[0] eq "StartInWorkArea" && !$cmd[2])
                                        { $json = '{"data": {"type":"'.$cmd[0].'","attributes":{"workAreaId":'.$cmd[1].'}}}'; $post = 'actions' }
   elsif ($cmd[0] eq "headlight")       { $json = '{"data": {"type":"settings","attributes":{"'.$cmd[0].'": {"mode": "'.$cmd[1].'"}}}}'; $post = 'settings' }
-  elsif ($cmd[0] eq "dateTime")        { $json = '{"data": {"type":"settings","attributes":{"'.$cmd[0].'": '.int(time + $cmd[1] * 3600).'}}}'; $post = 'settings' }
+  elsif ($cmd[0] eq "dateTime")        { $json = '{"data": {"type":"settings","attributes":{"'.$cmd[0].'": '.( $cmd[1] ? $cmd[1] : $ts ).'}}}'; $post = 'settings';$hash->{helper}{mower_commandSend} .= ( $cmd[1] ? '' : ' '.$ts ) }
   elsif ($cmd[0] eq "cuttingHeight")   { $json = '{"data": {"type":"settings","attributes":{"'.$cmd[0].'": '.$cmd[1].'}}}'; $post = 'settings' }
   elsif ($cmd[0] eq "stayOutZone")     { $json = '{"data": {"type":"stayOutZone","id":"'.$cmd[1].'","attributes":{"enable": '.$cmd[2].'}}}'; $post = 'stayOutZones/' . $cmd[1]; $method = 'PATCH' }
   elsif ($cmd[0] eq "confirmError")    { $json = '{}'; $post = 'errors/confirm' }
+  elsif ($cmd[0] eq "resetCuttingBladeUsageTime") { $json = '{}'; $post = 'statistics/resetCuttingBladeUsageTime' }
   elsif ($cmd[0] eq "sendScheduleFromAttributeToMower" && AttrVal( $name, 'mowerSchedule', '')) {
 
     my $perl = eval { JSON::XS->new->decode (AttrVal( $name, 'mowerSchedule', '')) };
@@ -1489,6 +1600,7 @@ sub CMDResponse {
   if( !$err && $statuscode == 202 && $data ) {
 
     my $result = eval { JSON::XS->new->decode($data) };
+
     if ($@) {
 
       Log3( $name, 2, "$iam - JSON error while request: $@");
@@ -1496,6 +1608,7 @@ sub CMDResponse {
     } else {
 
       $hash->{helper}{CMDResponse} = $result;
+
       if ($result->{data}) {
         
         Log3 $name, 5, $data; 
@@ -1532,6 +1645,8 @@ sub CMDResponse {
   readingsEndUpdate($hash, 1);
 
   Log3 $name, 2, "$iam \n\$statuscode >$statuscode<\n\$err >$err<,\n\$data >$data<\n\$param->{url} >$param->{url}<\n\$param->{data} >$param->{data}<";
+  DoTrigger($name, "MOWERAPI ERROR");
+  
   return undef;
 }
 
@@ -2580,6 +2695,9 @@ sub listStatisticsData {
     $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalDriveDistance</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalDriveDistance} / 1000 ) . '<sup>1</sup> </td><td> km </td></tr>';
     $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalRunningTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalRunningTime} / 3600 ) . '<sup>2</sup> </td><td> h </td></tr>';
     $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>totalSearchingTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{totalSearchingTime} / 3600 ) . ' </td><td> h </td></tr>';
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>cuttingBladeUsageTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{cuttingBladeUsageTime} / 3600 ) . ' </td><td> h </td></tr>' if ( defined $hash->{helper}{mower}{attributes}{statistics}{cuttingBladeUsageTime} );
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>upTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{upTime} / 3600 ) . ' </td><td> h </td></tr>' if ( defined $hash->{helper}{mower}{attributes}{statistics}{upTime} );
+    $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> $hash->{helper}{mower}{attributes}{statistics}{<b>downTime</b>} &emsp;</td><td> ' . sprintf( "%.0f", $hash->{helper}{mower}{attributes}{statistics}{downTime} / 3600 ) . ' </td><td> h </td></tr>' if ( defined $hash->{helper}{mower}{attributes}{statistics}{downTime} );
 
     my $prop = '';
     for my $item ( @items ) {
@@ -2717,13 +2835,13 @@ sub listErrorStack {
   my ( $hash ) = @_;
   my $name = $hash->{NAME};
   my $cnt = 0;
-  my $ret = '';
+  my $ret = '<html>';
   if ( $::init_done && defined( $hash->{helper}{mower}{type} ) && @{ $hash->{helper}{errorstack} } ) {
 
-    $ret .= '<html><table class="block wide">';
+    $ret .= '<table class="block wide">';
     $ret .= '<caption><b>Last Errors</b></caption><tbody>'; 
 
-    $ret .= '<tr class="col_header"><td> Timestamp </td><td> Description </td><td> &emsp;Zone &emsp;</td><td> Position </td></tr>';
+    $ret .= '<tr class="col_header"><td> Timestamp </td><td> Description </td><td> &emsp;Zone &emsp;</td><td> Longitude / Latitude </td></tr>';
 
     for ( my $i = 0; $i < @{ $hash->{helper}{errorstack} }; $i++ ) {
 
@@ -2732,15 +2850,38 @@ sub listErrorStack {
     }
 
     $ret .= '</tbody></table>';
-    $ret .= '</html>';
-
-    return $ret;
 
   } else {
 
-    return '<html><table class="block wide"><tr><td>No error in stack. </td></tr></table></html>';
+    $ret .= '<table class="block wide"><tr><td>No error in stack. </td></tr></table>';
 
   }
+
+  if ( $::init_done && defined ( $hash->{helper}{endpoints}{messages}{attributes}{messages} ) && ref $hash->{helper}{endpoints}{messages}{attributes}{messages} eq 'ARRAY' && @{ $hash->{helper}{endpoints}{messages}{attributes}{messages} } > 0 ) {
+
+
+    my @msg = @{ $hash->{helper}{endpoints}{messages}{attributes}{messages} };
+    $ret .= '<table class="block wide">';
+    $ret .= '<caption><b>Last Messages</b></caption><tbody>'; 
+
+    $ret .= '<tr class="col_header"><td> Timestamp </td><td> Description </td><td> Longitude / Latitude </td></tr>';
+    
+
+    for ( my $i = 0; $i < @{ $hash->{helper}{endpoints}{messages}{attributes}{messages} }; $i++ ) {
+
+      $ret .= '<tr class="column '.( $cnt++ % 2 ? 'odd' : 'even' ).'"><td> ' . FmtDateTimeGMT( $msg[$i]{time} ) . ' </td><td> ' . $msg[$i]{severity} . ' - ' . $errortable->{ $msg[$i]{code} } . ' </td><td> ' . ( defined $msg[$i]{longitude} ? $msg[$i]{longitude} : '-' ) . ' / ' . ( defined $msg[$i]{latitude} ? $msg[$i]{latitude} : '-' ) . ' </td></tr>';
+
+    }
+
+  } else {
+
+    $ret .= '<table class="block wide"><tr><td>No messages available. </td></tr></table>';
+
+  }
+
+  $ret .= '</html>';
+  return $ret;
+
 }
 
 #########################
@@ -2865,10 +3006,40 @@ sub listErrorCodes {
 }
 
 #########################
-# Format mower timestamp assuming mower time is always set to daylight saving time, because it is the mowing period.
 sub FmtDateTimeGMT {
-  my $ti = shift // 0;
-  my $ret = POSIX::strftime( "%F %H:%M:%S", gmtime( $ti ) );
+  # Returns a yyyy-mm-dd HH:MM:SS formated string for a UNIX like timestamp for local time (seconds since EPOCH)
+  my $ret = POSIX::strftime( "%F %H:%M:%S", gmtime( shift // 0 ) );
+}
+
+#########################
+# Calculate time timestamp in seconds regarding RTC time and DST
+sub TimeLocal {
+  # Creates a UNIX like timestamp for local time (seconds since EPOCH)
+  my @ti = localtime();
+  return ceil( fhemTimeGm( $ti[0], $ti[1], $ti[2], $ti[3], $ti[4], $ti[5] ) );
+}
+
+#########################
+sub autoDstSync {
+  my ( $hash ) = @_;
+  my @ti = localtime();
+  my $isDstOld = $hash->{helper}{isDst};
+  if ( $ti[8] ne $isDstOld && ( $ti[2] == 4 || $isDstOld eq -1 ) ) {
+
+    $hash->{helper}{isDst} = $ti[8];
+    InternalTimer( gettimeofday() + 7, \&CMDdateTime, $hash, 0 );
+
+  }
+  return
+}
+
+#########################
+sub CMDdateTime {
+  my ( $hash ) = @_;
+  my $name = $hash->{NAME};
+  RemoveInternalTimer( $hash, \&CMDdateTime );
+  CMD( $hash, 'dateTime' );
+  return
 }
 
 #########################
@@ -3140,6 +3311,8 @@ sub wsRead {
         }
 
       }
+
+      autoDstSync( $hash ) if ( AttrVal( $name, "mowerAutoSyncTime", 0 ) && $hash->{helper}{mower}{attributes}{metadata}{connected} );
 
     }
 

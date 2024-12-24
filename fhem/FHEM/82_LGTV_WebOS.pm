@@ -26,7 +26,7 @@
 #  GNU General Public License for more details.
 #
 #
-# $Id: 82_LGTV_WebOS.pm 29227 2024-10-12 07:19:10Z CoolTux $
+# $Id: 82_LGTV_WebOS.pm 29241 2024-10-15 04:17:43Z CoolTux $
 #
 ###############################################################################
 package FHEM::LGTV_WebOS;
@@ -369,7 +369,7 @@ __END__
   ],
   "release_status": "stable",
   "license": "GPL_2",
-  "version": "v3.7.0",
+  "version": "v3.7.1",
   "author": [
     "Marko Oldenburg <fhemdevelopment@cooltux.net>"
   ],

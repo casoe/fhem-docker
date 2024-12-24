@@ -1,4 +1,4 @@
-# $Id: 10_EnOcean.pm 29068 2024-08-15 11:59:08Z klaus.schauer $
+# $Id: 10_EnOcean.pm 29431 2024-12-15 16:48:57Z klaus.schauer $
 
 package main;
 use strict;
@@ -859,12 +859,12 @@ sub EnOcean_Initialize($) {
                       "pollInterval postmasterID productID rampTime rcvRespAction:textField-long ".
                       "releasedChannel:A,B,C,D,I,0,auto repeatingAllowed:yes,no remoteCode remoteEEP remoteID remoteManufID " .
                       "remoteManagement:client,manager,off rlcAlgo:no,2++,3++,4++ rlcRcv rlcSnd rlcTX:true,false " .
-                      "reposition:directly,opens,closes rltRepeat:16,32,64,128,256 rltType:1BS,4BS rotationSpeed:select,high,low " .
+                      "reposition:directly,opens,closes rltRepeat:16,32,64,128,256 rltType:1BS,4BS rocker:A,B rotationSpeed:select,high,low " .
                       "scaleDecimals:0,1,2,3,4,5,6,7,8,9 scaleMax scaleMin secMode:rcv,snd,biDir " .
                       "secLevel:encapsulation,encryption,off sendDevStatus:no,yes sendTimePeriodic sensorMode:switch,pushbutton " .
                       "serviceOn:no,yes setCmdTrigger:man,refDev setpointRefDev setpointSummerMode:slider,0,5,100 settingAccuracy:high,low " .
-                      "signal:off,on signOfLife:off,on signOfLifeInterval setpointTempRefDev shutTime shutTimeCloses subDef " .
-                      "subDef0 subDefI subDefA subDefB subDefC subDefD subDefH subDefW " .
+                      "signal:off,on signOfLife:off,on signOfLifeInterval setpointTempRefDev shutTime shutTimeCloses " .
+                      "subDef subDef0 subDefI subDefA subDefB subDefC subDefD subDefH subDefW " .
                       "subType:$subTypeList subTypeSet:$subTypeList subTypeReading:$subTypeList " .
                       "summerMode:off,on switchMode:switch,pushbutton " .
                       "switchHysteresis switchType:direction,universal,channel,central " .
@@ -3309,7 +3309,7 @@ sub EnOcean_Set($@) {
         ($err, $logLevel, $response) = EnOcean_setPID(undef, $hash, 'stop', undef, 'temperature', 'setpoint', 'Temp');
         readingsDelete($hash, "setpointSet");
         readingsDelete($hash, "setpointTempSet");
-        readingsDelete($hash, "alarm");
+        EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
         RemoveInternalTimer($hash->{helper}{timer}{alarm}) if(exists $hash->{helper}{timer}{alarm});
         Log3 $name, 3, "EnOcean set $name $cmd";
         $updateState = 2;
@@ -8271,7 +8271,7 @@ sub EnOcean_Parse($$) {
           EnOcean_CommandSave(undef, undef);
         }
         push @event, "3:state:" . ($db[0] & 1 ? "closed" : "open");
-        readingsDelete($hash, "alarm");
+        EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
         if (AttrVal($name, "signOfLife", 'off') eq 'on') {
           RemoveInternalTimer($hash->{helper}{timer}{alarm})  if(exists $hash->{helper}{timer}{alarm});
           @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -8557,11 +8557,15 @@ sub EnOcean_Parse($$) {
       }
       readingsSingleUpdate($hash, 'wakeUpCycle', $wakeUpCycle, 1);
       # set alarm timer
-      readingsDelete($hash, "alarm");
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       RemoveInternalTimer($hash->{helper}{timer}{alarm}) if(exists $hash->{helper}{timer}{alarm});
-      @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'no_response_from_actuator', 1, 3);
-      InternalTimer(gettimeofday() + $wakeUpCycle * 1.1, "EnOcean_readingsSingleUpdate", $hash->{helper}{timer}{alarm}, 0);
-
+      if (AttrVal($name, "signOfLife", 'on') eq 'on') {
+        @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'no_response_from_actuator', 1, 3);
+        #InternalTimer(gettimeofday() + $wakeUpCycle * 1.1, "EnOcean_readingsSingleUpdate", $hash->{helper}{timer}{alarm}, 0);
+        my $signOfLifeInterval = AttrVal($name, "signOfLifeInterval", 1);
+        $signOfLifeInterval = $wakeUpCycle if ($signOfLifeInterval < $wakeUpCycle);
+        InternalTimer(gettimeofday() + $signOfLifeInterval * 1.1, "EnOcean_readingsSingleUpdate", $hash->{helper}{timer}{alarm}, 0);
+      }
       my $actionCmd = AttrVal($name, "rcvRespAction", undef);
       if (defined $actionCmd) {
         my %specials = ("%ACTUATORSTATE" => (($db[2] & 1) ? "obstructed" : "ok"),
@@ -8913,7 +8917,7 @@ sub EnOcean_Parse($$) {
           push @event, "3:alarm:" . $failureCode{$db[1]};
           $battery = "empty" if ($db[1] == 18);
         } else {
-          readingsDelete($hash, "alarm");
+          EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
         }
       } else {
         if ($db[0] & 0x80) {
@@ -8923,7 +8927,7 @@ sub EnOcean_Parse($$) {
           # room temperature
           $roomTemp = sprintf("%0.1f", ($db[1] * 20 / 255 + 10));
           push @event, "3:roomTemp:$roomTemp";
-          readingsDelete($hash, "alarm");
+          EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
         }
       }
       if (!defined(AttrVal($name, "temperatureRefDev", undef))) {
@@ -8973,6 +8977,17 @@ sub EnOcean_Parse($$) {
         $setpointSet = 100;
         readingsSingleUpdate($hash, 'setpointSet', $setpointSet, 1);
         $wakeUpCycle = 50 if ($wakeUpCycle < 50);
+      }
+
+      # set alarm timer
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
+      RemoveInternalTimer($hash->{helper}{timer}{alarm}) if(exists $hash->{helper}{timer}{alarm});
+      if (AttrVal($name, "signOfLife", 'on') eq 'on') {
+        @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'no_response_from_actuator', 1, 3);
+        #InternalTimer(gettimeofday() + $wakeUpCycleInv{$wakeUpCycle} * 1.1, "EnOcean_readingsSingleUpdate", $hash->{helper}{timer}{alarm}, 0);
+        my $signOfLifeInterval = AttrVal($name, "signOfLifeInterval", 1);
+        $signOfLifeInterval = $wakeUpCycleInv{$wakeUpCycle} if ($signOfLifeInterval < $wakeUpCycleInv{$wakeUpCycle});
+        InternalTimer(gettimeofday() + $signOfLifeInterval * 1.1, "EnOcean_readingsSingleUpdate", $hash->{helper}{timer}{alarm}, 0);
       }
 
       my $actionCmd = AttrVal($name, "rcvRespAction", undef);
@@ -9266,12 +9281,17 @@ sub EnOcean_Parse($$) {
       }
       readingsSingleUpdate($hash, 'wakeUpCycle', $wakeUpCycle, 1);
       # set alarm timer
-      readingsDelete($hash, "alarm");
-      if ($waitingCmds ne "standby") {
-        RemoveInternalTimer($hash->{helper}{timer}{alarm}) if(exists $hash->{helper}{timer}{alarm});
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
+      RemoveInternalTimer($hash->{helper}{timer}{alarm}) if(exists $hash->{helper}{timer}{alarm});
+      if ($waitingCmds ne "standby" && AttrVal($name, "signOfLife", 'on') eq 'on') {
         @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'no_response_from_actuator', 1, 3);
-        InternalTimer(gettimeofday() + ($wakeUpCycle < 600 ? 600 : $wakeUpCycle) * 1.1, "EnOcean_readingsSingleUpdate", $hash->{helper}{timer}{alarm}, 0);
+        #InternalTimer(gettimeofday() + ($wakeUpCycle < 600 ? 600 : $wakeUpCycle) * 1.1, "EnOcean_readingsSingleUpdate", $hash->{helper}{timer}{alarm}, 0);
+        my $signOfLifeInterval = AttrVal($name, "signOfLifeInterval", 1);
+        $signOfLifeInterval = $wakeUpCycle if ($signOfLifeInterval < $wakeUpCycle);
+        $signOfLifeInterval = 600 if ($signOfLifeInterval < 600);
+        InternalTimer(gettimeofday() + $signOfLifeInterval * 1.1, "EnOcean_readingsSingleUpdate", $hash->{helper}{timer}{alarm}, 0);
       }
+
       my $actionCmd = AttrVal($name, "rcvRespAction", undef);
       if (defined $actionCmd) {
         my %specials = ("%ACTUATORSTATE" => (($db[0] & 1) ? "obstructed" : "ok"),
@@ -9590,7 +9610,7 @@ sub EnOcean_Parse($$) {
       $temp = sprintf "%0.1f", 62.3 - (($db[2] << 8) | $db[1]) / 10 if ($st eq "tempSensor.30");
       push @event, "3:temperature:$temp";
       push @event, "3:state:$temp";
-      readingsDelete($hash, "alarm");
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       if (AttrVal($name, "signOfLife", 'off') eq 'on') {
         RemoveInternalTimer($hash->{helper}{timer}{alarm})  if(exists $hash->{helper}{timer}{alarm});
         @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -9848,7 +9868,7 @@ sub EnOcean_Parse($$) {
         }
       }
       push @event, "3:temperature:$temp";
-      readingsDelete($hash, "alarm");
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       if (AttrVal($name, "signOfLife", 'off') eq 'on') {
         RemoveInternalTimer($hash->{helper}{timer}{alarm})  if(exists $hash->{helper}{timer}{alarm});
         @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -10238,7 +10258,7 @@ sub EnOcean_Parse($$) {
       push @event, "3:state:T: $temp H: $humi B: $battery";
       push @event, "3:humidity:$humi";
       push @event, "3:temperature:$temp";
-      readingsDelete($hash, "alarm");
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       if (AttrVal($name, "signOfLife", 'off') eq 'on') {
         RemoveInternalTimer($hash->{helper}{timer}{alarm})  if(exists $hash->{helper}{timer}{alarm});
         @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -10256,7 +10276,7 @@ sub EnOcean_Parse($$) {
       push @event, "3:humidity:$humi";
       push @event, "3:temperature:$temp";
       push @event, "3:telegramType:" . ($db[0] & 1 ? "event" : "heartbeat");
-      readingsDelete($hash, "alarm");
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       if (AttrVal($name, "signOfLife", 'off') eq 'on') {
         RemoveInternalTimer($hash->{helper}{timer}{alarm})  if(exists $hash->{helper}{timer}{alarm});
         @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -10303,7 +10323,7 @@ sub EnOcean_Parse($$) {
       }
       push @event, "3:brightness:$lux";
       push @event, "3:state:$lux";
-      readingsDelete($hash, 'alarm');
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       if (AttrVal($name, "signOfLife", 'on') eq 'on') {
         RemoveInternalTimer($hash->{helper}{timer}{alarm}) if(exists $hash->{helper}{timer}{alarm});
         @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -10412,7 +10432,7 @@ sub EnOcean_Parse($$) {
         InternalTimer(gettimeofday() + AttrVal($name, 'trackerWakeUpCycle', 30) * 1.1, 'EnOcean_readingsSingleUpdate', $hash->{helper}{timer}{motion}, 0);
         InternalTimer(gettimeofday() + AttrVal($name, 'trackerWakeUpCycle', 30) * 1.1, 'EnOcean_readingsSingleUpdate', $hash->{helper}{timer}{state}, 0);
       } else {
-        readingsDelete($hash, 'alarm');
+        EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
         if (AttrVal($name, "signOfLife", 'on') eq 'on') {
           RemoveInternalTimer($hash->{helper}{timer}{alarm}) if(exists $hash->{helper}{timer}{alarm});
           @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -10506,7 +10526,7 @@ sub EnOcean_Parse($$) {
       }
       push @event, "3:brightness:$lux";
       push @event, "3:motion:$motion";
-      readingsDelete($hash, 'alarm');
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       if (AttrVal($name, "signOfLife", 'on') eq 'on') {
         RemoveInternalTimer($hash->{helper}{timer}{alarm}) if(exists $hash->{helper}{timer}{alarm});
         @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -11065,7 +11085,7 @@ sub EnOcean_Parse($$) {
       push @event, "1:vibration:$vibration";
       push @event, "1:voltage:$voltage";
       push @event, "1:state:C: $contact V: $vibration E: $lux U: $voltage";
-      readingsDelete($hash, "alarm");
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       if (AttrVal($name, "signOfLife", 'on') eq 'on') {
         RemoveInternalTimer($hash->{helper}{timer}{alarm}) if(exists $hash->{helper}{timer}{alarm});
         @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -11083,7 +11103,7 @@ sub EnOcean_Parse($$) {
       push @event, "1:vibration:$vibration";
       push @event, "1:voltage:$voltage";
       push @event, "1:state:C: $doorContact B: $lockContact V: $vibration U: $voltage";
-      readingsDelete($hash, "alarm");
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       if (AttrVal($name, "signOfLife", 'on') eq 'on') {
         RemoveInternalTimer($hash->{helper}{timer}{alarm}) if(exists $hash->{helper}{timer}{alarm});
         @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -11101,7 +11121,7 @@ sub EnOcean_Parse($$) {
       push @event, "1:voltage:$voltage";
       push @event, "1:window:$window";
       push @event, "1:state:W: $window V: $vibration U: $voltage";
-      readingsDelete($hash, "alarm");
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       if (AttrVal($name, "signOfLife", 'on') eq 'on') {
         RemoveInternalTimer($hash->{helper}{timer}{alarm})  if(exists $hash->{helper}{timer}{alarm});
         @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -12303,7 +12323,7 @@ sub EnOcean_Parse($$) {
       } else {
 
       }
-      readingsDelete($hash, "alarm");
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       if (AttrVal($name, "signOfLife", 'on') eq 'on') {
         RemoveInternalTimer($hash->{helper}{timer}{alarm})  if(exists $hash->{helper}{timer}{alarm});
         @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -12413,7 +12433,7 @@ sub EnOcean_Parse($$) {
       } else {
 
       }
-      readingsDelete($hash, "alarm");
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       if (AttrVal($name, "signOfLife", 'on') eq 'on') {
         RemoveInternalTimer($hash->{helper}{timer}{alarm})  if(exists $hash->{helper}{timer}{alarm});
         @{$hash->{helper}{timer}{alarm}} = ($hash, 'alarm', 'dead_sensor', 1, 5);
@@ -12480,7 +12500,7 @@ sub EnOcean_Parse($$) {
     } elsif ($st eq "multiFuncSensor.40") {
       # Multi Sensor [EnOcean STM 550 / EMSIA]
       # (D2-14-40 - D2-14-41)
-      readingsDelete($hash, 'alarm');
+      EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
       my $temperature = ($db[8] << 8 | $db[7]) >> 6;
       if ($temperature <= 1000) {
         $temperature = sprintf "%0.1f", $temperature / 10 - 40;
@@ -15750,7 +15770,7 @@ sub EnOcean_environmentAppCustomCmd($) {
       $hash->{helper}{customCmdAlarmOff}{do} = 1;
       EnOcean_CustomCmdStart($hash, 'customCmdAlarmOff', $customCmdAlarmOff, 'once');
     }
-    readingsDelete($hash, 'alarm');
+    EnOcean_ReadingsDelete($hash, 'alarm', 'reset', 1);
   }
   delete $hash->{helper}{customCmdAlarmOff};
   if (AttrVal($name, "signOfLife", 'on') eq 'on') {
@@ -17929,6 +17949,15 @@ sub EnOcean_cdmClearHashVal($) {
 }
 
 #
+sub EnOcean_ReadingsDelete($$$$) {
+  my ($hash, $reading, $event, $trigger) = @_;
+  return if (!exists $hash->{READINGS}{$reading});
+  DoTrigger($hash->{NAME}, "$reading: $event", 1) if ($trigger);
+  readingsDelete($hash, $reading);          
+  return;
+}
+
+#
 sub EnOcean_CommandDelete($) {
   my ($functionHash) = @_;
   my $deleteDevice = $functionHash->{deleteDevice};
@@ -20026,7 +20055,11 @@ sub EnOcean_Delete($$) {
     created by autocreate. To control the device, it must be bidirectional paired,
     see <a href="#EnOcean-teach-in">Teach-In / Teach-Out</a>.<br>
     The command is not sent until the device wakes up and sends a message, usually
-    every 10 minutes.
+    every 10 minutes.<br>
+    A monitoring period can be set for signOfLife telegrams of the actor, see
+    <a href="#EnOcean-attr-signOfLife">signOfLife</a> and <a href="#EnOcean-attr-signOfLifeInterval">signOfLifeInterval</a>.
+    Default is "on" and an interval of the wakeUpCycle value. If the <a href="#EnOcean-attr-signOfLifeInterval">signOfLifeInterval</a>
+    is less than the wakeUpCycle value, the interval is set to the wakeUpCycle value.
     </li>
     <br><br>
 
@@ -20091,7 +20124,11 @@ sub EnOcean_Delete($$) {
     The OEM version of the Holter SmartDrive MX has an internal PID controller. This function is activated by
     attr <device> model Holter_OEM and attr <device> pidCtrl off.<br>
     The command is not sent until the device wakes up and sends a message, usually
-    every 5 minutes.
+    every 5 minutes.<br>
+    A monitoring period can be set for signOfLife telegrams of the actor, see
+    <a href="#EnOcean-attr-signOfLife">signOfLife</a> and <a href="#EnOcean-attr-signOfLifeInterval">signOfLifeInterval</a>.
+    Default is "on" and an interval of the wakeUpCycle value. If the <a href="#EnOcean-attr-signOfLifeInterval">signOfLifeInterval</a>
+    is less than the wakeUpCycle value, the interval is set to the wakeUpCycle value.
     </li>
     <br><br>
 
@@ -20153,7 +20190,11 @@ sub EnOcean_Delete($$) {
     The actuator has an internal PID controller. This function is activated by
     attr <device> pidCtrl off.<br>
     The command is not sent until the device wakes up and sends a message, usually
-    every 2 to 10 minutes.
+    every 2 to 10 minutes.<br>
+    A monitoring period can be set for signOfLife telegrams of the actor, see
+    <a href="#EnOcean-attr-signOfLife">signOfLife</a> and <a href="#EnOcean-attr-signOfLifeInterval">signOfLifeInterval</a>.
+    Default is "on" and an interval of the wakeUpCycle value. If the <a href="#EnOcean-attr-signOfLifeInterval">signOfLifeInterval</a>
+    is less than the wakeUpCycle value, the interval is set to the wakeUpCycle value.
     </li>
     <br><br>
 
@@ -21855,7 +21896,7 @@ sub EnOcean_Delete($$) {
       [signal] = off is default.<br>
       Activate the request functions of signal telegram messages.
     </li>
-    <li><a id="EnOcean-attr-signOfLife">signOfLife</a> off|on, [signOfLive] = off is default.<br>
+    <li><a id="EnOcean-attr-signOfLife">signOfLife</a> off|on, [signOfLife] = off is default.<br>
       Monitoring signOfLife telegrams from sensors.
     </li>
     <li><a id="EnOcean-attr-signOfLifeInterval">signOfLifeInterval</a> 1...65535<br>
@@ -23141,7 +23182,7 @@ sub EnOcean_Delete($$) {
         <a href="#EnOcean-attr-windSpeedWindy">windSpeedWindy</a>,
         <a href="#EnOcean-attr-windSpeedWindyDelay">windSpeedWindyDelay</a>.<br>
         Execution of custom alarm commands, see <a href="#EnOcean-attr-customCmdAlarmOff">customCmdAlarmOff</a>,
-        <a href="#EnOcean-attr-customCmdAlarmOn">customCmdAlarmOn</a>, <a href="#EnOcean-attr-signOfLife">signOfLife</a> ([signOfLive] = on is default) and
+        <a href="#EnOcean-attr-customCmdAlarmOn">customCmdAlarmOn</a>, <a href="#EnOcean-attr-signOfLife">signOfLife</a> ([signOfLife] = on is default) and
         <a href="#EnOcean-attr-signOfLifeInterval">signOfLifeInterval</a> ([signOfLifeInterval] = 660 is default).<br>
         Execution of custom up and down commands that can be triggered by the readings dayNight, isRaining, isStormy,
         isSunny, isSunnyEast, isSunnySouth, isSunnyWest and isWindy, see <a href="#EnOcean-attr-customCmdDown">customCmdDown</a> and

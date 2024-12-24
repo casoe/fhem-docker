@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_ZWave.pm 28978 2024-06-16 18:22:09Z rudolfkoenig $
+# $Id: 10_ZWave.pm 29303 2024-10-27 12:05:57Z rudolfkoenig $
 # See ZWDongle.pm for inspiration
 package main;
 
@@ -138,7 +138,8 @@ my %zwave_class = (
                "043003(..)(..)"=> 'ZWave_sensorbinaryV2Parse($1,$2)' } },
   SENSOR_MULTILEVEL        => { id => '31',
     get   => { smStatus    => "04" },
-    parse => { "..3105(..)(..)(.*)" => 'ZWave_multilevelParse($1,$2,$3)'} },
+    parse => { "..3105(..)(..)(.*)"
+               => 'ZWave_multilevelParse($hash,$1,$2,$3)'} },
   METER                    => { id => '32',
     set   => { meterReset  => "05",
                meterResetToValue => 'ZWave_meterSet($cmd, "%s")' },
@@ -792,6 +793,7 @@ ZWave_Initialize($)
     neighborListPos
     noExplorerFrames:1,0
     noWakeupForApplicationUpdate:1,0
+    noUnits:1,0
     secure_classes
     setExtensionsEvent:1,0
     setList
@@ -1841,6 +1843,7 @@ my @meter_type_text = (
   "cooling"
 );
 
+# 212400000000000000000000 => 0 kWh
 sub
 ZWave_meterParse($$)
 {
@@ -1884,15 +1887,16 @@ ZWave_meterParse($$)
   # Log 1, "$v1 $v2 $v3 precision:$precision size:$size scale:$scale val:$mv";
   $v3 = substr($v3, 2*$size, length($v3)-(2*$size));
 
+  $unit_text = AttrVal($name, "noUnits", 0) ? "" : " $unit_text"; #126384
   if (length($v3) < 4) { # V1 report
-    return "$meter_type_text:$mv $unit_text";
+    return "$meter_type_text:$mv$unit_text";
 
   } else { # V2 or greater report
     my $delta_time = hex(substr($v3, 0, 4));
     $v3 = substr($v3, 4, length($v3)-4);
 
     if ($delta_time == 0) { # no previous meter value
-      return "$meter_type_text:$mv $unit_text";
+      return "$meter_type_text:$mv$unit_text";
 
     } else { # previous meter value present
       my $pmv = hex(substr($v3, 0, 2*$size));
@@ -1904,7 +1908,7 @@ ZWave_meterParse($$)
       } else {
         $delta_time .= " s";
       };
-      return "$meter_type_text:$mv $unit_text previous: $pmv delta_time: ".
+      return "$meter_type_text:$mv$unit_text previous: $pmv delta_time: ".
                 "$delta_time"; # V2 report
     }
   }
@@ -2143,9 +2147,10 @@ my %zwave_ml_tbl = (
 );
 
 sub
-ZWave_multilevelParse($$$)
+ZWave_multilevelParse($$$$)
 {
-  my ($type,$fl,$arg) = @_;
+  my ($hash,$type,$fl,$arg) = @_;
+  my $name = $hash->{NAME};
 
   my $pr = (hex($fl)>>5)&0x07; # precision
   my $sc = (hex($fl)>>3)&0x03; # scale
@@ -2156,8 +2161,10 @@ ZWave_multilevelParse($$$)
   my $val = $msb ? -( 2 ** (8 * $bc) - hex($arg) ) : hex($arg); # 2's complement
   my $ml = $zwave_ml_tbl{$type};
   return "UNKNOWN multilevel type: $type fl: $fl arg: $arg" if(!$ml);
-  return sprintf("%s:%.*f %s", $ml->{n}, $pr, $val/(10**$pr),
-       int(@{$ml->{st}}) > $sc ? $ml->{st}->[$sc] : "");
+
+  my $unit_text = int(@{$ml->{st}}) > $sc ? $ml->{st}->[$sc] : "";
+  $unit_text = AttrVal($name, "noUnits", 0) ? "" : " $unit_text"; #126384
+  return sprintf("%s:%.*f%s", $ml->{n}, $pr, $val/(10**$pr),$unit_text);
 }
 
 sub
@@ -7494,12 +7501,16 @@ ZWave_tmSet($)
       turn off the use of Explorer Frames
       </li>
 
-    <li><a id="ZWave-attr-noWakeupForApplicationUpdate">noWakeupForApplicationUpdate</a>
-        <br>
+    <li><a id="ZWave-attr-noWakeupForApplicationUpdate">noWakeupForApplicationUpdate</a><br>
       some devices (notable the Aeotec Multisensor 6) are only awake after an
       APPLICATION UPDATE telegram for a very short time. If this attribute is
       set (recommended for the Aeotec Multisensor 6), the WakeUp-Stack is not
       processed after receiving such a message.
+      </li>
+
+    <li><a id="ZWave-attr-noUnits">noUnits</a><br>
+      the meter class generates the reading as "value unit".
+      If this attribute is set to 1, the unit is not part of the reading.
       </li>
 
     <li><a href="#readingFnAttributes">readingFnAttributes</a></li>

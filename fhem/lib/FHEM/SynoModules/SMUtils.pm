@@ -1,5 +1,5 @@
 ########################################################################################################################
-# $Id: SMUtils.pm 28667 2024-03-16 14:03:19Z DS_Starter $
+# $Id: SMUtils.pm 29430 2024-12-15 15:49:18Z DS_Starter $
 #########################################################################################################################
 #       SMUtils.pm
 #
@@ -26,6 +26,11 @@
 #########################################################################################################################
 
 # Version History
+# 1.28.2  15.12.2024  change delHashRefDeep
+# 1.28.1  08.12.2024  fix delHashRefDeep
+# 1.28.0  07.12.2024  add function delHashRefDeep
+# 1.27.4  05.12.2024  expand evaljson for SolarForecast
+# 1.27.3  26.10.2024  compatibility to SSCam V 9.12.0
 # 1.27.2  16.03.2024  change checkModVer text output
 # 1.27.1  04.12.2023  change checkModVer
 # 1.27.0  03.12.2023  new function checkModVer
@@ -59,13 +64,14 @@ use FHEM::SynoModules::ErrCodes qw(:all);                                 # Erro
 use GPUtils qw( GP_Import GP_Export ); 
 use Carp qw(croak carp);
 
-use version 0.77; our $VERSION = version->declare('1.27.2');
+use version 0.77; our $VERSION = version->declare('1.28.2');
 
 use Exporter ('import');
 our @EXPORT_OK = qw(
                      getClHash
                      delClHash
                      delReadings
+                     delHashRefDeep
                      createReadingsFromArray
                      checkModVer
                      addCHANGED
@@ -293,6 +299,30 @@ return ($errorcode, $content);
 }
 
 ###############################################################################
+#                     Hash Referenz rekursiv löschen
+#
+#     Stellt sicher, dass alle verschachtelten Strukturen explizit 
+#     gelöscht werden. Dies ist besonders nützlich um 
+#     sicherzustellen, dass keine zirkulären Referenzen bestehen, 
+#     die die Speicherfreigabe verhindern könnten.
+###############################################################################
+sub delHashRefDeep {
+  my $href = shift // carp $carpnohash && return;
+  
+  if (ref $href eq 'HASH') {
+      for my $key (keys %{$href}) { 
+          if (ref $href->{$key} eq 'HASH') { 
+              delHashRefDeep ($href->{$key}); 
+          } 
+          
+          delete $href->{$key}; 
+      }
+  }
+
+return;
+}
+
+###############################################################################
 #  einen Zeitstring YYYY-MM-TT hh:mm:ss in einen Unix 
 #  Timestamp umwandeln
 ###############################################################################
@@ -427,14 +457,14 @@ sub moduleVersion {
   if ($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {          # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;                                           # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{<TYPE>}{META}}
       
-      if ($modules{$type}{META}{x_version}) {                                             # {x_version} nur gesetzt wenn $Id: SMUtils.pm 28667 2024-03-16 14:03:19Z DS_Starter $ im Kopf komplett! vorhanden
+      if ($modules{$type}{META}{x_version}) {                                             # {x_version} nur gesetzt wenn $Id: SMUtils.pm 29430 2024-12-15 15:49:18Z DS_Starter $ im Kopf komplett! vorhanden
           $modules{$type}{META}{x_version} =~ s/1\.1\.1/$v/gx;
       } 
       else {
           $modules{$type}{META}{x_version} = $v; 
       }
       
-      FHEM::Meta::SetInternals($hash);                                                   # FVERSION wird gesetzt ( nur gesetzt wenn $Id: SMUtils.pm 28667 2024-03-16 14:03:19Z DS_Starter $ im Kopf komplett! vorhanden )
+      FHEM::Meta::SetInternals($hash);                                                   # FVERSION wird gesetzt ( nur gesetzt wenn $Id: SMUtils.pm 29430 2024-12-15 15:49:18Z DS_Starter $ im Kopf komplett! vorhanden )
   } 
   else {                                                                                 # herkömmliche Modulstruktur
       $hash->{VERSION} = $v;                                                             # Internal VERSION setzen
@@ -1184,10 +1214,10 @@ sub evaljson {
   if ($nojsonmod) {
       $success = 0;
       Log3 ($name, 1, "$name - ERROR: Perl module 'JSON' is missing. You need to install it.");
-      return ($success,$myjson);
+      return ($success, $myjson);
   }
   
-  eval {decode_json($myjson)
+  eval {decode_json ($myjson)
        } 
        or do {                                                            
           if (($hash->{HELPER}{RUNVIEW} && $hash->{HELPER}{RUNVIEW} =~ m/^live_.*hls$/x) || 
@@ -1202,7 +1232,7 @@ sub evaljson {
           else {
               $success      = 0;
               my $errorcode = "9000";         
-              my $error     = expErrors($hash, $errorcode);                                         # Fehlertext zum Errorcode ermitteln
+              my $error     = expErrors ($hash, $errorcode);                                        # Fehlertext zum Errorcode ermitteln
               
               if ($error) {          
                   setReadingErrorState ($hash, $error, $errorcode);
@@ -1295,6 +1325,8 @@ sub login {
   
   delete $hash->{HELPER}{SID};
     
+  $apiauthpath = 'webapi/entry.cgi' if($apiauthpath eq 'entry.cgi');                                     # compatibility SSCam >= V 9.12.0
+    
   Log3 ($name, 4, "$name - --- Begin Function login ---");
   
   my ($success, $username, $password) = getCredentials($hash,0,"credentials",$sep);                      # Credentials abrufen
@@ -1322,12 +1354,12 @@ sub login {
   my $sid = AttrVal($name, "noQuotesForSID", 0) ? "sid" : qq{"sid"};                        # sid in Quotes einschliessen oder nicht -> bei Problemen mit 402 - Permission denied
   
   if (AttrVal($name,"session","DSM") eq "DSM") {
-      $url     = "$proto://$serveraddr:$serverport/webapi/$apiauthpath?api=$apiauth&version=$apiauthver&method=Login&account=$username&passwd=$password&format=$sid"; 
-      $urlwopw = "$proto://$serveraddr:$serverport/webapi/$apiauthpath?api=$apiauth&version=$apiauthver&method=Login&account=$username&passwd=*****&format=$sid";
+      $url     = "$proto://$serveraddr:$serverport/$apiauthpath?api=$apiauth&version=$apiauthver&method=Login&account=$username&passwd=$password&format=$sid"; 
+      $urlwopw = "$proto://$serveraddr:$serverport/$apiauthpath?api=$apiauth&version=$apiauthver&method=Login&account=$username&passwd=*****&format=$sid";
   } 
   else {
-      $url     = "$proto://$serveraddr:$serverport/webapi/$apiauthpath?api=$apiauth&version=$apiauthver&method=Login&account=$username&passwd=$password&session=SurveillanceStation&format=$sid";
-      $urlwopw = "$proto://$serveraddr:$serverport/webapi/$apiauthpath?api=$apiauth&version=$apiauthver&method=Login&account=$username&passwd=*****&session=SurveillanceStation&format=$sid";
+      $url     = "$proto://$serveraddr:$serverport/$apiauthpath?api=$apiauth&version=$apiauthver&method=Login&account=$username&passwd=$password&session=SurveillanceStation&format=$sid";
+      $urlwopw = "$proto://$serveraddr:$serverport/$apiauthpath?api=$apiauth&version=$apiauthver&method=Login&account=$username&passwd=*****&session=SurveillanceStation&format=$sid";
   }
   
   my $printurl = AttrVal($name, "showPassInLog", 0) ? $url : $urlwopw;
@@ -1431,67 +1463,69 @@ return login($hash,$apiref,$fret,$fretarg,$sep);
 #    $sep     = Separator für split Credentials in getCredentials, default ":"
 ###################################################################################
 sub logout {
-   my $hash        = shift  // carp $carpnohash && return;
-   my $apiref      = shift  // carp $carpnoapir && return;
-   my $sep         = shift  // $splitdef;
+  my $hash        = shift  // carp $carpnohash && return;
+  my $apiref      = shift  // carp $carpnoapir && return;
+  my $sep         = shift  // $splitdef;
    
-   my $name        = $hash->{NAME};
-   my $serveraddr  = $hash->{SERVERADDR};
-   my $serverport  = $hash->{SERVERPORT};
-   my $proto       = $hash->{PROTOCOL};
-   my $type        = $hash->{TYPE};
+  my $name        = $hash->{NAME};
+  my $serveraddr  = $hash->{SERVERADDR};
+  my $serverport  = $hash->{SERVERPORT};
+  my $proto       = $hash->{PROTOCOL};
+  my $type        = $hash->{TYPE};
    
-   my $apiauth     = $apiref->{AUTH}{NAME};
-   my $apiauthpath = $apiref->{AUTH}{PATH};
-   my $apiauthver  = $apiref->{AUTH}{VER};
-   
-   my $sid         = delete $hash->{HELPER}{SID} // q{};
-   
-   my $url;
-     
-   Log3 ($name, 4, "$name - --- Start Synology logout ---");
-   
-   my ($success, $username) = getCredentials($hash,0,"credentials",$sep);
-   
-   if (!$sid) {
-       if ($username) {
-           Log3 ($name, 2, qq{$name - User "$username" has no valid session, logout is cancelled});
-       }
-
-       readingsBeginUpdate ($hash);
-       readingsBulkUpdate  ($hash, "Errorcode", "none");
-       readingsBulkUpdate  ($hash, "Error",     "none");
-       readingsBulkUpdate  ($hash, "state",     "logout done");
-       readingsEndUpdate   ($hash, 1);
-
-       delActiveToken        ($hash) if($type eq "SSCam");                                                   # ausgeführte Funktion ist erledigt (auch wenn logout nicht erfolgreich), Freigabe Funktionstoken
-       CancelDelayedShutdown ($name);
-       return;
-   }
-    
-   my $timeout = AttrVal($name,"timeout",60);
-   $timeout    = 60 if($timeout < 60);
-   Log3 ($name, 5, "$name - Call logout will be done with timeout value: $timeout s");
+  my $apiauth     = $apiref->{AUTH}{NAME};
+  my $apiauthpath = $apiref->{AUTH}{PATH};
+  my $apiauthver  = $apiref->{AUTH}{VER};
   
-   if (AttrVal($name,"session","DSM") eq "DSM") {
-       $url = "$proto://$serveraddr:$serverport/webapi/$apiauthpath?api=$apiauth&version=$apiauthver&method=Logout&_sid=$sid";    
-   } 
-   else {
-       $url = "$proto://$serveraddr:$serverport/webapi/$apiauthpath?api=$apiauth&version=$apiauthver&method=Logout&session=SurveillanceStation&_sid=$sid";
-   }
-
-   my $param = {
-       url      => $url,
-       timeout  => $timeout,
-       hash     => $hash,
-       sid      => $sid,
-       username => $username,
-       method   => "GET",
-       header   => "Accept: application/json",
-       callback => \&_logoutReturn
-   };
+  my $sid         = delete $hash->{HELPER}{SID} // q{};
    
-   HttpUtils_NonblockingGet ($param);
+  my $url;
+   
+  $apiauthpath = 'webapi/entry.cgi' if($apiauthpath eq 'entry.cgi');                                         # compatibility SSCam >= V 9.12.0
+     
+  Log3 ($name, 4, "$name - --- Start Synology logout ---");
+   
+  my ($success, $username) = getCredentials($hash,0,"credentials",$sep);
+   
+  if (!$sid) {
+      if ($username) {
+          Log3 ($name, 2, qq{$name - User "$username" has no valid session, logout is cancelled});
+      }
+
+      readingsBeginUpdate ($hash);
+      readingsBulkUpdate  ($hash, "Errorcode", "none");
+      readingsBulkUpdate  ($hash, "Error",     "none");
+      readingsBulkUpdate  ($hash, "state",     "logout done");
+      readingsEndUpdate   ($hash, 1);
+
+      delActiveToken        ($hash) if($type eq "SSCam");                                                   # ausgeführte Funktion ist erledigt (auch wenn logout nicht erfolgreich), Freigabe Funktionstoken
+      CancelDelayedShutdown ($name);
+      return;
+  }
+    
+  my $timeout = AttrVal($name,"timeout",60);
+  $timeout    = 60 if($timeout < 60);
+  Log3 ($name, 5, "$name - Call logout will be done with timeout value: $timeout s");
+  
+  if (AttrVal($name,"session","DSM") eq "DSM") {
+      $url = "$proto://$serveraddr:$serverport/$apiauthpath?api=$apiauth&version=$apiauthver&method=Logout&_sid=$sid";    
+  } 
+  else {
+      $url = "$proto://$serveraddr:$serverport/$apiauthpath?api=$apiauth&version=$apiauthver&method=Logout&session=SurveillanceStation&_sid=$sid";
+  }
+
+  my $param = {
+      url      => $url,
+      timeout  => $timeout,
+      hash     => $hash,
+      sid      => $sid,
+      username => $username,
+      method   => "GET",
+      header   => "Accept: application/json",
+      callback => \&_logoutReturn
+  };
+   
+  HttpUtils_NonblockingGet ($param);
 
 return;
 }

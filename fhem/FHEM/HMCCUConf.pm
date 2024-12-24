@@ -2,7 +2,7 @@
 #
 #  HMCCUConf.pm
 #
-#  $Id: HMCCUConf.pm 28721 2024-03-29 15:15:33Z zap $
+#  $Id: HMCCUConf.pm 29436 2024-12-18 16:10:26Z zap $
 #
 #  Version 5.0
 #
@@ -234,7 +234,7 @@ $HMCCU_CONFIG_VERSION = '5.0';
 		F => 3, S => 'ACTUAL_TEMPERATURE', C => '', V => '', P => 1
 	},
 	'WINMATIC' => {
-		F => 3, S => 'LEVEL', C => 'LEVEL', V => 'open:100,close:0', P => 2
+		F => 3, S => 'LEVEL', C => 'LEVEL', V => 'open:100,close:0,lock:-0.5', P => 2
 	}
 );
 

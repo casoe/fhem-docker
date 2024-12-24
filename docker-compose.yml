@@ -43,7 +43,7 @@ services:
             timeout: 5s
             retries: 5
     homebridge:
-        image: oznu/homebridge:ubuntu
+        image: homebridge/homebridge:ubuntu
         restart: always
         network_mode: host
         volumes:

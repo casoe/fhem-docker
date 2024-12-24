@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 92_FileLog.pm 28451 2024-01-31 22:05:20Z rudolfkoenig $
+# $Id: 92_FileLog.pm 29400 2024-12-05 10:29:06Z rudolfkoenig $
 package main;
 
 use strict;
@@ -243,6 +243,7 @@ FileLog_Switch($)
     $log->{currentlogfile} = $cn;
     return 1 if($log->{READONLY});
     $fh->close() if($fh);
+    restoreDir_mkDir($cn=~m,^/,? "":".", $cn, 1);
     HandleArchiving($log);
     $fh = new IO::File ">>$cn";
     if(!defined($fh)) {
@@ -836,32 +837,29 @@ FileLog_Get($@)
   } else {
     my $linf;
     if($inf eq "CURRENT") {
-      if($from =~ m/^(....)-(..)-(..)/) {       # compute the log filename
-        my ($fy,$fm,$fd) = ($1,$2,$3);
+      if($from =~ m/^(....-..-..)_(..:..:..)/) { 
+        my ($from_ymd, $from_hms) = ($1,$2);
         $linf = ResolveDateWildcards($hash->{logfile},
-                        localtime(time_str2num("$fy-$fm-$fd 00:00:00")));
+                        localtime(time_str2num("$from_ymd $from_hms")));
 
         if(AttrVal($name, "createGluedFile", 0)) {
           $to = (split(" ", TimeNow()))[0] if($to eq "9"); # Special
-          if($to =~ m/^(....)-(..)-(..)/) {
-            my ($ty,$tm,$td) = ($1,$2,$3);
+          if($to =~ m/^(....-..-..)_(..:..:..)/) {
+            my ($to_ymd, $to_hms) = ($1,$2);
             my $linf_to = ResolveDateWildcards($hash->{logfile},
-                            localtime(time_str2num("$ty-$tm-$td 00:00:00")));
+                            localtime(time_str2num("$to_ymd $to_hms")));
             if($linf ne $linf_to){  # append each file into a temporary one
               $tempfileName = $linf.".transit.temp.log";
               unlink($tempfileName);
               my $lf = $linf;
 
               if(open(my $out,'>',$tempfileName)){
-                my $sec   = time_str2num("$fy-$fm-$fd 00:00:00");
-                my $secTo = time_str2num("$ty-$tm-$td 00:00:00");
-                if(($secTo-$sec)%86400) { #DST change inbetween, #99215
-                  $secTo = $sec + 86400*int(($secTo-$sec+3600)/86400);
-                }
+                my $sec   = time_str2num("$from_ymd $from_hms");
+                my $secTo = time_str2num("$to_ymd $to_hms");
                 my $lastFile = "";
                 while($sec <= $secTo) { # Loop over each day
                   $linf=ResolveDateWildcards($hash->{logfile},localtime($sec));
-                  $sec += 86400;
+                  $sec += 3600;
                   if($linf ne $lastFile) {
                     $lastFile = $linf;
                     if(open(my $i,'<',$linf)){

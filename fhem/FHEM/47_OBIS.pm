@@ -13,7 +13,7 @@
 # Thanks to matzefizi for letting me merge this with 70_SMLUSB.pm and for testing
 # Thanks to immi for testing and supporting help and tips
 # 
-# $Id: 47_OBIS.pm 28127 2023-11-05 14:40:42Z gvzdus $
+# $Id: 47_OBIS.pm 29273 2024-10-20 19:23:06Z gvzdus $
 
 package main;
 use strict;
@@ -640,7 +640,7 @@ sub OBIS_Parse($$)
 			
 			# End of Message
 					if ($rmsg=~/^!.*/) {
-						$hash->{helper}{EoM}+=1 if ($hash->{helper}{DEVICES}[1]>0);
+						$hash->{helper}{EoM}+=1 if (($hash->{helper}{DEVICES}[1] // 0)>0);
 					}
 			#Version
 					elsif ($rmsg=~ /.*\/(.*)/) {

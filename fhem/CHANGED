@@ -1,5 +1,63 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it
+ - change:  76_SolarForecast: improve Bat careSoC management when dark doldrums
+ - change:  76_SolarForecast: prepare for further development
+ - bugfix:  88_HMCCU: Fixed Winmatic lock command
+ - bugfix:  76_SolarForecast: batteryManagement - fix care SoC management
+ - bugfix:  49_SSCam: fix Attr pollcaminfoall
+ - change:  49_SSCam: internal code changed
+ - change:  76_SolarForecast: Warning if no create AllPVforecastsToEvent events
+ - change:  76_SolarForecast: consumerXX if mode is device/reading combination
+ - feature: 76_SolarForecast: consumerkey 'mode' can device/reading combination
+ - feature: 76_SolarForecast: possible asynchron mode Battery Dev, code change
+ - feature: 76_SMAInverter.pm: add installer login, code optimized
+ - feature: 76_SolarForecast: possible asynchron mode for Meter & Inverter
+ - change:  93_DbLog: insertmode 0 - improved output of errors in Logfile
+ - change:  57_Calendar: remove smartmatch replacement as it is now
+                         officially in fhem.pl
+ - feature: 93_DbLog: check valid Event Time limit, Forum: #139847
+ - bugfix:  93_DbRep: fix check changeValue Forum: #139950
+ - change:  01_FHEMWEB: add filtered Event Monitor to detail view
+ - feature: 76_SolarForecast: attr setupRadiationAPI and setupWeatherDev1 can 
+                              be set largely independently of each other
+ - change:  76_SolarForecast: Separation of radiation API-data, API-state data, 
+                              weather-API data
+ - change:  76_SolarForecast: extended Debug collectData for EnergyConsumption
+ - bugfix:  49_SSCam: some fixes API does not exist
+ - change:  76_SolarForecast: Attr flowGraphicControl key shift changed to 
+                              shiftx, new key shifty,
+                              some obsolete attributes deleted
+ - feature: 49_SSCam: attr customSVSversion option 9.2.0
+ - feature: 57_Calendar: add terse human-readable format for datetimes
+ - change:  57_Calendar: replace deprectated smartmatch by function
+ - featur:  36_Shelly: reading 'temperature' for ShellyPlusUni
+ - bugfix:  36_Shelly: bad firmware identification 
+ - bugfix:  72_XiaomiDevice: requested fix for crash
+ - change:  76_SolarForecast: attr setupInverterDevXX: new key 'limit', 
+            the key 'capacity' is now mandatory! Attr affect70percentRule, 
+            ctrlAutoRefresh, ctrlAutoRefreshFW are deleted
+ - feature: 36_Shelly: add Shelly Plug S MTR Gen3
+ - change:  76_SolarForecast: Attr graphicStartHtml, graphicEndHtml removed
+ - feature: 49_SSCam: Compatibility (Snapshot API) to SVS version >= 9.2.1
+                      Attr simu_SVSversion renamed to customSVSversion
+ - feature: 76_SolarForecast: Attr flowGraphicControl new key h2consumerdist
+ - feature: 74_AutomowerConnect: new statistics values upTime, downTime
+            new setter getMessages, resetCuttingBladeUsageTime
+            added messages to listErrorStack
+ - bugfix:  36_Shelly: ShellyPro3EM: div by zero when attr Periods is not set 
+ - bugfix:  36_Shelly: diverse Korrekturen/Ergänzungen/siehe Forum
+ - bugfix:  76_SolarForecast: minor fix in Flowgraphic
+ - bufgix:  72_FRITZBOX: Perl Warning behoben 
+ - feature: 76_SolarForecast: see Forum: ..index.php?msg=1323142
+ - bufgix:  72_FRITZBOX: reconnect Fehler nach offline Device 
+ - bufgix:  72_FRITZBOX: kleinere Schönheits-Fehler 
+ - feature: 72_FRITZBOX: Neue Readings box_usb...
+            Aktivierbar über Attribut enableBoxReadings
+ - feature: 82_LGTV_WebOS: add Support for JellyFin App
+ - feature: 74_AutomowerConnect: attribute controlled automatic syncronizing
+                                 the mower time if DST changes
+ - feature: 76_SolarForecast: new attr affectConsForecastLastDays and more
+                              features, changes in Flowgraphic
  - change:  74_XiaomiBTLESens: remove experimental switch
  - change:  82_LGTV_WebOS: remove experimental switch
  - change:  73_AutoShuttersControl: remove experimental switch

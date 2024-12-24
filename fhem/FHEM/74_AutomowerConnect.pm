@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# $Id: 74_AutomowerConnect.pm 29221 2024-10-11 11:36:00Z Ellert $
+# $Id: 74_AutomowerConnect.pm 29292 2024-10-25 17:02:10Z Ellert $
 # 
 #  This script is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 ################################################################################
 
 package FHEM::AutomowerConnect;
-our $cvsid = '$Id: 74_AutomowerConnect.pm 29221 2024-10-11 11:36:00Z Ellert $';
+our $cvsid = '$Id: 74_AutomowerConnect.pm 29292 2024-10-25 17:02:10Z Ellert $';
 use strict;
 use warnings;
 use POSIX;
@@ -67,16 +67,17 @@ sub Initialize() {
                           "mapBackgroundColor " .
                           "mapDesignAttributes:textField-long " .
                           "mapZones:textField-long " .
-                          "showMap:1,0 " .
                           "chargingStationCoordinates " .
                           "chargingStationImagePosition:left,top,right,bottom,center " .
-                          "scaleToMeterXY " .
                           "mowerCuttingWidth " .
                           "mowerPanel:textField-long,85 " .
                           "mowerSchedule:textField-long " .
                           "mowingAreaLimits:textField-long " .
                           "mowingAreaHull:textField-long " .
+                          "mowerAutoSyncTime:1,0 " .
                           "propertyLimits:textField-long " .
+                          "scaleToMeterXY " .
+                          "showMap:1,0 " .
                           "weekdaysToResetWayPoints " .
                           "numberOfWayPointsToDisplay " .
                           "addPollingMinInterval " .
@@ -192,8 +193,8 @@ __END__
       Starts immediately for &lt;number of minutes&gt;</li>
 
     <li><a id='AutomowerConnect-set-dateTime'>dateTime</a><br>
-      <code>set &lt;name&gt; dateTime &lt;RTC and DST time corretion / h &gt;</code><br>
-      Syncronize the mower time. The proposal is for RTC = UTC and DST for CET(MEZ) </li>
+      <code>set &lt;name&gt; dateTime &lt;timestamp / s&gt;</code><br>
+      Syncronize the mower time to timestamp. The default (empty Input field) timestamp is for local time of the machine the mower is defined, see also <a href="#AutomowerConnect-attr-mowerAutoSyncTime">mowerAutoSyncTime</a>.</li>
 
     <li><a id='AutomowerConnect-set-confirmError'>confirmError</a><br>
       <code>set &lt;name&gt; confirmError</code><br>
@@ -217,6 +218,10 @@ __END__
       <code>set &lt;name&gt; cuttingHeight &lt;1..9&gt;</code><br>
       Sets the cutting height. NOTE: Do not use for 550 EPOS and Ceora.</li>
 
+    <li><a id='AutomowerConnect-set-resetCuttingBladeUsageTime'>resetCuttingBladeUsageTime</a><br>
+      <code>set &lt;name&gt; resetCuttingBladeUsageTime</code><br>
+      Resets the cutting blade usage time if the mower provides it.</li>
+
     <li><a id='AutomowerConnect-set-cuttingHeightInWorkArea'>cuttingHeightInWorkArea</a><br>
       <code>set &lt;name&gt; cuttingHeightInWorkArea &lt;Id|name&gt; &lt;0..100&gt;</code><br>
       Testing: Sets the cutting height for Id or zone name from 0 to 100. Zone name must not include space and contain at least one alphabetic character.</li>
@@ -232,6 +237,10 @@ __END__
     <li><a id='AutomowerConnect-set-getUpdate'>getUpdate</a><br>
       <code>set &lt;name&gt; getUpdate</code><br>
       For debug purpose only.</li>
+
+    <li><a id='AutomowerConnect-set-getMessages'getMessages</a><br>
+      <code>get &lt;name&gt; getMessages</code><br>
+      Gets messages from mower if supported, see also <a href="#AutomowerConnect-get-errorStack">errorStack</a>.</li>
 
     <li><a id='AutomowerConnect-set-headlight'>headlight</a><br>
       <code>set &lt;name&gt; headlight &lt;ALWAYS_OFF|ALWAYS_ON|EVENIG_ONLY|EVENING_AND_NIGHT&gt;</code><br>
@@ -283,8 +292,9 @@ __END__
 
     <li><a id='AutomowerConnect-get-errorStack'>errorStack</a><br>
       <code>get &lt;name&gt; errorStack</code><br>
-      Lists error stack.</li>
-    <br><br>
+      Lists error stack and messages, see also <a href="#AutomowerConnect-set-getMessages">getMessages</a>.</li>
+
+    <br>
   </ul>
   <br>
 
@@ -376,6 +386,10 @@ __END__
     <li><a id='AutomowerConnect-attr-showMap'>showMap</a><br>
       <code>attr &lt;name&gt; showMap &lt;<b>1</b>,0&gt;</code><br>
       Shows Map on (1 default) or not (0).</li>
+
+    <li><a id='AutomowerConnect-attr-mowerAutoSyncTime'>mowerAutoSyncTime</a><br>
+      <code>attr &lt;name&gt; mowerAutoSyncTime &lt;<b>0</b>,1&gt;</code><br>
+      Synchronizes mower time if DST changes, on (1) or not (0 default).</li>
 
    <li><a id='AutomowerConnect-attr-chargingStationCoordinates'>chargingStationCoordinates</a><br>
       <code>attr &lt;name&gt; chargingStationCoordinates &lt;longitude&gt;&lt;separator&gt;&lt;latitude&gt;</code><br>
@@ -710,6 +724,10 @@ __END__
       <code>set &lt;name&gt; cuttingHeight &lt;1..9&gt;</code><br>
       Setzt die Schnitthöhe. HINWEIS: Nicht für 550 EPOS und Ceora geeignet.</li>
 
+    <li><a id='AutomowerConnect-set-resetCuttingBladeUsageTime'>resetCuttingBladeUsageTime</a><br>
+      <code>set &lt;name&gt; resetCuttingBladeUsageTime</code><br>
+      Setzt die Benutzungszeit der Messer zurück, falls der Mäher es unterstützt.</li>
+
     <li><a id='AutomowerConnect-set-cuttingHeightInWorkArea'>cuttingHeightInWorkArea</a><br>
       <code>set &lt;name&gt; cuttingHeightInWorkArea &lt;Id|name&gt; &lt;0..100&gt;</code><br>
       Testing: Setzt die Schnitthöhe für Id oder Zonennamen von 0 bis 100. Der Zonenname darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
@@ -720,8 +738,9 @@ __END__
       Der Zonenname darf keine Leerzeichen beinhalten und muss mindestens einen Buchstaben enthalten.</li>
 
     <li><a id='AutomowerConnect-set-dateTime'>dateTime</a><br>
-      <code>set &lt;name&gt; dateTime &lt;RTC and DST time corretion / h &gt;</code><br>
-      Synchronisiert die Zeit im Mäher. Der im Auswahlfeld vorgeschlagene Korrekturwert geht davon aus, dass die RTC auf UTC eingestellt ist und berücksichtigt DST für CET(MEZ).</li>
+      <code>set &lt;name&gt; dateTime &lt;timestamp / s&gt;</code><br>
+      Synchronisiert die Zeit im Mäher. Timestamp, ist die Zeit in Sekunden seit  1. Januar 1970, 00:00 Uhr UTC unter Berücksichtigung der Zeitzone und DST.
+      Der Standardwert (leeres Eingabefeld) verwendet die lokale Zeit des Rechners auf dem der Mäher definiert ist, siehe auch <a href="#AutomowerConnect-attr-mowerAutoSyncTime">mowerAutoSyncTime</a></li>
 
     <li><a id='AutomowerConnect-set-confirmError'>confirmError</a><br>
       <code>set &lt;name&gt; confirmError</code><br>
@@ -734,6 +753,10 @@ __END__
     <li><a id='AutomowerConnect-set-getUpdate'>getUpdate</a><br>
       <code>set &lt;name&gt; getUpdate</code><br>
       Nur zur Fehlerbehebung.</li>
+
+    <li><a id='AutomowerConnect-set-getMessages'>getMessages</a><br>
+      <code>get &lt;name&gt; getMessages</code><br>
+      Läd die im Mäher gespeicherten Meldungen, sofern unterstützt, siehe auch <a href="#AutomowerConnect-get-errorStack">errorStack</a>.</li>
 
      <li><a id='AutomowerConnect-set-headlight'>headlight</a><br>
       <code>set &lt;name&gt; headlight &lt;ALWAYS_OFF|ALWAYS_ON|EVENIG_ONLY|EVENING_AND_NIGHT&gt;</code><br>
@@ -785,7 +808,8 @@ __END__
 
     <li><a id='AutomowerConnect-get-errorStack'>errorStack</a><br>
       <code>get &lt;name&gt; errorStack</code><br>
-      Listet die gespeicherten Fehler auf.</li>
+      Listet die gespeicherten Fehler und die geladenen Meldungen auf, siehe auch <a href="#AutomowerConnect-set-getMessages">getMessages</a>.</li>
+
     <br>
   </ul>
   <br>
@@ -889,6 +913,10 @@ __END__
     <li><a id='AutomowerConnect-attr-chargingStationImagePosition'>chargingStationImagePosition</a><br>
       <code>attr &lt;name&gt; chargingStationImagePosition &lt;<b>right</b>, bottom, left, top, center&gt;</code><br>
       Position der Ladestation relativ zu ihren Koordinaten.</li>
+
+    <li><a id='AutomowerConnect-attr-mowerAutoSyncTime'>mowerAutoSyncTime</a><br>
+      <code>attr &lt;name&gt; mowerAutoSyncTime &lt;<b>0</b>,1&gt;</code><br>
+      Synchronisiert die Zeit im Mäher, bei einer Zeitumstellung, ein (1) aus (0 Standard).</li>
 
     <li><a id='AutomowerConnect-attr-mowerCuttingWidth'>mowerCuttingWidth</a><br>
       <code>attr &lt;name&gt; mowerCuttingWidth &lt;cutting width&gt;</code><br>

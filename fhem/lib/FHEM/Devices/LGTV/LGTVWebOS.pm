@@ -25,7 +25,7 @@
 #  GNU General Public License for more details.
 #
 #
-# $Id: LGTVWebOS.pm 29227 2024-10-12 07:19:10Z CoolTux $
+# $Id: LGTVWebOS.pm 29241 2024-10-15 04:17:43Z CoolTux $
 #
 ###############################################################################
 package FHEM::Devices::LGTV::LGTVWebOS;
@@ -199,6 +199,7 @@ my %openApps = (
     'DAZN'               => 'dazn',
     'SkyQ'               => 'com.skygo.app.de.q',
     'WaipuTv'            => 'tv.waipu.app.waipu-lg',
+    'JellyFin'           => 'org.jellyfin.webos',
 );
 
 my %openAppsPackageName = reverse %openApps;

@@ -1,9 +1,9 @@
 ########################################################################################################################
-# $Id: ErrCodes.pm 27415 2023-04-08 20:33:35Z DS_Starter $
+# $Id: ErrCodes.pm 29403 2024-12-05 20:20:26Z DS_Starter $
 #########################################################################################################################
 #       ErrCodes.pm
 #
-#       (c) 2020 - 2023  by Heiko Maaz
+#       (c) 2020 - 2024  by Heiko Maaz
 #       e-mail: Heiko dot Maaz at t-online dot de
 #
 #       This Module provides Synology API Error Codes.
@@ -32,7 +32,7 @@ use warnings;
 use utf8;
 use Carp qw(croak carp);
 
-use version; our $VERSION = version->declare('1.3.7');
+use version; our $VERSION = version->declare('1.3.9');
 
 use Exporter ('import');
 our @EXPORT_OK   = qw(expErrorsAuth expErrors);                 
@@ -51,18 +51,29 @@ my %errauthsscam = (                                                    # Authen
   100  => "Unknown error",
   101  => "The account parameter is not specified",
   102  => "API does not exist",
-  400  => "invalid user or password",
-  401  => "Guest or disabled account",
+  105  => "No permission",
+  117  => "Internal error",
+  119  => "SID not found",
+  400  => "invalid user or password, WebAPI >= 9.2.1: Execute failed",
+  401  => "Guest or disabled account, WebAPI >= 9.2.1: Param invalid",
   402  => "Permission denied - DSM-Session: make sure user is member of Admin-group, SVS-Session: make sure SVS package is started, make sure FHEM-Server IP won't be blocked in DSM automated blocking list",
-  403  => "2-factor authentication code required",
+  403  => "2-factor authentication code required, WebAPI >= 9.2.1: Insufficient license",
   404  => "Failed to authenticate 2-factor authentication code",
   405  => "method not allowd - maybe the password is too long",
-  406  => "enforce to authenticate with 2-factor authentication code",
-  407  => "blocked IP source - make sure FHEM-Server IP won't be blocked in DSM automated blocking list",
+  406  => "enforce to authenticate with 2-factor authentication code, WebAPI >= 9.2.1: Related server conn failed",
+  407  => "blocked IP source - make sure FHEM-Server IP won't be blocked in DSM automated blocking list, WebAPI >= 9.2.1: CMS closed reload",
   408  => "expired password cannot change",
   409  => "Password expired",
   410  => "Password must be changed (when first time use or after reset password by admin)",
   411  => "Account locked (when account max try exceed)",
+  416  => "Msg connect host failed",
+  418  => "Object not exist",
+  424  => "Upgrade dp",
+  440  => "License conn server failed",
+  441  => "License activation failed",
+  448  => "License activation ssl verify failed",
+  450  => "Not apply on migrating cam",
+  457  => "Camcap error default",
 );
 
 my %errsscam = (                                                       # Standard Error Codes der Surveillance Station API                 
@@ -71,26 +82,35 @@ my %errsscam = (                                                       # Standar
   102  => "API does not exist",
   103  => "Method does not exist",
   104  => "This API version is not supported",
-  105  => "Insufficient user privilege",
+  105  => "Insufficient user privilege, WebAPI >= 9.2.1: No permission",
   106  => "Connection time out",
   107  => "Multiple login detected",
-  117  => "need manager rights in SurveillanceStation for operation",
-  400  => "Execution failed",
-  401  => "Parameter invalid",
+  117  => "need manager rights in SurveillanceStation for operation, WebAPI >= 9.2.1: Internal error",
+  119  => "SID not found",
+  400  => "Execute failed",
+  401  => "Parameter invalid, WebAPI >= 9.2.1: Param invalid",
   402  => "Camera disabled",
   403  => "Insufficient license",
   404  => "Codec activation failed",
   405  => "CMS server connection failed",
-  407  => "CMS closed",
+  406  => "Related server conn failed",
+  407  => "CMS closed reload",
   410  => "Service is not enabled",
   412  => "Need to add license",
   413  => "Reach the maximum of platform",
   414  => "Some events not exist",
   415  => "message connect failed",
+  416  => "Msg connect host failed",
   417  => "Test Connection Error",
   418  => "Object is not exist",
   419  => "Visualstation name repetition",
+  424  => "Upgrade dp",
   439  => "Too many items selected",
+  440  => "License conn server failed",
+  441  => "License activation failed",
+  448  => "License activation ssl verify failed",
+  450  => "Not apply on migrating cam",
+  457  => "Camcap error default",
   502  => "Camera disconnected",
   600  => "Presetname and PresetID not found in Hash",
   806  => "couldn't get Synology Surveillance Station API informations",
@@ -183,6 +203,11 @@ my %errsschat = (                                                       # Standa
   9001 => "API keys and values not completed",
 );
 
+## SolarForecast ##
+my %errsolarforecast = (                                                # Standard Error Codes SolarForecast
+  9000 => "malformed JSON string received",
+);
+
 ## SSFile ##
 my %errauthssfile = (                                                   # Authentification Error Codes der File Station API
   400  => "invalid user or password",
@@ -269,10 +294,11 @@ my %errssfile = (                                                       # Standa
 );
 
 my %hterr = (                                                           # Hash der TYPE Error Code Spezifikationen
-  SSCam     => {errauth => \%errauthsscam,  errh => \%errsscam  },    
-  SSCal     => {errauth => \%errauthsscal,  errh => \%errsscal  },
-  SSChatBot => {                            errh => \%errsschat },
-  SSFile    => {errauth => \%errauthssfile, errh => \%errssfile },
+  SSCam         => {errauth => \%errauthsscam,  errh => \%errsscam         },    
+  SSCal         => {errauth => \%errauthsscal,  errh => \%errsscal         },
+  SSChatBot     => {                            errh => \%errsschat        },
+  SolarForecast => {                            errh => \%errsolarforecast },
+  SSFile        => {errauth => \%errauthssfile, errh => \%errssfile        },
 );
 
 ##############################################################################
@@ -302,7 +328,7 @@ sub expErrors {
   my $errorcode = shift // carp "got no error code to analyse"  && return;
   my $type      = $hash->{TYPE};
    
-  if($hterr{$type} && %{$hterr{$type}{errh}}) {
+  if ($hterr{$type} && %{$hterr{$type}{errh}}) {
 	  my $errh  = $hterr{$type}{errh};                                    # der Error Kodierungshash
 	  my $error = $errh->{$errorcode} // $nofound." ".$errorcode;
       return $error;
