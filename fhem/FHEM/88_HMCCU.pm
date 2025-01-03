@@ -2,7 +2,7 @@
 #
 #  88_HMCCU.pm
 #
-#  $Id: 88_HMCCU.pm 28794 2024-04-14 12:03:39Z zap $
+#  $Id: 88_HMCCU.pm 29453 2024-12-27 09:41:44Z zap $
 #
 #  Version 5.0
 #
@@ -58,7 +58,7 @@ my %HMCCU_CUST_CHN_DEFAULTS;
 my %HMCCU_CUST_DEV_DEFAULTS;
 
 # HMCCU version
-my $HMCCU_VERSION = '5.0 2024-04';
+my $HMCCU_VERSION = '2024-12';
 
 # Timeout for CCU requests (seconds)
 my $HMCCU_TIMEOUT_REQUEST = 4;
@@ -7568,7 +7568,7 @@ sub HMCCU_DisplayWeekProgram ($$$;$$)
 		$s .= '</table><br/>';
 	}
 	$s .= '</html>';
-		
+
 	return $s;
 }
 

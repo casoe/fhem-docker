@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 92_FileLog.pm 29319 2024-10-30 17:18:26Z rudolfkoenig $
+# $Id: 92_FileLog.pm 29471 2025-01-02 09:36:20Z rudolfkoenig $
 package main;
 
 use strict;
@@ -183,6 +183,7 @@ FileLog_Define($@)
   eval { "Hallo" =~ m/^$a[3]$/ };
   return "Bad regexp: $@" if($@);
 
+  $hash->{READONLY} = 1 if($a[3] eq $hash->{NAME});
   my @t = localtime;
   my $f = ResolveDateWildcards($a[2], @t);
   if(!$hash->{READONLY}) {
@@ -205,6 +206,8 @@ FileLog_Define($@)
     FileLog_initEMI($hash, "addLog", undef, 1);
     my $mi = $hash->{addLogMinInterval};
     InternalTimer(time()+$mi, "FileLog_addLog", $hash, 0) if($mi);
+    delete($hash->{READINGS}{linesInTheFile})
+      if($hash->{READONLY} && $hash->{READINGS});
   }, $hash);
 
   return undef;
@@ -243,6 +246,7 @@ FileLog_Switch($)
     $log->{currentlogfile} = $cn;
     return 1 if($log->{READONLY});
     $fh->close() if($fh);
+    restoreDir_mkDir($cn=~m,^/,? "":".", $cn, 1);
     HandleArchiving($log);
     $fh = new IO::File ">>$cn";
     if(!defined($fh)) {
@@ -476,7 +480,8 @@ FileLog_Set($@)
       $fh->close() if($fh);
       if($cmd eq "clear") {
         $fh = new IO::File(">$cn");
-        setReadingsVal($hash, "linesInTheFile", 0, TimeNow());
+        setReadingsVal($hash, "linesInTheFile", 0, TimeNow())
+          if(!$hash->{READONLY});
       } else {
         $fh = new IO::File(">>$cn");
       }
@@ -556,6 +561,8 @@ FileLog_Set($@)
     CommandDelete(undef, $victim);
 
   }
+  Log3 $me, 3, "set ".join(" ",@a);
+  
   return undef;
 }
 
@@ -836,15 +843,21 @@ FileLog_Get($@)
   } else {
     my $linf;
     if($inf eq "CURRENT") {
-      if($from =~ m/^(....-..-..)_(..:..:..)/) { 
-        my ($from_ymd, $from_hms) = ($1,$2);
+      my ($from_ymd, $from_hms);
+      if($from =~ m/^(....-..-..)$/ ||
+         $from =~ m/^(....-..-..)_(..:..:..)/)  {
+
+        my $from_ymd = $1;
+        my $from_hms = $2 ? $2 : "00:00:00";
         $linf = ResolveDateWildcards($hash->{logfile},
                         localtime(time_str2num("$from_ymd $from_hms")));
 
         if(AttrVal($name, "createGluedFile", 0)) {
           $to = (split(" ", TimeNow()))[0] if($to eq "9"); # Special
-          if($to =~ m/^(....-..-..)_(..:..:..)/) {
-            my ($to_ymd, $to_hms) = ($1,$2);
+          if($to =~ m/^(....-..-..)$/ ||
+             $to =~ m/^(....-..-..)_(..:..:..)/) {
+            my $to_ymd = $1;
+            my $to_hms = $2 ? $2 : "23:59:59";
             my $linf_to = ResolveDateWildcards($hash->{logfile},
                             localtime(time_str2num("$to_ymd $to_hms")));
             if($linf ne $linf_to){  # append each file into a temporary one

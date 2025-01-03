@@ -1,4 +1,4 @@
-# $Id: WMBus.pm 29104 2024-08-25 09:38:32Z kaihs $
+# $Id: WMBus.pm 29463 2024-12-30 15:58:31Z kaihs $
 
 package WMBus;
 
@@ -724,7 +724,23 @@ my %VIFInfo_FD = (
     unit         => '',
     calcFunc     => \&valueCalcNumeric,
   },
-  VIF_SPECIAL_SUPPLIER_INFORMATION => {     #  Special supplier information
+  VIF_DURATION_IN_MINUTES => {            # DURATION_IN_MINUTES information
+    typeMask     => 0b01111111,
+    expMask      => 0b00000000,
+    type         => 0b00110001,
+    bias         => 0,
+    unit         => 'minutes',
+    calcFunc     => \&valueCalcNumeric,
+  },
+  VIF_CUMULATION_COUNTER => {             #  Cumulated Value
+    typeMask     => 0b01111111,
+    expMask      => 0b00000000,
+    type         => 0b01100001,
+    bias         => 0,
+    unit         => '',
+    calcFunc     => \&valueCalcNumeric,
+  },
+  VIF_SPECIAL_SUPPLIER_INFORMATION => {   #  Special supplier information
     typeMask     => 0b01111111,
     expMask      => 0b00000000,
     type         => 0b01100111,
@@ -1451,6 +1467,12 @@ sub decodeValueInformationBlock($$$) {
         # Kamstrup
         $vif = unpack('C', substr($vib,$offset++,1));
         $vifInfoRef = \%VIFInfo_KAM;       
+      } elsif ($self->{manufacturer} eq 'EIE') {
+        # EIE
+	$offset++; # Ignore next byte
+        $dataBlockRef->{type} = VIF_TYPE_MANUFACTURER_SPECIFIC;
+        $dataBlockRef->{unit} = "";
+        $analyzeVIF = 0;
       } else {
         # manufacturer specific data, can't be interpreted
         

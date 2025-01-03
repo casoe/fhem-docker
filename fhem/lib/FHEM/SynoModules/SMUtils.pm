@@ -1,5 +1,5 @@
 ########################################################################################################################
-# $Id: SMUtils.pm 29299 2024-10-26 18:29:25Z DS_Starter $
+# $Id: SMUtils.pm 29430 2024-12-15 15:49:18Z DS_Starter $
 #########################################################################################################################
 #       SMUtils.pm
 #
@@ -26,6 +26,10 @@
 #########################################################################################################################
 
 # Version History
+# 1.28.2  15.12.2024  change delHashRefDeep
+# 1.28.1  08.12.2024  fix delHashRefDeep
+# 1.28.0  07.12.2024  add function delHashRefDeep
+# 1.27.4  05.12.2024  expand evaljson for SolarForecast
 # 1.27.3  26.10.2024  compatibility to SSCam V 9.12.0
 # 1.27.2  16.03.2024  change checkModVer text output
 # 1.27.1  04.12.2023  change checkModVer
@@ -60,13 +64,14 @@ use FHEM::SynoModules::ErrCodes qw(:all);                                 # Erro
 use GPUtils qw( GP_Import GP_Export ); 
 use Carp qw(croak carp);
 
-use version 0.77; our $VERSION = version->declare('1.27.3');
+use version 0.77; our $VERSION = version->declare('1.28.2');
 
 use Exporter ('import');
 our @EXPORT_OK = qw(
                      getClHash
                      delClHash
                      delReadings
+                     delHashRefDeep
                      createReadingsFromArray
                      checkModVer
                      addCHANGED
@@ -294,6 +299,30 @@ return ($errorcode, $content);
 }
 
 ###############################################################################
+#                     Hash Referenz rekursiv löschen
+#
+#     Stellt sicher, dass alle verschachtelten Strukturen explizit 
+#     gelöscht werden. Dies ist besonders nützlich um 
+#     sicherzustellen, dass keine zirkulären Referenzen bestehen, 
+#     die die Speicherfreigabe verhindern könnten.
+###############################################################################
+sub delHashRefDeep {
+  my $href = shift // carp $carpnohash && return;
+  
+  if (ref $href eq 'HASH') {
+      for my $key (keys %{$href}) { 
+          if (ref $href->{$key} eq 'HASH') { 
+              delHashRefDeep ($href->{$key}); 
+          } 
+          
+          delete $href->{$key}; 
+      }
+  }
+
+return;
+}
+
+###############################################################################
 #  einen Zeitstring YYYY-MM-TT hh:mm:ss in einen Unix 
 #  Timestamp umwandeln
 ###############################################################################
@@ -428,14 +457,14 @@ sub moduleVersion {
   if ($modules{$type}{META}{x_prereqs_src} && !$hash->{HELPER}{MODMETAABSENT}) {          # META-Daten sind vorhanden
       $modules{$type}{META}{version} = "v".$v;                                           # Version aus META.json überschreiben, Anzeige mit {Dumper $modules{<TYPE>}{META}}
       
-      if ($modules{$type}{META}{x_version}) {                                             # {x_version} nur gesetzt wenn $Id: SMUtils.pm 29299 2024-10-26 18:29:25Z DS_Starter $ im Kopf komplett! vorhanden
+      if ($modules{$type}{META}{x_version}) {                                             # {x_version} nur gesetzt wenn $Id: SMUtils.pm 29430 2024-12-15 15:49:18Z DS_Starter $ im Kopf komplett! vorhanden
           $modules{$type}{META}{x_version} =~ s/1\.1\.1/$v/gx;
       } 
       else {
           $modules{$type}{META}{x_version} = $v; 
       }
       
-      FHEM::Meta::SetInternals($hash);                                                   # FVERSION wird gesetzt ( nur gesetzt wenn $Id: SMUtils.pm 29299 2024-10-26 18:29:25Z DS_Starter $ im Kopf komplett! vorhanden )
+      FHEM::Meta::SetInternals($hash);                                                   # FVERSION wird gesetzt ( nur gesetzt wenn $Id: SMUtils.pm 29430 2024-12-15 15:49:18Z DS_Starter $ im Kopf komplett! vorhanden )
   } 
   else {                                                                                 # herkömmliche Modulstruktur
       $hash->{VERSION} = $v;                                                             # Internal VERSION setzen
@@ -1185,10 +1214,10 @@ sub evaljson {
   if ($nojsonmod) {
       $success = 0;
       Log3 ($name, 1, "$name - ERROR: Perl module 'JSON' is missing. You need to install it.");
-      return ($success,$myjson);
+      return ($success, $myjson);
   }
   
-  eval {decode_json($myjson)
+  eval {decode_json ($myjson)
        } 
        or do {                                                            
           if (($hash->{HELPER}{RUNVIEW} && $hash->{HELPER}{RUNVIEW} =~ m/^live_.*hls$/x) || 
@@ -1203,7 +1232,7 @@ sub evaljson {
           else {
               $success      = 0;
               my $errorcode = "9000";         
-              my $error     = expErrors($hash, $errorcode);                                         # Fehlertext zum Errorcode ermitteln
+              my $error     = expErrors ($hash, $errorcode);                                        # Fehlertext zum Errorcode ermitteln
               
               if ($error) {          
                   setReadingErrorState ($hash, $error, $errorcode);

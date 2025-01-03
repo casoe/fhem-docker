@@ -1,6 +1,6 @@
 #original script by  https://github.com/mjg59/python-broadlink
 #some parts by 31_LightScene.pm
-# $Id: 38_Broadlink.pm 15578 2017-12-09 11:44:57Z daniel2311 $
+# $Id: 38_Broadlink.pm 29361 2024-11-25 20:49:33Z daniel2311 $
 package main;
 use strict;
 use warnings;
@@ -493,6 +493,7 @@ sub Broadlink_auth(@) {
 
 sub Broadlink_getCipher(@) {
 	my ($hash) = @_;
+	my $version = $Crypt::CBC::VERSION // 2;
 	return Crypt::CBC->new(
 					-key         => $hash->{'.key'},
 					-cipher      => "Crypt::OpenSSL::AES",
@@ -501,6 +502,16 @@ sub Broadlink_getCipher(@) {
 					-literal_key => 1,
 					-keysize     => 16,
 					-padding	 => 'space'
+			) if ($version < 3);
+			
+	return Crypt::CBC->new(
+					-key         => $hash->{'.key'},
+					-cipher      => "Crypt::OpenSSL::AES",
+					-header      => "none",
+					-iv          => $hash->{'.iv'},
+					-literal_key => 1,
+					-keysize     => 16,
+					-padding	 => 'none'
 			);
 }
 

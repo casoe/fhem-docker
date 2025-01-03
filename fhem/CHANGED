@@ -1,5 +1,44 @@
 # Add changes at the top of the list. Keep it in ASCII, and 80-char wide.
 # Do not insert empty lines here, update check depends on it
+ - bugfix: 76_SMAInverter.pm: fix STP X bug, fix STP TypeName
+ - change:  76_SolarForecast: ctrlBatSocManagement to ctrlBatSocManagement01
+ - change:  76_SolarForecast: rename of some readings, see Forum:
+                              ?topic=137058.msg1329009#msg1329009
+ - feature: WMBus.pm: support for smoke detector IE6500-OMS: #1326558
+ - change:  76_SolarForecast: more preparation for multi batteries
+ - change:  70_PylonLowVoltage: internal code change (use random time delay)
+ - feature: 76_SolarForecast: change Attr setupBatteryDev to setupBatteryDev01, 
+                              new getter valBattery
+ - bugfix:  88_HMCCU: Role STATUS_INDICATOR
+ - feature: 76_SolarForecast: consumer key surpmeth - various surplus variants
+ - change:  76_SolarForecast: improve Bat careSoC management when dark doldrums
+ - change:  76_SolarForecast: prepare for further development
+ - bugfix:  88_HMCCU: Fixed Winmatic lock command
+ - bugfix:  76_SolarForecast: batteryManagement - fix care SoC management
+ - bugfix:  49_SSCam: fix Attr pollcaminfoall
+ - change:  49_SSCam: internal code changed
+ - change:  76_SolarForecast: Warning if no create AllPVforecastsToEvent events
+ - change:  76_SolarForecast: consumerXX if mode is device/reading combination
+ - feature: 76_SolarForecast: consumerkey 'mode' can device/reading combination
+ - feature: 76_SolarForecast: possible asynchron mode Battery Dev, code change
+ - feature: 76_SMAInverter.pm: add installer login, code optimized
+ - feature: 76_SolarForecast: possible asynchron mode for Meter & Inverter
+ - change:  93_DbLog: insertmode 0 - improved output of errors in Logfile
+ - change:  57_Calendar: remove smartmatch replacement as it is now
+                         officially in fhem.pl
+ - feature: 93_DbLog: check valid Event Time limit, Forum: #139847
+ - bugfix:  93_DbRep: fix check changeValue Forum: #139950
+ - change:  01_FHEMWEB: add filtered Event Monitor to detail view
+ - feature: 76_SolarForecast: attr setupRadiationAPI and setupWeatherDev1 can 
+                              be set largely independently of each other
+ - change:  76_SolarForecast: Separation of radiation API-data, API-state data, 
+                              weather-API data
+ - change:  76_SolarForecast: extended Debug collectData for EnergyConsumption
+ - bugfix:  49_SSCam: some fixes API does not exist
+ - change:  76_SolarForecast: Attr flowGraphicControl key shift changed to 
+                              shiftx, new key shifty,
+                              some obsolete attributes deleted
+ - feature: 49_SSCam: attr customSVSversion option 9.2.0
  - feature: 57_Calendar: add terse human-readable format for datetimes
  - change:  57_Calendar: replace deprectated smartmatch by function
  - featur:  36_Shelly: reading 'temperature' for ShellyPlusUni

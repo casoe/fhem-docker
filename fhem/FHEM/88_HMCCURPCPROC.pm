@@ -2,7 +2,7 @@
 #
 #  88_HMCCURPCPROC.pm
 #
-#  $Id: 88_HMCCURPCPROC.pm 28793 2024-04-14 11:57:19Z zap $
+#  $Id: 88_HMCCURPCPROC.pm 29453 2024-12-27 09:41:44Z zap $
 #
 #  Version 5.0
 #
@@ -36,7 +36,7 @@ use SetExtensions;
 ######################################################################
 
 # HMCCURPC version
-my $HMCCURPCPROC_VERSION = '5.0 2024-04';
+my $HMCCURPCPROC_VERSION = '2024-12';
 
 # Maximum number of events processed per call of Read()
 my $HMCCURPCPROC_MAX_EVENTS = 100;

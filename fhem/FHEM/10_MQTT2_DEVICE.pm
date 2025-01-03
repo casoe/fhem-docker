@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 10_MQTT2_DEVICE.pm 29153 2024-09-19 17:58:21Z rudolfkoenig $
+# $Id: 10_MQTT2_DEVICE.pm 29379 2024-11-30 18:28:54Z rudolfkoenig $
 package main;
 
 use strict;
@@ -287,7 +287,7 @@ MQTT2_DEVICE_Parse($$)
     my $cidArr = $modules{MQTT2_DEVICE}{defptr}{cid}{$newCid};
     if(!$cidArr || !int(@{$cidArr})) {
       my $devName = $newCid;
-      $devName = makeDeviceName("MQTT2_$devName");
+      $devName = makeDeviceName($devName);
       return "UNDEFINED $devName MQTT2_DEVICE $newCid ".$iodev->{NAME}
         if(!$defs{$devName}); # 125159
     }

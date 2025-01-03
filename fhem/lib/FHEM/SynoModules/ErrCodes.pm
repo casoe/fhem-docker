@@ -1,5 +1,5 @@
 ########################################################################################################################
-# $Id: ErrCodes.pm 29302 2024-10-27 09:59:58Z DS_Starter $
+# $Id: ErrCodes.pm 29403 2024-12-05 20:20:26Z DS_Starter $
 #########################################################################################################################
 #       ErrCodes.pm
 #
@@ -32,7 +32,7 @@ use warnings;
 use utf8;
 use Carp qw(croak carp);
 
-use version; our $VERSION = version->declare('1.3.8');
+use version; our $VERSION = version->declare('1.3.9');
 
 use Exporter ('import');
 our @EXPORT_OK   = qw(expErrorsAuth expErrors);                 
@@ -203,6 +203,11 @@ my %errsschat = (                                                       # Standa
   9001 => "API keys and values not completed",
 );
 
+## SolarForecast ##
+my %errsolarforecast = (                                                # Standard Error Codes SolarForecast
+  9000 => "malformed JSON string received",
+);
+
 ## SSFile ##
 my %errauthssfile = (                                                   # Authentification Error Codes der File Station API
   400  => "invalid user or password",
@@ -289,10 +294,11 @@ my %errssfile = (                                                       # Standa
 );
 
 my %hterr = (                                                           # Hash der TYPE Error Code Spezifikationen
-  SSCam     => {errauth => \%errauthsscam,  errh => \%errsscam  },    
-  SSCal     => {errauth => \%errauthsscal,  errh => \%errsscal  },
-  SSChatBot => {                            errh => \%errsschat },
-  SSFile    => {errauth => \%errauthssfile, errh => \%errssfile },
+  SSCam         => {errauth => \%errauthsscam,  errh => \%errsscam         },    
+  SSCal         => {errauth => \%errauthsscal,  errh => \%errsscal         },
+  SSChatBot     => {                            errh => \%errsschat        },
+  SolarForecast => {                            errh => \%errsolarforecast },
+  SSFile        => {errauth => \%errauthssfile, errh => \%errssfile        },
 );
 
 ##############################################################################
@@ -322,7 +328,7 @@ sub expErrors {
   my $errorcode = shift // carp "got no error code to analyse"  && return;
   my $type      = $hash->{TYPE};
    
-  if($hterr{$type} && %{$hterr{$type}{errh}}) {
+  if ($hterr{$type} && %{$hterr{$type}{errh}}) {
 	  my $errh  = $hterr{$type}{errh};                                    # der Error Kodierungshash
 	  my $error = $errh->{$errorcode} // $nofound." ".$errorcode;
       return $error;

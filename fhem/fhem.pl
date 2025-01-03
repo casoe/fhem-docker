@@ -19,7 +19,7 @@
 #
 #  Homepage:  http://fhem.de
 #
-# $Id: fhem.pl 29222 2024-10-11 16:25:05Z rudolfkoenig $
+# $Id: fhem.pl 29402 2024-12-05 16:03:59Z rudolfkoenig $
 
 
 use strict;
@@ -31,6 +31,7 @@ use Time::HiRes qw(gettimeofday time);
 use Scalar::Util qw(looks_like_number);
 use POSIX;
 use File::Copy qw(copy);
+use List::Util qw(any);
 use Encode;
 
 ##################################################
@@ -115,6 +116,8 @@ sub attrSplit($);
 sub computeClientArray($$);
 sub concatc($$$);
 sub configDBUsed();
+sub contains_numeric($@);
+sub contains_string($@);
 sub createNtfyHash();
 sub createUniqueId();
 sub devspec2array($;$$);
@@ -281,7 +284,7 @@ use constant {
 };
 
 $selectTimestamp = gettimeofday();
-my $cvsid = '$Id: fhem.pl 29222 2024-10-11 16:25:05Z rudolfkoenig $';
+my $cvsid = '$Id: fhem.pl 29402 2024-12-05 16:03:59Z rudolfkoenig $';
 
 my $AttrList = "alias comment:textField-long eventMap:textField-long ".
                "group room suppressReading userattr ".
@@ -5459,7 +5462,9 @@ json2nameValue($;$$$$)
       my $in2 = $val;
       while($in2 =~ m/^\s*"([^"]*)"\s*:\s*(.*)$/s) { # 125340
         my ($name,$val) = ($1,$2);
-        $name =~ s/[^a-z0-9._\-\/]/_/gsi;
+        ($err,$name) = lStr('"'.$name.'"'); #139807
+        return ($err,undef) if($err);
+        $name = makeReadingName($name);
         ($err,$in2) = eObj(\%r2, $name, $val, $in2, $prefix);
         return ($err,undef) if($err);
         $in2 =~ s/^\s*,\s*//;
@@ -6208,8 +6213,11 @@ makeReadingName($) # Convert non-valid characters to _
     return $name;
   }
   my %umlaut = ( '\xc3\xa4'=>'ae',
+                 '\xc3\x84'=>'Ae',
                  '\xc3\xb6'=>'oe',
+                 '\xc3\x96'=>'Oe',
                  '\xc3\xbc'=>'ue',
+                 '\xc3\x9c'=>'Ue',
                  '\xc3\x9f'=>'ss');
   map { $name =~ s/$_/$umlaut{$_}/g } keys %umlaut;
   $name =~ s/[^a-z0-9._\-\/]/_/gi;
@@ -6486,6 +6494,18 @@ CheckRegexp($$)
   return "Bad regexp >$re< in $context: $@" if($@);
   return "Bad regexp >$re< in $context: $warn" if($warn);
   return undef;
+}
+
+# smartmatch replacement #137776
+# use contains_<type>($scalar, @array) instead of $scalar ~~ @array
+sub contains_numeric($@) {
+  my ($scalar, @array) = @_;
+  return any { $_ == $scalar } @array;
+}
+
+sub contains_string($@) {
+  my ($scalar, @array) = @_;
+  return any { $_ eq $scalar } @array;
 }
 
 1;

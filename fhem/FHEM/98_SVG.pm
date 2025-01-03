@@ -1,5 +1,5 @@
 ##############################################
-# $Id: 98_SVG.pm 29055 2024-08-05 18:37:21Z rudolfkoenig $
+# $Id: 98_SVG.pm 29467 2025-01-01 17:12:21Z rudolfkoenig $
 package main;
 
 use strict;
@@ -2068,12 +2068,12 @@ SVG_render($$$$$$$$$$)
       foreach my $i (0..int(@{$dxp})-1) {
         my ($x1, $y1) = ( $x + $dxp->[$i] - $bw,
                            $y +$h-($dyp->[$i]-$min)*$hmul);
-        my $curBw = $bw;
-        if($x1 < $x) {
-            $curBw -= $x - $x1;
-            $x1 = $x;
+        my $x2 = $bw;
+        if($x1 < $x) { # start is left of y-axis
+          $x2 -= $x - $x1;
+          $x1 = $x;
         }
-        my ($x2, $y2) = ($curBw, ($dyp->[$i]-$min)*$hmul);    
+        my $y2 = ($dyp->[$i]-$min)*$hmul;
         SVG_pO "<rect $attributes $lStyle x=\"$x1\" y=\"$y1\" ".
                     "width=\"$x2\" height=\"$y2\"/>";
       }
