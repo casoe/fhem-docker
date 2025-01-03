@@ -1,4 +1,4 @@
-# Created by FHEM/98_SVG.pm, 2024-05-22 09:25:40
+# Created by FHEM/98_SVG.pm, 2024-12-11 07:15:38
 set terminal png transparent size <SIZE> crop
 set output '<OUT>.png'
 set xdata time
@@ -18,7 +18,7 @@ set y2range [0:10]
 #lp ConstY:50
 #lp ConstY:20
 
-plot "<IN>" using 1:2 axes x1y1 title 'Ladestand' ls l3 lw 1 with steps,\
+plot "<IN>" using 1:2 axes x1y1 title 'Ladestand' ls l3 lw 1 with lines,\
      "<IN>" using 1:2 axes x1y1 title '90/50/20%' ls l7 lw 0.2 with lines,\
      "<IN>" using 1:2 axes x1y1 title '.' ls l7 lw 0.2 with lines,\
      "<IN>" using 1:2 axes x1y1 title '.' ls l7 lw 0.2 with lines
